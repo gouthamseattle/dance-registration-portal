@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clear All Courses - Admin Tool</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 30px;
+            border-radius: 10px;
+            backdrop-filter: blur(10px);
+        }
+        .btn {
+            background: #ff4757;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 0;
+        }
+        .btn:hover {
+            background: #ff3742;
+        }
+        .btn:disabled {
+            background: #666;
+            cursor: not-allowed;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 5px;
+            background: rgba(255, 255, 255, 0.1);
+        }
+        .success { background: rgba(46, 204, 113, 0.3); }
+        .error { background: rgba(231, 76, 60, 0.3); }
+        .warning { background: rgba(241, 196, 15, 0.3); }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🗑️ Clear All Dance Courses</h1>
+        <p><strong>Warning:</strong> This will permanently delete ALL courses and registrations from the database.</p>
+        
+        <button id="clearBtn" class="btn" onclick="clearAllCourses()">
+            Clear All Courses
+        </button>
+        
+        <div id="result"></div>
+    </div>
+
+    <script>
+        async function clearAllCourses() {
+            const btn = document.getElementById('clearBtn');
+            const result = document.getElementById('result');
+            
+            btn.disabled = true;
+            btn.textContent = 'Clearing...';
+            result.innerHTML = '<p>⏳ Clearing all courses and registrations...</p>';
+            result.className = 'result warning';
+            
+            try {
+                const response = await fetch('/api/admin/clear-all-courses', {
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'same-origin'
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    result.innerHTML = `
+                        <h3>✅ Success!</h3>
+                        <p>${data.message}</p>
+                        <p><strong>Courses deleted:</strong> ${data.deleted}</p>
+                    `;
+                    result.className = 'result success';
+                    btn.textContent = 'Cleared Successfully';
+                } else {
+                    throw new Error(data.error || 'Unknown error');
+                }
+                
+            } catch (error) {
+                console.error('Error:', error);
+                result.innerHTML = `
+                    <h3>❌ Error</h3>
+                    <p>${error.message}</p>
+                    <p>Please check the console for more details.</p>
+                `;
+                result.className = 'result error';
+                btn.disabled = false;
+                btn.textContent = 'Try Again';
+            }
+        }
+        
+        // Check if user is authenticated
+        fetch('/api/admin/status')
+            .then(response => response.json())
+            .then(data => {
+                if (!data.authenticated) {
+                    document.getElementById('result').innerHTML = `
+                        <h3>🔒 Authentication Required</h3>
+                        <p>Please <a href="/admin" style="color: #fff;">login to the admin panel</a> first.</p>
+                    `;
+                    document.getElementById('result').className = 'result error';
+                    document.getElementById('clearBtn').disabled = true;
+                }
+            })
+            .catch(error => {
+                console.error('Auth check failed:', error);
+            });
+    </script>
+</body>
+</html>
