@@ -365,9 +365,20 @@
 
                                 <div class="row">
                                     <div class="col-md-6 mb-3">
+                                        <label for="venmoUsername" class="form-label">Venmo Username</label>
+                                        <div class="input-group">
+                                            <span class="input-group-text">@</span>
+                                            <input type="text" class="form-control" id="venmoUsername" name="venmo_username" placeholder="sangou">
+                                        </div>
+                                        <div class="form-text">Students will send payments to this Venmo username</div>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
                                         <label for="maxRegistrations" class="form-label">Max Registrations per Student</label>
                                         <input type="number" class="form-control" id="maxRegistrations" name="max_registrations_per_student" min="1" max="10">
                                     </div>
+                                </div>
+
+                                <div class="row">
                                     <div class="col-md-6 mb-3">
                                         <div class="form-check form-switch mt-4">
                                             <input class="form-check-input" type="checkbox" id="allowSameDayDropins" name="allow_same_day_dropins">
@@ -376,11 +387,8 @@
                                             </label>
                                         </div>
                                     </div>
-                                </div>
-
-                                <div class="row">
-                                    <div class="col-12 mb-3">
-                                        <div class="form-check form-switch">
+                                    <div class="col-md-6 mb-3">
+                                        <div class="form-check form-switch mt-4">
                                             <input class="form-check-input" type="checkbox" id="emailNotifications" name="email_notifications_enabled">
                                             <label class="form-check-label" for="emailNotifications">
                                                 Enable Email Notifications
@@ -388,6 +396,7 @@
                                         </div>
                                     </div>
                                 </div>
+
 
                                 <div class="d-grid">
                                     <button type="submit" class="btn btn-primary">

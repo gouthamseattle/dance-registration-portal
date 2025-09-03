@@ -29,56 +29,17 @@ class DanceRegistrationApp {
             const response = await fetch('/api/settings');
             this.settings = await response.json();
             
-            // Load PayPal SDK dynamically with the correct client ID
-            if (this.settings.paypal_client_id) {
-                await this.loadPayPalSDK();
-            } else {
-                console.warn('PayPal client ID not configured');
-            }
-            
             // Check if registration is open
             if (this.settings.registration_open !== 'true') {
                 this.showRegistrationClosed();
                 return;
             }
+            
+            console.log('✅ Venmo payment system ready with username:', this.settings.venmo_username);
         } catch (error) {
             console.error('Error loading settings:', error);
             throw error;
         }
-    }
-
-    async loadPayPalSDK() {
-        return new Promise((resolve, reject) => {
-            // Check if PayPal SDK is already loaded
-            if (typeof paypal !== 'undefined') {
-                resolve();
-                return;
-            }
-
-            // Check if PayPal client ID is configured
-            if (!this.settings.paypal_client_id || this.settings.paypal_client_id.trim() === '') {
-                console.warn('PayPal client ID not configured');
-                resolve(); // Don't reject, just continue without PayPal
-                return;
-            }
-
-            // Create and load PayPal SDK script
-            const script = document.createElement('script');
-            script.src = `https://www.paypal.com/sdk/js?client-id=${this.settings.paypal_client_id}&currency=${this.settings.currency || 'USD'}&components=buttons`;
-            script.async = true;
-            
-            script.onload = () => {
-                console.log('PayPal SDK loaded successfully');
-                resolve();
-            };
-            
-            script.onerror = () => {
-                console.error('Failed to load PayPal SDK - possibly invalid client ID');
-                resolve(); // Don't reject, just continue without PayPal
-            };
-            
-            document.head.appendChild(script);
-        });
     }
 
     async loadCourses() {
@@ -521,7 +482,7 @@ class DanceRegistrationApp {
         document.getElementById('confirmationSection').style.display = 'none';
 
         this.populatePaymentSummary();
-        this.initializePayPal();
+        this.initializeVenmoPayment();
         this.scrollToTop();
     }
 
@@ -545,70 +506,186 @@ class DanceRegistrationApp {
         `;
     }
 
-    initializePayPal() {
-        // Clear any existing PayPal buttons
+    async initializeVenmoPayment() {
         const container = document.getElementById('paypal-button-container');
         container.innerHTML = '';
 
-        if (typeof paypal === 'undefined') {
-            // Show a message that PayPal is not configured instead of an error
+        try {
+            // Generate Venmo payment link
+            const courseName = this.selectedCourse ? this.selectedCourse.name : 
+                              this.selectedDropIn ? this.selectedDropIn.course_name : '';
+
+            const response = await fetch('/api/generate-venmo-link', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    registrationId: this.registrationData.registrationId,
+                    amount: this.registrationData.payment_amount,
+                    courseName: courseName
+                })
+            });
+
+            const venmoData = await response.json();
+
+            if (!response.ok) {
+                throw new Error(venmoData.error || 'Failed to generate Venmo payment link');
+            }
+
+            // Detect if user is on mobile
+            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
             container.innerHTML = `
-                <div class="alert alert-warning">
-                    <i class="fas fa-exclamation-triangle"></i>
-                    <strong>Payment System Not Configured</strong>
-                    <p class="mb-0 mt-2">PayPal payment processing is not currently available. Please contact the administrator to complete your registration.</p>
-                </div>
-                <div class="text-center mt-3">
-                    <p class="text-muted">Your registration has been recorded with ID: #${this.registrationData.registrationId}</p>
+                <div class="venmo-payment-container">
+                    <div class="alert alert-info mb-4">
+                        <div class="d-flex align-items-center">
+                            <i class="fas fa-mobile-alt fa-2x text-primary me-3"></i>
+                            <div>
+                                <h6 class="mb-1">Pay with Venmo</h6>
+                                <small>Send payment to <strong>@${venmoData.venmoUsername}</strong></small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="payment-details mb-4">
+                        <div class="row">
+                            <div class="col-6">
+                                <strong>Amount:</strong><br>
+                                <span class="h4 text-success">$${this.registrationData.payment_amount}</span>
+                            </div>
+                            <div class="col-6">
+                                <strong>Payment Note:</strong><br>
+                                <small class="text-muted">${venmoData.paymentNote}</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    ${isMobile ? `
+                        <!-- Mobile: Direct Venmo app link -->
+                        <div class="d-grid gap-2 mb-3">
+                            <a href="${venmoData.venmoLink}" class="btn btn-primary btn-lg venmo-btn">
+                                <i class="fas fa-mobile-alt me-2"></i>
+                                Open Venmo App & Pay
+                            </a>
+                        </div>
+                        <div class="text-center">
+                            <small class="text-muted">
+                                <i class="fas fa-info-circle me-1"></i>
+                                This will open your Venmo app with payment details pre-filled
+                            </small>
+                        </div>
+                    ` : `
+                        <!-- Desktop: QR Code and manual instructions -->
+                        <div class="text-center mb-4">
+                            <div class="qr-code-container mb-3">
+                                <div id="venmoQRCode" class="d-inline-block p-3 bg-white border rounded">
+                                    <div class="spinner-border text-primary" role="status">
+                                        <span class="visually-hidden">Generating QR code...</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <p class="mb-2"><strong>Scan with your phone to pay via Venmo</strong></p>
+                            <small class="text-muted">Or manually send $${this.registrationData.payment_amount} to @${venmoData.venmoUsername}</small>
+                        </div>
+                        
+                        <div class="manual-payment-info">
+                            <div class="alert alert-light">
+                                <h6><i class="fas fa-hand-point-right me-2"></i>Manual Payment Instructions:</h6>
+                                <ol class="mb-0 small">
+                                    <li>Open Venmo app on your phone</li>
+                                    <li>Search for <strong>@${venmoData.venmoUsername}</strong></li>
+                                    <li>Send <strong>$${this.registrationData.payment_amount}</strong></li>
+                                    <li>Include note: <strong>${venmoData.paymentNote}</strong></li>
+                                </ol>
+                            </div>
+                        </div>
+                    `}
+
+                    <div class="payment-confirmation mt-4">
+                        <div class="alert alert-warning">
+                            <h6><i class="fas fa-clock me-2"></i>After Payment</h6>
+                            <p class="mb-2">Your registration is saved with ID: <strong>#${this.registrationData.registrationId}</strong></p>
+                            <p class="mb-0 small">We'll confirm your payment within a few minutes and send you a confirmation email.</p>
+                        </div>
+                        
+                        <div class="d-grid">
+                            <button class="btn btn-success" onclick="app.showPaymentSentConfirmation()">
+                                <i class="fas fa-check me-2"></i>
+                                I've Sent the Payment
+                            </button>
+                        </div>
+                    </div>
                 </div>
             `;
-            return;
-        }
 
-        paypal.Buttons({
-            createOrder: (data, actions) => {
-                return actions.order.create({
-                    purchase_units: [{
-                        amount: {
-                            value: this.registrationData.payment_amount.toString(),
-                            currency_code: this.settings.currency || 'USD'
-                        },
-                        description: this.selectedCourse ? 
-                            `${this.selectedCourse.name} - Dance Class Registration` :
-                            `${this.selectedDropIn.course_name} - Drop-in Class`
-                    }]
-                });
-            },
-            onApprove: async (data, actions) => {
-                try {
-                    document.getElementById('paymentStatus').style.display = 'block';
-                    
-                    const order = await actions.order.capture();
-                    await this.handlePaymentSuccess(order);
-                    
-                } catch (error) {
-                    console.error('Payment capture error:', error);
-                    this.showError('Payment processing failed. Please try again.');
-                    document.getElementById('paymentStatus').style.display = 'none';
-                }
-            },
-            onError: (err) => {
-                console.error('PayPal error:', err);
-                this.showError('Payment failed. Please try again.');
-                document.getElementById('paymentStatus').style.display = 'none';
-            },
-            onCancel: (data) => {
-                console.log('Payment cancelled:', data);
-                this.showError('Payment was cancelled.');
-            },
-            style: {
-                layout: 'vertical',
-                color: 'blue',
-                shape: 'rect',
-                label: 'paypal',
-                height: 50
+            // Generate QR code for desktop users
+            if (!isMobile) {
+                this.generateVenmoQRCode(venmoData.venmoLink);
             }
-        }).render('#paypal-button-container');
+
+        } catch (error) {
+            console.error('Error initializing Venmo payment:', error);
+            container.innerHTML = `
+                <div class="alert alert-danger">
+                    <h6><i class="fas fa-exclamation-triangle me-2"></i>Payment System Error</h6>
+                    <p class="mb-2">${error.message}</p>
+                    <p class="mb-0 small">Your registration has been saved with ID: #${this.registrationData.registrationId}</p>
+                </div>
+            `;
+        }
+    }
+
+    async generateVenmoQRCode(venmoLink) {
+        try {
+            // Use a QR code generation service
+            const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(venmoLink)}`;
+            
+            const qrContainer = document.getElementById('venmoQRCode');
+            qrContainer.innerHTML = `<img src="${qrCodeUrl}" alt="Venmo Payment QR Code" class="img-fluid" style="max-width: 200px;">`;
+        } catch (error) {
+            console.error('Error generating QR code:', error);
+            const qrContainer = document.getElementById('venmoQRCode');
+            qrContainer.innerHTML = `<div class="text-muted small">QR code unavailable</div>`;
+        }
+    }
+
+    showPaymentSentConfirmation() {
+        // Update the payment section to show confirmation
+        const container = document.getElementById('paypal-button-container');
+        container.innerHTML = `
+            <div class="text-center">
+                <div class="alert alert-success">
+                    <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
+                    <h5>Payment Sent!</h5>
+                    <p class="mb-2">Thank you for sending your Venmo payment.</p>
+                    <p class="mb-0 small">We'll confirm your payment and send you a confirmation email shortly.</p>
+                </div>
+                
+                <div class="registration-summary">
+                    <h6>Registration Summary</h6>
+                    <div class="row text-start">
+                        <div class="col-6"><strong>Registration ID:</strong></div>
+                        <div class="col-6">#${this.registrationData.registrationId}</div>
+                        <div class="col-6"><strong>Amount:</strong></div>
+                        <div class="col-6">$${this.registrationData.payment_amount}</div>
+                        <div class="col-6"><strong>Status:</strong></div>
+                        <div class="col-6"><span class="badge bg-warning">Pending Confirmation</span></div>
+                    </div>
+                </div>
+
+                <div class="d-grid gap-2 mt-4">
+                    <button class="btn btn-primary" onclick="app.resetRegistration()">
+                        <i class="fas fa-plus me-2"></i>
+                        Register for Another Class
+                    </button>
+                    <button class="btn btn-outline-secondary" onclick="app.shareRegistration()">
+                        <i class="fas fa-share me-2"></i>
+                        Share with Friends
+                    </button>
+                </div>
+            </div>
+        `;
     }
 
     async handlePaymentSuccess(order) {

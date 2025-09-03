@@ -144,6 +144,12 @@ app.get('/api/settings', asyncHandler(async (req, res) => {
     settings.forEach(setting => {
         settingsObj[setting.setting_key] = setting.setting_value;
     });
+    
+    // Set default Venmo username if not configured
+    if (!settingsObj.venmo_username) {
+        settingsObj.venmo_username = 'sangou';
+    }
+    
     res.json(settingsObj);
 }));
 
@@ -198,6 +204,13 @@ app.get('/api/courses', asyncHandler(async (req, res) => {
     
     const courses = await dbConfig.all(query, params);
     res.json(courses);
+}));
+
+// Drop-in classes endpoint (returns empty array for now)
+app.get('/api/drop-in-classes', asyncHandler(async (req, res) => {
+    // For now, return empty array since drop-in classes aren't implemented yet
+    // This prevents the 404 error on the frontend
+    res.json([]);
 }));
 
 app.post('/api/courses', requireAuth, asyncHandler(async (req, res) => {
@@ -369,7 +382,7 @@ app.get('/api/registrations', requireAuth, asyncHandler(async (req, res) => {
 // Update registration payment status
 app.put('/api/registrations/:id/payment', asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const { payment_status, paypal_transaction_id, payment_method } = req.body;
+    const { payment_status, venmo_transaction_id, payment_method } = req.body;
     
     if (!payment_status) {
         return res.status(400).json({ error: 'Payment status is required' });
@@ -383,7 +396,7 @@ app.put('/api/registrations/:id/payment', asyncHandler(async (req, res) => {
             payment_method = $3,
             updated_at = CURRENT_TIMESTAMP
         WHERE id = $4
-    `, [payment_status, paypal_transaction_id, payment_method, id]);
+    `, [payment_status, venmo_transaction_id || null, payment_method || 'Venmo', id]);
     
     // If payment is completed, log success
     if (payment_status === 'completed') {
@@ -391,6 +404,56 @@ app.put('/api/registrations/:id/payment', asyncHandler(async (req, res) => {
     }
     
     res.json({ success: true });
+}));
+
+// Admin confirm payment endpoint
+app.put('/api/admin/registrations/:id/confirm-payment', requireAuth, asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const { venmo_transaction_note } = req.body;
+    
+    // Update registration to completed status
+    await dbConfig.run(`
+        UPDATE registrations SET
+            payment_status = 'completed',
+            payment_method = 'Venmo',
+            paypal_transaction_id = $1,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = $2
+    `, [venmo_transaction_note || `Venmo payment confirmed by admin`, id]);
+    
+    console.log('✅ Admin confirmed Venmo payment for registration:', id);
+    
+    res.json({ success: true, message: 'Payment confirmed successfully' });
+}));
+
+// Generate Venmo payment link
+app.post('/api/generate-venmo-link', asyncHandler(async (req, res) => {
+    const { registrationId, amount, courseName } = req.body;
+    
+    if (!registrationId || !amount) {
+        return res.status(400).json({ error: 'Registration ID and amount are required' });
+    }
+    
+    // Get Venmo username from settings
+    const venmoSetting = await dbConfig.get('SELECT setting_value FROM system_settings WHERE setting_key = $1', ['venmo_username']);
+    const venmoUsername = venmoSetting ? venmoSetting.setting_value : 'sangou';
+    
+    // Create payment note
+    const paymentNote = `Dance Registration #${registrationId}${courseName ? ` - ${courseName}` : ''}`;
+    
+    // Generate Venmo deep link
+    const venmoLink = `venmo://paycharge?txn=pay&recipients=${venmoUsername}&amount=${amount}&note=${encodeURIComponent(paymentNote)}`;
+    
+    // Generate web fallback link
+    const webLink = `https://venmo.com/${venmoUsername}?txn=pay&amount=${amount}&note=${encodeURIComponent(paymentNote)}`;
+    
+    res.json({
+        success: true,
+        venmoLink,
+        webLink,
+        paymentNote,
+        venmoUsername
+    });
 }));
 
 // Dashboard stats

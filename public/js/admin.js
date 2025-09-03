@@ -546,6 +546,7 @@ class AdminDashboard {
         // Populate settings form
         document.getElementById('appName').value = this.settings.app_name || '';
         document.getElementById('currency').value = this.settings.currency || 'USD';
+        document.getElementById('venmoUsername').value = this.settings.venmo_username || 'sangou';
         document.getElementById('maxRegistrations').value = this.settings.max_registrations_per_student || '5';
         document.getElementById('allowSameDayDropins').checked = this.settings.allow_same_day_dropins === 'true';
         document.getElementById('emailNotifications').checked = this.settings.email_notifications_enabled === 'true';
@@ -1143,33 +1144,119 @@ Questions? Reply to this message`;
     }
 
     async markPaid(registrationId) {
-        if (!confirm('Mark this registration as paid?')) return;
+        this.showVenmoConfirmationModal(registrationId);
+    }
 
+    showVenmoConfirmationModal(registrationId) {
+        const registration = this.registrations.find(r => r.id === registrationId);
+        if (!registration) return;
+
+        const modalHtml = `
+            <div class="modal fade" id="venmoConfirmModal" tabindex="-1">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">
+                                <i class="fas fa-mobile-alt text-primary me-2"></i>
+                                Confirm Venmo Payment
+                            </h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="alert alert-info">
+                                <strong>Check your Venmo notifications</strong> for a payment matching these details:
+                            </div>
+                            
+                            <div class="payment-details">
+                                <div class="row mb-2">
+                                    <div class="col-4"><strong>Student:</strong></div>
+                                    <div class="col-8">${registration.email}</div>
+                                </div>
+                                <div class="row mb-2">
+                                    <div class="col-4"><strong>Amount:</strong></div>
+                                    <div class="col-8">$${parseFloat(registration.payment_amount).toFixed(2)}</div>
+                                </div>
+                                <div class="row mb-2">
+                                    <div class="col-4"><strong>Expected Note:</strong></div>
+                                    <div class="col-8"><code>Dance Registration #${registration.id}</code></div>
+                                </div>
+                                <div class="row mb-2">
+                                    <div class="col-4"><strong>Course:</strong></div>
+                                    <div class="col-8">${registration.course_name || 'Drop-in Class'}</div>
+                                </div>
+                            </div>
+
+                            <div class="form-group mt-3">
+                                <label for="venmoNote" class="form-label">Venmo Payment Note (Optional)</label>
+                                <input type="text" class="form-control" id="venmoNote" 
+                                       placeholder="Copy the note from your Venmo notification">
+                                <div class="form-text">This helps track the payment for your records</div>
+                            </div>
+
+                            <div class="alert alert-warning mt-3">
+                                <i class="fas fa-exclamation-triangle me-2"></i>
+                                <strong>Only confirm if you received the Venmo payment!</strong>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="button" class="btn btn-success" onclick="admin.confirmVenmoPayment(${registrationId})">
+                                <i class="fas fa-check me-2"></i>
+                                Confirm Payment Received
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Remove existing modal if any
+        const existingModal = document.getElementById('venmoConfirmModal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+
+        // Add modal to body
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        
+        // Show modal
+        const modal = new bootstrap.Modal(document.getElementById('venmoConfirmModal'));
+        modal.show();
+    }
+
+    async confirmVenmoPayment(registrationId) {
+        const venmoNote = document.getElementById('venmoNote').value;
+        
         try {
-            const response = await fetch(`/api/registrations/${registrationId}/payment`, {
+            const response = await fetch(`/api/admin/registrations/${registrationId}/confirm-payment`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    payment_status: 'completed',
-                    payment_method: 'Manual'
+                    venmo_transaction_note: venmoNote || `Venmo payment confirmed by admin`
                 })
             });
 
             if (response.ok) {
+                // Close modal
+                const modal = bootstrap.Modal.getInstance(document.getElementById('venmoConfirmModal'));
+                modal.hide();
+                
+                // Reload data
                 await this.loadInitialData();
-                this.showSuccess('Registration marked as paid');
+                this.showSuccess('Venmo payment confirmed successfully!');
+                
                 if (this.currentSection === 'registrations') {
                     this.loadRegistrations();
                 }
             } else {
                 const error = await response.json();
-                this.showError(error.error || 'Failed to update payment status');
+                this.showError(error.error || 'Failed to confirm payment');
             }
         } catch (error) {
-            console.error('Error updating payment status:', error);
-            this.showError('Failed to update payment status');
+            console.error('Error confirming payment:', error);
+            this.showError('Failed to confirm payment');
         }
     }
 
