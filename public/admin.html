@@ -497,12 +497,14 @@
 
                         <div class="row">
                             <div class="col-md-6 mb-3">
-                                <label for="fullCoursePrice" class="form-label">Full Course Price</label>
-                                <input type="number" class="form-control" id="fullCoursePrice" name="full_course_price" min="0" step="0.01">
+                                <label for="perClassPrice" class="form-label">Per Class Price (USD) *</label>
+                                <input type="number" class="form-control" id="perClassPrice" name="per_class_price" min="0" step="0.01" required>
+                                <div class="form-text">Enter the price per individual class</div>
                             </div>
                             <div class="col-md-6 mb-3">
-                                <label for="perClassPrice" class="form-label">Per Class Price</label>
-                                <input type="number" class="form-control" id="perClassPrice" name="per_class_price" min="0" step="0.01">
+                                <label for="fullCoursePrice" class="form-label">Full Course Price (Auto-calculated)</label>
+                                <input type="number" class="form-control" id="fullCoursePrice" name="full_course_price" min="0" step="0.01" readonly>
+                                <div class="form-text">Automatically calculated: Per Class Price × Duration</div>
                             </div>
                         </div>
 

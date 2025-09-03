@@ -587,34 +587,36 @@ class AdminDashboard {
         const name = document.getElementById('courseName').value.trim();
         const courseType = document.getElementById('courseType').value;
         const capacity = document.getElementById('courseCapacity').value;
-        const fullCoursePrice = document.getElementById('fullCoursePrice').value;
         const perClassPrice = document.getElementById('perClassPrice').value;
+        const duration = document.getElementById('courseDuration').value;
         
         // Validate required fields
         if (!name || !courseType || !capacity) {
-            this.showError('Required fields missing: name, course_type, capacity, and price are required');
+            this.showError('Required fields missing: name, course_type, and capacity are required');
             return;
         }
         
-        // Validate that at least one price is provided
-        if (!fullCoursePrice && !perClassPrice) {
-            this.showError('Please provide either a Full Course Price or Per Class Price');
+        // Validate that per class price is provided
+        if (!perClassPrice || parseFloat(perClassPrice) <= 0) {
+            this.showError('Please provide a valid Per Class Price');
             return;
         }
         
-        // Calculate the main price (prefer full course price, fallback to per class price)
-        const mainPrice = parseFloat(fullCoursePrice) || parseFloat(perClassPrice) || 0;
+        // Calculate full course price based on duration and per class price
+        const perClassPriceNum = parseFloat(perClassPrice);
+        const durationWeeks = parseInt(duration) || 1;
+        const calculatedFullPrice = perClassPriceNum * durationWeeks;
         
         const courseData = {
             name: name,
             description: document.getElementById('courseDescription').value || null,
             course_type: courseType,
-            duration_weeks: document.getElementById('courseDuration').value || null,
+            duration_weeks: durationWeeks,
             level: document.getElementById('courseLevel').value || 'All Levels',
             capacity: parseInt(capacity),
-            price: mainPrice,
-            full_course_price: parseFloat(fullCoursePrice) || null,
-            per_class_price: parseFloat(perClassPrice) || null,
+            price: calculatedFullPrice, // Use calculated full price as main price
+            full_course_price: calculatedFullPrice,
+            per_class_price: perClassPriceNum,
             schedule_info: document.getElementById('scheduleInfo').value || null,
             prerequisites: document.getElementById('prerequisites').value || null,
             start_date: document.getElementById('startDate').value || null,
@@ -1307,6 +1309,15 @@ Questions? Reply to this message`;
         const courseTypeField = document.getElementById('courseType');
         const scheduleInfoField = document.getElementById('scheduleInfo');
         const multipleDatesSection = document.getElementById('multipleDatesSection');
+        const perClassPriceField = document.getElementById('perClassPrice');
+        const fullCoursePriceField = document.getElementById('fullCoursePrice');
+
+        const updateFullCoursePrice = () => {
+            const perClassPrice = parseFloat(perClassPriceField.value) || 0;
+            const duration = parseInt(durationField.value) || 1;
+            const calculatedPrice = perClassPrice * duration;
+            fullCoursePriceField.value = calculatedPrice.toFixed(2);
+        };
 
         const updateScheduleInfo = () => {
             const startDate = startDateField.value;
@@ -1369,12 +1380,21 @@ Questions? Reply to this message`;
         startTimeField.removeEventListener('change', updateScheduleInfo);
         durationField.removeEventListener('change', updateScheduleInfo);
         courseTypeField.removeEventListener('change', updateScheduleInfo);
+        perClassPriceField.removeEventListener('input', updateFullCoursePrice);
+        durationField.removeEventListener('input', updateFullCoursePrice);
 
         // Add event listeners
         startDateField.addEventListener('change', updateScheduleInfo);
         startTimeField.addEventListener('change', updateScheduleInfo);
         durationField.addEventListener('change', updateScheduleInfo);
         courseTypeField.addEventListener('change', updateScheduleInfo);
+        
+        // Add price calculation listeners
+        perClassPriceField.addEventListener('input', updateFullCoursePrice);
+        durationField.addEventListener('input', updateFullCoursePrice);
+        
+        // Initial calculation
+        updateFullCoursePrice();
     }
 
     // Get additional dates from the form
