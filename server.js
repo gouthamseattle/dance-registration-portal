@@ -268,12 +268,15 @@ app.post('/api/register', asyncHandler(async (req, res) => {
     const {
         first_name, last_name, email, phone, date_of_birth,
         emergency_contact_name, emergency_contact_phone, medical_conditions,
-        dance_experience, instagram_handle, how_heard_about_us,
+        dance_experience, instagram_handle, instagram_id, how_heard_about_us,
         course_id, payment_amount, special_requests
     } = req.body;
     
-    if (!first_name || !last_name || !email || !course_id || !payment_amount) {
-        return res.status(400).json({ error: 'Required fields missing' });
+    // Handle both instagram_handle and instagram_id field names
+    const instagram = instagram_handle || instagram_id;
+    
+    if (!email || !course_id || !payment_amount) {
+        return res.status(400).json({ error: 'Required fields missing: email, course_id, and payment_amount are required' });
     }
     
     // Check if registration is open
@@ -311,9 +314,9 @@ app.post('/api/register', asyncHandler(async (req, res) => {
                 how_heard_about_us = $10, updated_at = CURRENT_TIMESTAMP 
             WHERE id = $11
         `, [
-            first_name, last_name, phone, date_of_birth,
+            first_name || 'Student', last_name || '', phone, date_of_birth,
             emergency_contact_name, emergency_contact_phone, medical_conditions,
-            dance_experience, instagram_handle, how_heard_about_us, student.id
+            dance_experience, instagram, how_heard_about_us, student.id
         ]);
     } else {
         const result = await dbConfig.run(`
@@ -323,11 +326,11 @@ app.post('/api/register', asyncHandler(async (req, res) => {
                 dance_experience, instagram_handle, how_heard_about_us
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
         `, [
-            first_name, last_name, email, phone, date_of_birth,
+            first_name || 'Student', last_name || '', email, phone, date_of_birth,
             emergency_contact_name, emergency_contact_phone, medical_conditions,
-            dance_experience, instagram_handle, how_heard_about_us
+            dance_experience, instagram, how_heard_about_us
         ]);
-        student = { id: result.lastID || result.id, email, first_name, last_name };
+        student = { id: result.lastID || result.id, email, first_name: first_name || 'Student', last_name: last_name || '' };
     }
     
     // Create registration
