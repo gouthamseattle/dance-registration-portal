@@ -6,7 +6,9 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
-    "setup": "npm install && node setup.js"
+    "setup": "npm install && node setup.js",
+    "build": "node migrate-to-postgres.js",
+    "deploy": "npm run build && npm start"
   },
   "keywords": [
     "dance",
