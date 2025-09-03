@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dance Class Registration</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="css/styles.css" rel="stylesheet">
+    <meta name="description" content="Register for dance classes - Salsa, Bachata, Hip-Hop and more!">
+    <meta name="theme-color" content="#e91e63">
+    
+    <!-- Open Graph tags for WhatsApp sharing -->
+    <meta property="og:title" content="Dance Class Registration">
+    <meta property="og:description" content="Register for amazing dance classes! Multiple levels and styles available.">
+    <meta property="og:type" content="website">
+    <meta property="og:image" content="/images/dance-preview.jpg">
+    
+</head>
+<body>
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <p class="mt-3">Loading registration...</p>
+    </div>
+
+    <!-- Header -->
+    <header class="header-section">
+        <div class="container">
+            <div class="row align-items-center">
+                <div class="col-12 text-center">
+                    <h1 class="display-4 mb-2">
+                        <i class="fas fa-music text-primary"></i>
+                        Dance Classes
+                    </h1>
+                    <p class="lead text-muted">Register for amazing dance experiences</p>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Registration Status Alert -->
+    <div id="registrationStatus" class="container mt-3" style="display: none;">
+        <div class="alert alert-warning text-center">
+            <i class="fas fa-exclamation-triangle"></i>
+            <strong>Registration is currently closed.</strong>
+            <p class="mb-0 mt-2">Please check back later or contact us for more information.</p>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <main class="container mt-4" id="mainContent">
+        <!-- Course Selection Section -->
+        <section id="courseSelection" class="mb-5">
+            <div class="row">
+                <div class="col-12">
+                    <h2 class="section-title">
+                        <i class="fas fa-calendar-alt text-primary"></i>
+                        Available Courses
+                    </h2>
+                </div>
+            </div>
+
+            <!-- Multi-week Courses -->
+            <div id="multiWeekCourses" class="row">
+                <!-- Courses will be loaded dynamically -->
+            </div>
+
+            <!-- Drop-in Classes -->
+            <div id="dropInSection" style="display: none;">
+                <div class="row mt-4">
+                    <div class="col-12">
+                        <h3 class="section-subtitle">
+                            <i class="fas fa-clock text-secondary"></i>
+                            Drop-in Classes
+                        </h3>
+                    </div>
+                </div>
+                <div id="dropInClasses" class="row">
+                    <!-- Drop-in classes will be loaded dynamically -->
+                </div>
+            </div>
+
+            <!-- No courses available message -->
+            <div id="noCoursesMessage" class="text-center py-5" style="display: none;">
+                <i class="fas fa-calendar-times fa-3x text-muted mb-3"></i>
+                <h3 class="text-muted">No courses available</h3>
+                <p class="text-muted">Registration is not currently open. Please check back later!</p>
+            </div>
+        </section>
+
+        <!-- Registration Form Section -->
+        <section id="registrationForm" class="registration-form-section" style="display: none;">
+            <div class="row justify-content-center">
+                <div class="col-lg-8">
+                    <div class="card shadow-lg border-0">
+                        <div class="card-header bg-primary text-white text-center">
+                            <h3 class="mb-0">
+                                <i class="fas fa-user-plus"></i>
+                                Complete Your Registration
+                            </h3>
+                        </div>
+                        <div class="card-body p-4">
+                            <!-- Selected Course Info -->
+                            <div id="selectedCourseInfo" class="alert alert-info">
+                                <!-- Course details will be populated here -->
+                            </div>
+
+                            <!-- Registration Form -->
+                            <form id="studentRegistrationForm">
+                                <div class="row">
+                                    <div class="col-12 mb-3">
+                                        <label for="email" class="form-label">
+                                            <i class="fas fa-envelope text-primary"></i>
+                                            Email Address *
+                                        </label>
+                                        <input type="email" class="form-control form-control-lg" id="email" name="email" required>
+                                        <div class="form-text">We'll send your confirmation to this email</div>
+                                    </div>
+
+                                    <div class="col-12 mb-3">
+                                        <label for="instagram_id" class="form-label">
+                                            <i class="fab fa-instagram text-primary"></i>
+                                            Instagram ID *
+                                        </label>
+                                        <div class="input-group">
+                                            <span class="input-group-text">@</span>
+                                            <input type="text" class="form-control form-control-lg" id="instagram_id" name="instagram_id" required>
+                                        </div>
+                                    </div>
+
+                                    <div class="col-12 mb-4">
+                                        <label for="dance_experience" class="form-label">
+                                            <i class="fas fa-star text-primary"></i>
+                                            Dance Experience *
+                                        </label>
+                                        <select class="form-select form-select-lg" id="dance_experience" name="dance_experience" required>
+                                            <option value="">Select your experience level</option>
+                                            <option value="Complete Beginner">Complete Beginner - Never danced before</option>
+                                            <option value="Some Experience">Some Experience - Taken a few classes</option>
+                                            <option value="Intermediate">Intermediate - Regular dancer</option>
+                                            <option value="Advanced">Advanced - Very experienced</option>
+                                        </select>
+                                    </div>
+
+                                    <!-- Payment Options (for multi-week courses) -->
+                                    <div id="paymentOptions" class="col-12 mb-4" style="display: none;">
+                                        <label class="form-label">
+                                            <i class="fas fa-credit-card text-primary"></i>
+                                            Payment Option *
+                                        </label>
+                                        <div class="payment-options">
+                                            <div class="form-check payment-option-card">
+                                                <input class="form-check-input" type="radio" name="payment_option" id="fullCourse" value="full-course">
+                                                <label class="form-check-label" for="fullCourse">
+                                                    <div class="payment-option-content">
+                                                        <strong>Full Course Payment</strong>
+                                                        <div class="price" id="fullCoursePrice">$0</div>
+                                                        <small class="text-muted">Pay once for the entire course</small>
+                                                    </div>
+                                                </label>
+                                            </div>
+                                            <div class="form-check payment-option-card">
+                                                <input class="form-check-input" type="radio" name="payment_option" id="perClass" value="per-class">
+                                                <label class="form-check-label" for="perClass">
+                                                    <div class="payment-option-content">
+                                                        <strong>Per Class Payment</strong>
+                                                        <div class="price" id="perClassPrice">$0</div>
+                                                        <small class="text-muted">Pay for each class individually</small>
+                                                    </div>
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Total Amount Display -->
+                                    <div class="col-12 mb-4">
+                                        <div class="total-amount-card">
+                                            <div class="d-flex justify-content-between align-items-center">
+                                                <span class="h5 mb-0">Total Amount:</span>
+                                                <span class="h4 mb-0 text-primary" id="totalAmount">$0</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Form Actions -->
+                                <div class="d-grid gap-2">
+                                    <button type="button" class="btn btn-secondary btn-lg" id="backToCourses">
+                                        <i class="fas fa-arrow-left"></i>
+                                        Back to Courses
+                                    </button>
+                                    <button type="submit" class="btn btn-primary btn-lg" id="proceedToPayment">
+                                        <i class="fas fa-credit-card"></i>
+                                        Proceed to Payment
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Payment Section -->
+        <section id="paymentSection" class="payment-section" style="display: none;">
+            <div class="row justify-content-center">
+                <div class="col-lg-8">
+                    <div class="card shadow-lg border-0">
+                        <div class="card-header bg-success text-white text-center">
+                            <h3 class="mb-0">
+                                <i class="fas fa-lock"></i>
+                                Secure Payment
+                            </h3>
+                        </div>
+                        <div class="card-body p-4">
+                            <!-- Payment Summary -->
+                            <div id="paymentSummary" class="alert alert-light border">
+                                <!-- Payment details will be populated here -->
+                            </div>
+
+                            <!-- PayPal Button Container -->
+                            <div id="paypal-button-container" class="mb-3"></div>
+
+                            <!-- Payment Status -->
+                            <div id="paymentStatus" class="text-center" style="display: none;">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">Processing payment...</span>
+                                </div>
+                                <p class="mt-2">Processing your payment...</p>
+                            </div>
+
+                            <!-- Back Button -->
+                            <div class="d-grid">
+                                <button type="button" class="btn btn-outline-secondary" id="backToForm">
+                                    <i class="fas fa-arrow-left"></i>
+                                    Back to Registration Form
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Confirmation Section -->
+        <section id="confirmationSection" class="confirmation-section" style="display: none;">
+            <div class="row justify-content-center">
+                <div class="col-lg-8">
+                    <div class="card shadow-lg border-0 border-success">
+                        <div class="card-header bg-success text-white text-center">
+                            <h3 class="mb-0">
+                                <i class="fas fa-check-circle"></i>
+                                Registration Confirmed!
+                            </h3>
+                        </div>
+                        <div class="card-body p-4 text-center">
+                            <div class="success-animation mb-4">
+                                <i class="fas fa-check-circle fa-5x text-success"></i>
+                            </div>
+                            
+                            <h4 class="text-success mb-3">Welcome to the class!</h4>
+                            
+                            <div id="confirmationDetails" class="confirmation-details">
+                                <!-- Confirmation details will be populated here -->
+                            </div>
+
+                            <div class="alert alert-info mt-4">
+                                <i class="fas fa-envelope"></i>
+                                <strong>Check your email!</strong>
+                                <p class="mb-0 mt-2">We've sent you a confirmation email with all the class details.</p>
+                            </div>
+
+                            <div class="d-grid gap-2 mt-4">
+                                <button type="button" class="btn btn-primary btn-lg" id="registerAnother">
+                                    <i class="fas fa-plus"></i>
+                                    Register for Another Class
+                                </button>
+                                <button type="button" class="btn btn-outline-secondary" id="shareRegistration">
+                                    <i class="fas fa-share"></i>
+                                    Share with Friends
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer mt-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-12 text-center">
+                    <p class="text-muted mb-2">
+                        <i class="fas fa-heart text-danger"></i>
+                        Made with love for dance
+                    </p>
+                    <p class="text-muted small">
+                        Questions? Contact us for support
+                    </p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Toast Notifications -->
+    <div class="toast-container position-fixed bottom-0 end-0 p-3">
+        <div id="errorToast" class="toast" role="alert">
+            <div class="toast-header bg-danger text-white">
+                <i class="fas fa-exclamation-triangle me-2"></i>
+                <strong class="me-auto">Error</strong>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast"></button>
+            </div>
+            <div class="toast-body" id="errorToastBody">
+                <!-- Error message will be populated here -->
+            </div>
+        </div>
+
+        <div id="successToast" class="toast" role="alert">
+            <div class="toast-header bg-success text-white">
+                <i class="fas fa-check-circle me-2"></i>
+                <strong class="me-auto">Success</strong>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast"></button>
+            </div>
+            <div class="toast-body" id="successToastBody">
+                <!-- Success message will be populated here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="js/registration.js"></script>
+</body>
+</html>
