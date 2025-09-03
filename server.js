@@ -493,6 +493,49 @@ app.get('/api/dashboard/stats', requireAuth, asyncHandler(async (req, res) => {
     });
 }));
 
+// Clear all courses (admin only)
+app.delete('/api/admin/clear-all-courses', requireAuth, asyncHandler(async (req, res) => {
+    console.log('🗑️  Admin requested to clear all courses');
+    
+    try {
+        // Get count of existing courses
+        const countResult = await dbConfig.get('SELECT COUNT(*) as count FROM courses');
+        const courseCount = countResult.count;
+        console.log(`📊 Found ${courseCount} courses to delete`);
+        
+        if (courseCount === 0) {
+            return res.json({ success: true, message: 'No courses found to delete', deleted: 0 });
+        }
+        
+        // Delete all registrations first (to maintain referential integrity)
+        await dbConfig.run('DELETE FROM registrations');
+        console.log('🗑️  Deleted all registrations');
+        
+        // Delete all courses
+        await dbConfig.run('DELETE FROM courses');
+        console.log('🗑️  Deleted all courses');
+        
+        // Reset sequences if in production (PostgreSQL)
+        if (dbConfig.isProduction) {
+            await dbConfig.run('ALTER SEQUENCE courses_id_seq RESTART WITH 1');
+            await dbConfig.run('ALTER SEQUENCE registrations_id_seq RESTART WITH 1');
+            console.log('🔄 Reset ID sequences');
+        }
+        
+        console.log('🎉 Successfully cleared all dance courses and registrations!');
+        
+        res.json({ 
+            success: true, 
+            message: `Successfully deleted ${courseCount} courses and all associated registrations`,
+            deleted: courseCount
+        });
+        
+    } catch (error) {
+        console.error('❌ Error clearing courses:', error);
+        res.status(500).json({ error: 'Failed to clear courses', details: error.message });
+    }
+}));
+
 // Error handling middleware
 app.use((err, req, res, next) => {
     console.error('Error:', err);
