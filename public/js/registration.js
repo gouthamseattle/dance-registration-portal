@@ -462,8 +462,21 @@ class DanceRegistrationApp {
                 throw new Error(result.error || 'Registration failed');
             }
 
+            // Ensure registrationId is properly set
             this.registrationData.registrationId = result.registrationId;
             this.registrationData.studentId = result.studentId;
+
+            // Debug logging to verify data
+            console.log('✅ Registration successful:', {
+                registrationId: this.registrationData.registrationId,
+                studentId: this.registrationData.studentId,
+                amount: this.registrationData.payment_amount
+            });
+
+            // Verify we have all required data before proceeding
+            if (!this.registrationData.registrationId || !this.registrationData.payment_amount) {
+                throw new Error('Registration data incomplete - missing ID or amount');
+            }
 
             // Proceed to payment
             this.showPaymentSection();

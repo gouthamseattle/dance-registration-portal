@@ -346,11 +346,22 @@ app.post('/api/register', asyncHandler(async (req, res) => {
         INSERT INTO registrations (
             student_id, course_id, payment_amount, payment_status, special_requests
         ) VALUES ($1, $2, $3, 'pending', $4)
+        ${dbConfig.isProduction ? 'RETURNING id' : ''}
     `, [student.id, course_id, payment_amount, special_requests]);
+    
+    // Handle different return formats for SQLite vs PostgreSQL
+    let registrationId;
+    if (dbConfig.isProduction) {
+        // PostgreSQL with RETURNING returns an array of rows
+        registrationId = registrationResult[0]?.id;
+    } else {
+        // SQLite returns { lastID: ... }
+        registrationId = registrationResult.lastID;
+    }
     
     res.json({ 
         success: true, 
-        registrationId: registrationResult.lastID || registrationResult.id,
+        registrationId: registrationId,
         studentId: student.id
     });
 }));
