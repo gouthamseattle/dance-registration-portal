@@ -582,11 +582,12 @@ class AdminDashboard {
         const formData = new FormData(form);
         const courseId = formData.get('id');
         
-        // Validate required fields
-        const name = formData.get('name');
-        const courseType = formData.get('course_type');
-        const capacity = formData.get('capacity');
+        // Get values using the correct field names from the HTML
+        const name = document.getElementById('courseName').value;
+        const courseType = document.getElementById('courseType').value;
+        const capacity = document.getElementById('courseCapacity').value;
         
+        // Validate required fields
         if (!name || !courseType || !capacity) {
             this.showError('Please fill in all required fields: Dance Series Name, Series Type, and Capacity');
             return;
@@ -594,17 +595,19 @@ class AdminDashboard {
         
         const courseData = {
             name: name,
-            description: formData.get('description'),
+            description: document.getElementById('courseDescription').value || null,
             course_type: courseType,
-            duration_weeks: formData.get('duration_weeks') || null,
-            level: formData.get('level'),
+            duration_weeks: document.getElementById('courseDuration').value || null,
+            level: document.getElementById('courseLevel').value || 'All Levels',
             capacity: parseInt(capacity),
-            full_course_price: parseFloat(formData.get('full_course_price')) || null,
-            per_class_price: parseFloat(formData.get('per_class_price')) || null,
-            schedule_info: formData.get('schedule_info'),
-            prerequisites: formData.get('prerequisites'),
-            start_date: formData.get('start_date') || null,
-            start_time: formData.get('start_time') || null
+            price: parseFloat(document.getElementById('fullCoursePrice').value) || parseFloat(document.getElementById('perClassPrice').value) || 0,
+            start_date: document.getElementById('startDate').value || null,
+            start_time: document.getElementById('startTime').value || null,
+            day_of_week: null,
+            end_date: null,
+            end_time: null,
+            location: null,
+            instructor: null
         };
 
         try {
