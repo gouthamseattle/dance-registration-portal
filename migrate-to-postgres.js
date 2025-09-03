@@ -231,12 +231,20 @@ async function migrateTable(sqliteDb, pgClient, tableName, columns) {
 async function insertDefaultData(client) {
     console.log('📝 Inserting default data...');
     
-    // Insert default admin user
+    // Insert default admin user (force update to fix login issue)
+    const bcrypt = require('bcryptjs');
+    const hashedPassword = await bcrypt.hash('admin123', 10);
+    
     await client.query(`
         INSERT INTO admin_users (username, password_hash, email, is_active) 
         VALUES ($1, $2, $3, $4) 
-        ON CONFLICT (username) DO NOTHING
-    `, ['admin', '$2b$10$8K1p/a0dclxKoNqIiVHb.eUXrL2tkXM4V.rA4kxVkfFU2u0SROn4S', 'admin@dancestudio.com', true]);
+        ON CONFLICT (username) DO UPDATE SET 
+            password_hash = $2,
+            email = $3,
+            is_active = $4
+    `, ['admin', hashedPassword, 'admin@dancestudio.com', true]);
+    
+    console.log('✅ Admin user created/updated with fresh password hash');
     
     // Insert default system settings
     const defaultSettings = [
