@@ -287,11 +287,15 @@ async function insertDefaultData(client) {
     ];
     
     for (const [name, description, course_type, duration_weeks, level, capacity, price, start_date, end_date, day_of_week, start_time, end_time, location, instructor, is_active] of sampleCourses) {
-        await client.query(`
-            INSERT INTO courses (name, description, course_type, duration_weeks, level, capacity, price, start_date, end_date, day_of_week, start_time, end_time, location, instructor, is_active) 
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) 
-            ON CONFLICT DO NOTHING
-        `, [name, description, course_type, duration_weeks, level, capacity, price, start_date, end_date, day_of_week, start_time, end_time, location, instructor, is_active]);
+        try {
+            await client.query(`
+                INSERT INTO courses (name, description, course_type, duration_weeks, level, capacity, price, start_date, end_date, day_of_week, start_time, end_time, location, instructor, is_active) 
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) 
+                ON CONFLICT (name) DO NOTHING
+            `, [name, description, course_type, duration_weeks, level, capacity, price, start_date, end_date, day_of_week, start_time, end_time, location, instructor, is_active]);
+        } catch (error) {
+            console.log(`ℹ️  Course ${name} already exists or conflict occurred, skipping`);
+        }
     }
     
     console.log('✅ Default data inserted');
