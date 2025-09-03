@@ -584,15 +584,26 @@ class AdminDashboard {
         const courseId = formData.get('id');
         
         // Get values using the correct field names from the HTML
-        const name = document.getElementById('courseName').value;
+        const name = document.getElementById('courseName').value.trim();
         const courseType = document.getElementById('courseType').value;
         const capacity = document.getElementById('courseCapacity').value;
+        const fullCoursePrice = document.getElementById('fullCoursePrice').value;
+        const perClassPrice = document.getElementById('perClassPrice').value;
         
         // Validate required fields
         if (!name || !courseType || !capacity) {
-            this.showError('Please fill in all required fields: Dance Series Name, Series Type, and Capacity');
+            this.showError('Required fields missing: name, course_type, capacity, and price are required');
             return;
         }
+        
+        // Validate that at least one price is provided
+        if (!fullCoursePrice && !perClassPrice) {
+            this.showError('Please provide either a Full Course Price or Per Class Price');
+            return;
+        }
+        
+        // Calculate the main price (prefer full course price, fallback to per class price)
+        const mainPrice = parseFloat(fullCoursePrice) || parseFloat(perClassPrice) || 0;
         
         const courseData = {
             name: name,
@@ -601,7 +612,11 @@ class AdminDashboard {
             duration_weeks: document.getElementById('courseDuration').value || null,
             level: document.getElementById('courseLevel').value || 'All Levels',
             capacity: parseInt(capacity),
-            price: parseFloat(document.getElementById('fullCoursePrice').value) || parseFloat(document.getElementById('perClassPrice').value) || 0,
+            price: mainPrice,
+            full_course_price: parseFloat(fullCoursePrice) || null,
+            per_class_price: parseFloat(perClassPrice) || null,
+            schedule_info: document.getElementById('scheduleInfo').value || null,
+            prerequisites: document.getElementById('prerequisites').value || null,
             start_date: document.getElementById('startDate').value || null,
             start_time: document.getElementById('startTime').value || null,
             day_of_week: null,
