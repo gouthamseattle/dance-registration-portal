@@ -203,7 +203,15 @@ app.get('/api/courses', asyncHandler(async (req, res) => {
     query += ' GROUP BY c.id ORDER BY c.created_at DESC';
     
     const courses = await dbConfig.all(query, params);
-    res.json(courses);
+    
+    // Map price field to full_course_price for frontend compatibility
+    const mappedCourses = courses.map(course => ({
+        ...course,
+        full_course_price: course.price,
+        per_class_price: 0 // Set to 0 or calculate based on course.price if needed
+    }));
+    
+    res.json(mappedCourses);
 }));
 
 // Drop-in classes endpoint (returns empty array for now)
