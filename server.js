@@ -46,8 +46,10 @@ app.use(session({
     resave: false,
     saveUninitialized: false,
     cookie: { 
-        secure: process.env.NODE_ENV === 'production', // Use HTTPS in production
-        maxAge: 24 * 60 * 60 * 1000 // 24 hours
+        secure: false, // Set to false for Railway deployment
+        httpOnly: true,
+        maxAge: 24 * 60 * 60 * 1000, // 24 hours
+        sameSite: 'lax'
     }
 }));
 
