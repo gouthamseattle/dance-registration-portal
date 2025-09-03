@@ -245,7 +245,8 @@ async function insertDefaultData(client) {
         ['currency', 'USD', 'Currency for payments'],
         ['max_registrations_per_student', '5', 'Maximum registrations per student'],
         ['allow_same_day_dropins', 'true', 'Allow same-day drop-in registrations'],
-        ['email_notifications_enabled', 'false', 'Enable email notifications']
+        ['email_notifications_enabled', 'false', 'Enable email notifications'],
+        ['paypal_client_id', 'sb', 'PayPal Client ID for payment processing']
     ];
     
     for (const [key, value, description] of defaultSettings) {
@@ -269,6 +270,20 @@ async function insertDefaultData(client) {
             VALUES ($1, $2, $3, $4, $5) 
             ON CONFLICT (template_name) DO NOTHING
         `, [name, subject, body, variables, true]);
+    }
+    
+    // Insert sample courses
+    const sampleCourses = [
+        ['Crew Practice', 'Weekly crew practice sessions for all skill levels', 'multi-week', 8, 'All Levels', 20, 150.00, '2024-09-15', '2024-11-10', 'Sunday', '14:00', '16:00', 'Main Studio', 'Dance Instructor', true],
+        ['SDS Workshop', 'Special dance style workshop focusing on technique and performance', 'workshop', 1, 'Intermediate', 15, 75.00, '2024-09-22', '2024-09-22', 'Saturday', '10:00', '13:00', 'Studio B', 'Guest Instructor', true]
+    ];
+    
+    for (const [name, description, course_type, duration_weeks, level, capacity, price, start_date, end_date, day_of_week, start_time, end_time, location, instructor, is_active] of sampleCourses) {
+        await client.query(`
+            INSERT INTO courses (name, description, course_type, duration_weeks, level, capacity, price, start_date, end_date, day_of_week, start_time, end_time, location, instructor, is_active) 
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) 
+            ON CONFLICT DO NOTHING
+        `, [name, description, course_type, duration_weeks, level, capacity, price, start_date, end_date, day_of_week, start_time, end_time, location, instructor, is_active]);
     }
     
     console.log('✅ Default data inserted');
