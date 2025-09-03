@@ -1202,13 +1202,26 @@ Questions? Reply to this message`;
         const startDateField = document.getElementById('startDate');
         const startTimeField = document.getElementById('startTime');
         const durationField = document.getElementById('courseDuration');
+        const courseTypeField = document.getElementById('courseType');
         const scheduleInfoField = document.getElementById('scheduleInfo');
+        const multipleDatesSection = document.getElementById('multipleDatesSection');
 
         const updateScheduleInfo = () => {
             const startDate = startDateField.value;
             const startTime = startTimeField.value;
             const duration = durationField.value;
+            const courseType = courseTypeField.value;
 
+            // Show/hide multiple dates section based on course type and duration
+            if (courseType === 'multi-week' && duration && parseInt(duration) > 1) {
+                multipleDatesSection.style.display = 'block';
+            } else {
+                multipleDatesSection.style.display = 'none';
+            }
+
+            // Generate schedule information
+            let scheduleText = '';
+            
             if (startDate && startTime) {
                 const date = new Date(startDate);
                 const dayName = date.toLocaleDateString('en-US', { weekday: 'long' });
@@ -1219,13 +1232,33 @@ Questions? Reply to this message`;
                 const ampm = parseInt(hours) >= 12 ? 'PM' : 'AM';
                 const timeFormatted = `${hour12}:${minutes} ${ampm}`;
                 
-                let scheduleText = `${dayName}s ${timeFormatted}`;
+                // Check if there are additional dates
+                const additionalDates = this.getAdditionalDates();
                 
-                if (duration && parseInt(duration) > 1) {
-                    scheduleText += ` (${duration} weeks)`;
+                if (additionalDates.length > 0) {
+                    // Format with specific dates
+                    const allDates = [startDate, ...additionalDates].sort();
+                    const formattedDates = allDates.map(dateStr => {
+                        const d = new Date(dateStr);
+                        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                    }).join(', ');
+                    scheduleText = `${formattedDates} at ${timeFormatted}`;
+                } else if (courseType === 'multi-week' && duration && parseInt(duration) > 1) {
+                    // Weekly recurring format
+                    scheduleText = `${dayName}s ${timeFormatted} (${duration} weeks)`;
+                } else {
+                    // Single class format
+                    const formattedDate = date.toLocaleDateString('en-US', { 
+                        weekday: 'long', 
+                        month: 'long', 
+                        day: 'numeric' 
+                    });
+                    scheduleText = `${formattedDate} at ${timeFormatted}`;
                 }
                 
                 scheduleInfoField.value = scheduleText;
+            } else {
+                scheduleInfoField.value = '';
             }
         };
 
@@ -1233,11 +1266,60 @@ Questions? Reply to this message`;
         startDateField.removeEventListener('change', updateScheduleInfo);
         startTimeField.removeEventListener('change', updateScheduleInfo);
         durationField.removeEventListener('change', updateScheduleInfo);
+        courseTypeField.removeEventListener('change', updateScheduleInfo);
 
         // Add event listeners
         startDateField.addEventListener('change', updateScheduleInfo);
         startTimeField.addEventListener('change', updateScheduleInfo);
         durationField.addEventListener('change', updateScheduleInfo);
+        courseTypeField.addEventListener('change', updateScheduleInfo);
+    }
+
+    // Get additional dates from the form
+    getAdditionalDates() {
+        const additionalDates = [];
+        const dateInputs = document.querySelectorAll('#additionalDates input[type="date"]');
+        dateInputs.forEach(input => {
+            if (input.value) {
+                additionalDates.push(input.value);
+            }
+        });
+        return additionalDates;
+    }
+
+    // Add a new date field for multi-week series
+    addDateField() {
+        const additionalDatesContainer = document.getElementById('additionalDates');
+        const dateFieldCount = additionalDatesContainer.children.length;
+        
+        const dateFieldHtml = `
+            <div class="input-group mb-2" id="dateField${dateFieldCount}">
+                <input type="date" class="form-control" name="additional_date_${dateFieldCount}" onchange="admin.updateScheduleFromAdditionalDates()">
+                <button type="button" class="btn btn-outline-danger" onclick="admin.removeDateField(${dateFieldCount})">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+        `;
+        
+        additionalDatesContainer.insertAdjacentHTML('beforeend', dateFieldHtml);
+    }
+
+    // Remove a date field
+    removeDateField(fieldIndex) {
+        const dateField = document.getElementById(`dateField${fieldIndex}`);
+        if (dateField) {
+            dateField.remove();
+            this.updateScheduleFromAdditionalDates();
+        }
+    }
+
+    // Update schedule info when additional dates change
+    updateScheduleFromAdditionalDates() {
+        // Trigger the main schedule update function
+        const startDateField = document.getElementById('startDate');
+        if (startDateField) {
+            startDateField.dispatchEvent(new Event('change'));
+        }
     }
 }
 

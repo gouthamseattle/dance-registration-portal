@@ -508,14 +508,31 @@
                             </div>
                         </div>
 
-                        <div class="mb-3">
-                            <label for="scheduleInfo" class="form-label">Schedule Information</label>
-                            <input type="text" class="form-control" id="scheduleInfo" name="schedule_info" placeholder="e.g., Tuesdays & Thursdays 7-8 PM">
+                        <!-- Multiple Dates Section (for multi-week series) -->
+                        <div id="multipleDatesSection" class="mb-3" style="display: none;">
+                            <label class="form-label">Additional Class Dates</label>
+                            <div class="alert alert-info small">
+                                <i class="fas fa-info-circle"></i>
+                                For multi-week series, you can add specific dates for each class session.
+                            </div>
+                            <div id="additionalDates">
+                                <!-- Additional date inputs will be added here -->
+                            </div>
+                            <button type="button" class="btn btn-outline-primary btn-sm" onclick="admin.addDateField()">
+                                <i class="fas fa-plus"></i> Add Date
+                            </button>
                         </div>
 
                         <div class="mb-3">
-                            <label for="prerequisites" class="form-label">Prerequisites</label>
-                            <input type="text" class="form-control" id="prerequisites" name="prerequisites" placeholder="e.g., Basic dance experience required">
+                            <label for="scheduleInfo" class="form-label">Schedule Information</label>
+                            <input type="text" class="form-control" id="scheduleInfo" name="schedule_info" placeholder="Auto-populated from dates and time" readonly>
+                            <div class="form-text">This field is automatically generated from your selected dates and time.</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="prerequisites" class="form-label">Prerequisites <span class="text-muted">(Optional)</span></label>
+                            <input type="text" class="form-control" id="prerequisites" name="prerequisites" placeholder="e.g., Basic dance experience required (leave blank if none)">
+                            <div class="form-text">Leave blank if there are no specific prerequisites for this course.</div>
                         </div>
                     </form>
                 </div>
