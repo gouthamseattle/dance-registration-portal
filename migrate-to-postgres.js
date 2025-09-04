@@ -129,8 +129,40 @@ async function createTables(client) {
     for (const table of tables) {
         await client.query(table);
     }
-    
-    console.log('✅ PostgreSQL tables created');
+
+    // Align schema for slot-based architecture
+    // 1) Relax NOT NULL constraints on legacy generic fields so inserts without them succeed
+    await client.query(`ALTER TABLE courses ALTER COLUMN capacity DROP NOT NULL`).catch(() => {});
+    await client.query(`ALTER TABLE courses ALTER COLUMN price DROP NOT NULL`).catch(() => {});
+    // 2) Add new optional metadata fields used by slot-based UI
+    await client.query(`ALTER TABLE courses ADD COLUMN IF NOT EXISTS schedule_info TEXT`);
+    await client.query(`ALTER TABLE courses ADD COLUMN IF NOT EXISTS prerequisites TEXT`);
+    // 3) Create slot/pricing tables (idempotent)
+    await client.query(`
+        CREATE TABLE IF NOT EXISTS course_slots (
+            id SERIAL PRIMARY KEY,
+            course_id INTEGER REFERENCES courses(id) ON DELETE CASCADE,
+            slot_name VARCHAR(255),
+            difficulty_level VARCHAR(100) NOT NULL,
+            capacity INTEGER NOT NULL,
+            day_of_week VARCHAR(20),
+            start_time TIME,
+            end_time TIME,
+            location VARCHAR(255),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    `);
+    await client.query(`
+        CREATE TABLE IF NOT EXISTS course_pricing (
+            id SERIAL PRIMARY KEY,
+            course_slot_id INTEGER REFERENCES course_slots(id) ON DELETE CASCADE,
+            pricing_type VARCHAR(50) NOT NULL,
+            price DECIMAL(10,2) NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    `);
+
+    console.log('✅ PostgreSQL tables created (including slot-based schema)');
 }
 
 async function migrateData(client) {
