@@ -570,8 +570,14 @@ class AdminDashboard {
         document.getElementById('courseForm').reset();
         document.getElementById('courseId').value = '';
         
-        // Set up date/time change listeners for auto-populating schedule info
-        this.setupScheduleAutoPopulation();
+        // Clear slots container
+        document.getElementById('slotsContainer').innerHTML = '';
+        
+        // Add initial slot
+        this.addSlot();
+        
+        // Set up course type change listener
+        this.setupCourseTypeListener();
         
         const modal = new bootstrap.Modal(document.getElementById('courseModal'));
         modal.show();
@@ -579,53 +585,43 @@ class AdminDashboard {
 
 
     async saveCourse() {
-        const form = document.getElementById('courseForm');
-        const formData = new FormData(form);
-        const courseId = formData.get('id');
-        
-        // Get values using the correct field names from the HTML
+        const courseId = document.getElementById('courseId').value;
         const name = document.getElementById('courseName').value.trim();
         const courseType = document.getElementById('courseType').value;
-        const capacity = document.getElementById('courseCapacity').value;
-        const perClassPrice = document.getElementById('perClassPrice').value;
-        const duration = document.getElementById('courseDuration').value;
+        const description = document.getElementById('courseDescription').value || null;
+        const duration = parseInt(document.getElementById('courseDuration').value) || 1;
+        const startDate = document.getElementById('startDate').value || null;
+        const scheduleInfo = document.getElementById('scheduleInfo').value || null;
+        const prerequisites = document.getElementById('prerequisites').value || null;
         
         // Validate required fields
-        if (!name || !courseType || !capacity) {
-            this.showError('Required fields missing: name, course_type, and capacity are required');
+        if (!name || !courseType) {
+            this.showError('Required fields missing: name and course_type are required');
             return;
         }
         
-        // Validate that per class price is provided
-        if (!perClassPrice || parseFloat(perClassPrice) <= 0) {
-            this.showError('Please provide a valid Per Class Price');
+        // Collect slots data
+        const slots = this.collectSlotsData();
+        if (slots.length === 0) {
+            this.showError('At least one slot is required');
             return;
         }
         
-        // Calculate full course price based on duration and per class price
-        const perClassPriceNum = parseFloat(perClassPrice);
-        const durationWeeks = parseInt(duration) || 1;
-        const calculatedFullPrice = perClassPriceNum * durationWeeks;
+        // Validate course type constraints
+        if (courseType === 'crew_practice' && slots.length > 1) {
+            this.showError('Crew Practice can only have one slot');
+            return;
+        }
         
         const courseData = {
             name: name,
-            description: document.getElementById('courseDescription').value || null,
+            description: description,
             course_type: courseType,
-            duration_weeks: durationWeeks,
-            level: document.getElementById('courseLevel').value || 'All Levels',
-            capacity: parseInt(capacity),
-            price: calculatedFullPrice, // Use calculated full price as main price
-            full_course_price: calculatedFullPrice,
-            per_class_price: perClassPriceNum,
-            schedule_info: document.getElementById('scheduleInfo').value || null,
-            prerequisites: document.getElementById('prerequisites').value || null,
-            start_date: document.getElementById('startDate').value || null,
-            start_time: document.getElementById('startTime').value || null,
-            day_of_week: null,
-            end_date: null,
-            end_time: null,
-            location: null,
-            instructor: null
+            duration_weeks: duration,
+            start_date: startDate,
+            schedule_info: scheduleInfo,
+            prerequisites: prerequisites,
+            slots: slots
         };
 
         try {
@@ -658,6 +654,219 @@ class AdminDashboard {
             console.error('Error saving course:', error);
             this.showError('Failed to save course');
         }
+    }
+
+    // Slot Management Functions
+    setupCourseTypeListener() {
+        const courseTypeField = document.getElementById('courseType');
+        const addSlotBtn = document.getElementById('addSlotBtn');
+        const slotInfoText = document.getElementById('slotInfoText');
+        
+        const updateSlotConstraints = () => {
+            const courseType = courseTypeField.value;
+            const slotsContainer = document.getElementById('slotsContainer');
+            const currentSlots = slotsContainer.children.length;
+            
+            if (courseType === 'crew_practice') {
+                addSlotBtn.style.display = currentSlots >= 1 ? 'none' : 'inline-block';
+                slotInfoText.textContent = 'Crew Practice is limited to one slot only.';
+                
+                // Remove extra slots if switching to crew practice
+                while (slotsContainer.children.length > 1) {
+                    slotsContainer.removeChild(slotsContainer.lastChild);
+                }
+            } else {
+                addSlotBtn.style.display = 'inline-block';
+                slotInfoText.textContent = 'Dance Series and Drop In Classes can have multiple slots. Crew Practice is limited to one slot.';
+            }
+        };
+        
+        courseTypeField.addEventListener('change', updateSlotConstraints);
+        updateSlotConstraints(); // Initial call
+    }
+
+    addSlot() {
+        const slotsContainer = document.getElementById('slotsContainer');
+        const courseType = document.getElementById('courseType').value;
+        const slotIndex = slotsContainer.children.length;
+        
+        // Check crew practice constraint
+        if (courseType === 'crew_practice' && slotIndex >= 1) {
+            this.showError('Crew Practice can only have one slot');
+            return;
+        }
+        
+        const slotHtml = `
+            <div class="slot-card card mb-3" data-slot-index="${slotIndex}">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0">Slot ${slotIndex + 1}</h6>
+                    <button type="button" class="btn btn-outline-danger btn-sm" onclick="admin.removeSlot(${slotIndex})">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Slot Name</label>
+                            <input type="text" class="form-control slot-name" placeholder="e.g., Beginner Session" value="Main Session">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Difficulty Level *</label>
+                            <select class="form-select slot-difficulty" required>
+                                <option value="All Levels">All Levels</option>
+                                <option value="Beginner">Beginner</option>
+                                <option value="Intermediate">Intermediate</option>
+                                <option value="Advanced">Advanced</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Capacity *</label>
+                            <input type="number" class="form-control slot-capacity" min="1" max="100" required value="20">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Day of Week</label>
+                            <select class="form-select slot-day">
+                                <option value="">Select Day</option>
+                                <option value="Monday">Monday</option>
+                                <option value="Tuesday">Tuesday</option>
+                                <option value="Wednesday">Wednesday</option>
+                                <option value="Thursday">Thursday</option>
+                                <option value="Friday">Friday</option>
+                                <option value="Saturday">Saturday</option>
+                                <option value="Sunday">Sunday</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Location</label>
+                            <input type="text" class="form-control slot-location" placeholder="e.g., Studio A">
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Start Time</label>
+                            <input type="time" class="form-control slot-start-time">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">End Time</label>
+                            <input type="time" class="form-control slot-end-time">
+                        </div>
+                    </div>
+                    
+                    <div class="pricing-section">
+                        <h6 class="mb-3">Pricing for this Slot</h6>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Full Package Price *</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">$</span>
+                                    <input type="number" class="form-control slot-full-price" min="0" step="0.01" required>
+                                </div>
+                                <div class="form-text">Total price for entire series/class</div>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Drop In Fee (per class) *</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">$</span>
+                                    <input type="number" class="form-control slot-drop-in-price" min="0" step="0.01" required>
+                                </div>
+                                <div class="form-text">Price per individual class session</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        slotsContainer.insertAdjacentHTML('beforeend', slotHtml);
+        
+        // Update add button visibility
+        this.updateAddSlotButton();
+    }
+
+    removeSlot(slotIndex) {
+        const slotsContainer = document.getElementById('slotsContainer');
+        const slotCard = slotsContainer.querySelector(`[data-slot-index="${slotIndex}"]`);
+        
+        if (slotCard) {
+            // Don't allow removing the last slot
+            if (slotsContainer.children.length <= 1) {
+                this.showError('A course must have at least one slot');
+                return;
+            }
+            
+            slotCard.remove();
+            
+            // Re-index remaining slots
+            Array.from(slotsContainer.children).forEach((slot, index) => {
+                slot.setAttribute('data-slot-index', index);
+                const header = slot.querySelector('.card-header h6');
+                if (header) {
+                    header.textContent = `Slot ${index + 1}`;
+                }
+                const removeBtn = slot.querySelector('.btn-outline-danger');
+                if (removeBtn) {
+                    removeBtn.setAttribute('onclick', `admin.removeSlot(${index})`);
+                }
+            });
+        }
+        
+        // Update add button visibility
+        this.updateAddSlotButton();
+    }
+
+    updateAddSlotButton() {
+        const courseType = document.getElementById('courseType').value;
+        const slotsContainer = document.getElementById('slotsContainer');
+        const addSlotBtn = document.getElementById('addSlotBtn');
+        const currentSlots = slotsContainer.children.length;
+        
+        if (courseType === 'crew_practice') {
+            addSlotBtn.style.display = currentSlots >= 1 ? 'none' : 'inline-block';
+        } else {
+            addSlotBtn.style.display = 'inline-block';
+        }
+    }
+
+    collectSlotsData() {
+        const slotsContainer = document.getElementById('slotsContainer');
+        const slots = [];
+        
+        Array.from(slotsContainer.children).forEach(slotCard => {
+            const slotName = slotCard.querySelector('.slot-name').value || 'Main Session';
+            const difficulty = slotCard.querySelector('.slot-difficulty').value;
+            const capacity = parseInt(slotCard.querySelector('.slot-capacity').value);
+            const dayOfWeek = slotCard.querySelector('.slot-day').value || null;
+            const startTime = slotCard.querySelector('.slot-start-time').value || null;
+            const endTime = slotCard.querySelector('.slot-end-time').value || null;
+            const location = slotCard.querySelector('.slot-location').value || null;
+            const fullPrice = parseFloat(slotCard.querySelector('.slot-full-price').value);
+            const dropInPrice = parseFloat(slotCard.querySelector('.slot-drop-in-price').value);
+            
+            // Validate required fields
+            if (!difficulty || !capacity || isNaN(fullPrice) || isNaN(dropInPrice)) {
+                return; // Skip invalid slots
+            }
+            
+            slots.push({
+                slot_name: slotName,
+                difficulty_level: difficulty,
+                capacity: capacity,
+                day_of_week: dayOfWeek,
+                start_time: startTime,
+                end_time: endTime,
+                location: location,
+                pricing: {
+                    full_package: fullPrice,
+                    drop_in: dropInPrice
+                }
+            });
+        });
+        
+        return slots;
     }
 
     async saveSettings() {

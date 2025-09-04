@@ -6,7 +6,7 @@
     <title>Admin Dashboard - Dance Registration Portal</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    <link href="css/admin-styles.css" rel="stylesheet">
+    <link href="css/admin-styles.css?v=2" rel="stylesheet">
     <meta name="robots" content="noindex, nofollow">
 </head>
 <body>
@@ -459,8 +459,9 @@
                             <div class="col-md-12 mb-3">
                                 <label for="courseType" class="form-label">Series Type *</label>
                                 <select class="form-select" id="courseType" name="course_type" required>
-                                    <option value="multi-week">Multi-Week Series</option>
-                                    <option value="drop-in">Drop-in Class</option>
+                                    <option value="dance_series">Dance Series</option>
+                                    <option value="drop_in">Drop In Class</option>
+                                    <option value="crew_practice">Crew Practice</option>
                                 </select>
                             </div>
                         </div>
@@ -476,62 +477,31 @@
                         </div>
 
                         <div class="row">
-                            <div class="col-md-4 mb-3">
+                            <div class="col-md-6 mb-3">
                                 <label for="courseDuration" class="form-label">Duration (weeks)</label>
-                                <input type="number" class="form-control" id="courseDuration" name="duration_weeks" min="1" max="52">
+                                <input type="number" class="form-control" id="courseDuration" name="duration_weeks" min="1" max="52" value="1">
                             </div>
-                            <div class="col-md-4 mb-3">
-                                <label for="courseLevel" class="form-label">Level</label>
-                                <select class="form-select" id="courseLevel" name="level">
-                                    <option value="All Levels">All Levels</option>
-                                    <option value="Beginner">Beginner</option>
-                                    <option value="Intermediate">Intermediate</option>
-                                    <option value="Advanced">Advanced</option>
-                                </select>
-                            </div>
-                            <div class="col-md-4 mb-3">
-                                <label for="courseCapacity" class="form-label">Capacity *</label>
-                                <input type="number" class="form-control" id="courseCapacity" name="capacity" min="1" max="100" required>
-                            </div>
-                        </div>
-
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label for="perClassPrice" class="form-label">Per Class Price (USD) *</label>
-                                <input type="number" class="form-control" id="perClassPrice" name="per_class_price" min="0" step="0.01" required>
-                                <div class="form-text">Enter the price per individual class</div>
-                            </div>
-                            <div class="col-md-6 mb-3">
-                                <label for="fullCoursePrice" class="form-label">Full Course Price (Auto-calculated)</label>
-                                <input type="number" class="form-control" id="fullCoursePrice" name="full_course_price" min="0" step="0.01" readonly>
-                                <div class="form-text">Automatically calculated: Per Class Price × Duration</div>
-                            </div>
-                        </div>
-
-                        <div class="row">
                             <div class="col-md-6 mb-3">
                                 <label for="startDate" class="form-label">Start Date</label>
                                 <input type="date" class="form-control" id="startDate" name="start_date">
                             </div>
-                            <div class="col-md-6 mb-3">
-                                <label for="startTime" class="form-label">Start Time</label>
-                                <input type="time" class="form-control" id="startTime" name="start_time">
-                            </div>
                         </div>
 
-                        <!-- Multiple Dates Section (for multi-week series) -->
-                        <div id="multipleDatesSection" class="mb-3" style="display: none;">
-                            <label class="form-label">Additional Class Dates</label>
-                            <div class="alert alert-info small">
+                        <!-- Slots Management Section -->
+                        <div class="mb-4">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h6 class="mb-0">Time Slots</h6>
+                                <button type="button" class="btn btn-outline-primary btn-sm" id="addSlotBtn" onclick="admin.addSlot()">
+                                    <i class="fas fa-plus"></i> Add Slot
+                                </button>
+                            </div>
+                            <div class="alert alert-info small" id="slotInfo">
                                 <i class="fas fa-info-circle"></i>
-                                For multi-week series, you can add specific dates for each class session.
+                                <span id="slotInfoText">Dance Series and Drop In Classes can have multiple slots. Crew Practice is limited to one slot.</span>
                             </div>
-                            <div id="additionalDates">
-                                <!-- Additional date inputs will be added here -->
+                            <div id="slotsContainer">
+                                <!-- Slots will be added here dynamically -->
                             </div>
-                            <button type="button" class="btn btn-outline-primary btn-sm" onclick="admin.addDateField()">
-                                <i class="fas fa-plus"></i> Add Date
-                            </button>
                         </div>
 
                         <div class="mb-3">
@@ -578,6 +548,6 @@
 
     <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="js/admin.js"></script>
+    <script src="js/admin.js?v=2"></script>
 </body>
 </html>

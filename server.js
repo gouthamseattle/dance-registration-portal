@@ -179,8 +179,7 @@ app.get('/api/courses', asyncHandler(async (req, res) => {
     
     let query = `
         SELECT c.*,
-               COUNT(DISTINCT r.id) as registration_count,
-               (c.capacity - COUNT(DISTINCT r.id)) as available_spots
+               COUNT(DISTINCT r.id) as registration_count
         FROM courses c
         LEFT JOIN registrations r ON c.id = r.course_id AND r.payment_status = 'completed'
     `;
@@ -204,14 +203,54 @@ app.get('/api/courses', asyncHandler(async (req, res) => {
     
     const courses = await dbConfig.all(query, params);
     
-    // Map price field to full_course_price for frontend compatibility
-    const mappedCourses = courses.map(course => ({
-        ...course,
-        full_course_price: course.price,
-        per_class_price: 0 // Set to 0 or calculate based on course.price if needed
+    // Get slots and pricing for each course
+    const coursesWithSlots = await Promise.all(courses.map(async (course) => {
+        const slots = await dbConfig.all(`
+            SELECT cs.*, 
+                   COUNT(DISTINCT r.id) as slot_registration_count,
+                   (cs.capacity - COUNT(DISTINCT r.id)) as available_spots
+            FROM course_slots cs
+            LEFT JOIN registrations r ON cs.course_id = r.course_id AND r.payment_status = 'completed'
+            WHERE cs.course_id = $1
+            GROUP BY cs.id
+            ORDER BY cs.created_at ASC
+        `, [course.id]);
+        
+        // Get pricing for each slot
+        const slotsWithPricing = await Promise.all(slots.map(async (slot) => {
+            const pricing = await dbConfig.all(`
+                SELECT pricing_type, price 
+                FROM course_pricing 
+                WHERE course_slot_id = $1
+            `, [slot.id]);
+            
+            const pricingObj = {};
+            pricing.forEach(p => {
+                pricingObj[p.pricing_type] = parseFloat(p.price);
+            });
+            
+            return {
+                ...slot,
+                pricing: pricingObj
+            };
+        }));
+        
+        // Calculate total capacity and available spots across all slots
+        const totalCapacity = slots.reduce((sum, slot) => sum + (slot.capacity || 0), 0);
+        const totalAvailableSpots = slots.reduce((sum, slot) => sum + (slot.available_spots || 0), 0);
+        
+        return {
+            ...course,
+            slots: slotsWithPricing,
+            capacity: totalCapacity,
+            available_spots: totalAvailableSpots,
+            // Backward compatibility fields
+            full_course_price: slotsWithPricing[0]?.pricing?.full_package || 0,
+            per_class_price: slotsWithPricing[0]?.pricing?.drop_in || 0
+        };
     }));
     
-    res.json(mappedCourses);
+    res.json(coursesWithSlots);
 }));
 
 // Drop-in classes endpoint (returns empty array for now)
@@ -224,49 +263,303 @@ app.get('/api/drop-in-classes', asyncHandler(async (req, res) => {
 app.post('/api/courses', requireAuth, asyncHandler(async (req, res) => {
     const {
         name, description, course_type, duration_weeks,
-        level, capacity, price, start_date, end_date,
-        day_of_week, start_time, end_time, location, instructor
+        start_date, end_date, instructor, schedule_info, prerequisites,
+        slots // Array of slot objects with difficulty_level, capacity, pricing, etc.
     } = req.body;
     
-    if (!name || !course_type || !capacity || !price) {
-        return res.status(400).json({ error: 'Required fields missing: name, course_type, capacity, and price are required' });
+    if (!name || !course_type || !slots || slots.length === 0) {
+        return res.status(400).json({ error: 'Required fields missing: name, course_type, and at least one slot are required' });
     }
     
-    const result = await dbConfig.run(`
+    // Validate course type constraints
+    if (course_type === 'crew_practice' && slots.length > 1) {
+        return res.status(400).json({ error: 'Crew Practice can only have one slot' });
+    }
+    
+    // Create the course
+    const courseResult = await dbConfig.run(`
         INSERT INTO courses (
             name, description, course_type, duration_weeks,
-            level, capacity, price, start_date, end_date,
-            day_of_week, start_time, end_time, location, instructor
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+            start_date, end_date, instructor, schedule_info, prerequisites
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        ${dbConfig.isProduction ? 'RETURNING id' : ''}
     `, [
         name, description, course_type, duration_weeks || 1,
-        level || 'All Levels', capacity, price, start_date, end_date,
-        day_of_week, start_time, end_time, location, instructor
+        start_date, end_date, instructor, schedule_info, prerequisites
     ]);
     
-    res.json({ success: true, courseId: result.lastID || result.id });
+    // Get course ID
+    let courseId;
+    if (dbConfig.isProduction) {
+        courseId = courseResult[0]?.id;
+    } else {
+        courseId = courseResult.lastID;
+    }
+    
+    if (!courseId) {
+        return res.status(500).json({ error: 'Failed to create course' });
+    }
+    
+    // Create slots and pricing
+    for (const slot of slots) {
+        const {
+            slot_name, difficulty_level, capacity, day_of_week,
+            start_time, end_time, location, pricing
+        } = slot;
+        
+        if (!difficulty_level || !capacity || !pricing) {
+            return res.status(400).json({ error: 'Each slot must have difficulty_level, capacity, and pricing' });
+        }
+        
+        // Create slot
+        const slotResult = await dbConfig.run(`
+            INSERT INTO course_slots (
+                course_id, slot_name, difficulty_level, capacity,
+                day_of_week, start_time, end_time, location
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            ${dbConfig.isProduction ? 'RETURNING id' : ''}
+        `, [
+            courseId, slot_name || 'Main Session', difficulty_level, capacity,
+            day_of_week, start_time, end_time, location
+        ]);
+        
+        // Get slot ID
+        let slotId;
+        if (dbConfig.isProduction) {
+            slotId = slotResult[0]?.id;
+        } else {
+            slotId = slotResult.lastID;
+        }
+        
+        if (!slotId) {
+            return res.status(500).json({ error: 'Failed to create slot' });
+        }
+        
+        // Create pricing records
+        if (pricing.full_package) {
+            await dbConfig.run(`
+                INSERT INTO course_pricing (course_slot_id, pricing_type, price)
+                VALUES ($1, 'full_package', $2)
+            `, [slotId, pricing.full_package]);
+        }
+        
+        if (pricing.drop_in) {
+            await dbConfig.run(`
+                INSERT INTO course_pricing (course_slot_id, pricing_type, price)
+                VALUES ($1, 'drop_in', $2)
+            `, [slotId, pricing.drop_in]);
+        }
+    }
+    
+    res.json({ success: true, courseId: courseId });
 }));
 
 app.put('/api/courses/:id', requireAuth, asyncHandler(async (req, res) => {
     const { id } = req.params;
     const {
         name, description, course_type, duration_weeks,
-        level, capacity, price, start_date, end_date,
-        day_of_week, start_time, end_time, location, instructor, is_active
+        start_date, end_date, instructor, schedule_info, prerequisites, is_active,
+        slots // Array of slot objects for updating
     } = req.body;
     
+    // Update course basic info
     await dbConfig.run(`
         UPDATE courses SET
             name = $1, description = $2, course_type = $3, duration_weeks = $4,
-            level = $5, capacity = $6, price = $7, start_date = $8, end_date = $9,
-            day_of_week = $10, start_time = $11, end_time = $12, location = $13, 
-            instructor = $14, is_active = $15, updated_at = CURRENT_TIMESTAMP
-        WHERE id = $16
+            start_date = $5, end_date = $6, instructor = $7, schedule_info = $8,
+            prerequisites = $9, is_active = $10, updated_at = CURRENT_TIMESTAMP
+        WHERE id = $11
     `, [
         name, description, course_type, duration_weeks,
-        level, capacity, price, start_date, end_date,
-        day_of_week, start_time, end_time, location, instructor, is_active, id
+        start_date, end_date, instructor, schedule_info, prerequisites, is_active, id
     ]);
+    
+    // If slots are provided, update them
+    if (slots && Array.isArray(slots)) {
+        // Validate course type constraints
+        if (course_type === 'crew_practice' && slots.length > 1) {
+            return res.status(400).json({ error: 'Crew Practice can only have one slot' });
+        }
+        
+        // Delete existing slots and pricing (cascade will handle pricing)
+        await dbConfig.run('DELETE FROM course_slots WHERE course_id = $1', [id]);
+        
+        // Create new slots
+        for (const slot of slots) {
+            const {
+                slot_name, difficulty_level, capacity, day_of_week,
+                start_time, end_time, location, pricing
+            } = slot;
+            
+            if (!difficulty_level || !capacity || !pricing) {
+                return res.status(400).json({ error: 'Each slot must have difficulty_level, capacity, and pricing' });
+            }
+            
+            // Create slot
+            const slotResult = await dbConfig.run(`
+                INSERT INTO course_slots (
+                    course_id, slot_name, difficulty_level, capacity,
+                    day_of_week, start_time, end_time, location
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                ${dbConfig.isProduction ? 'RETURNING id' : ''}
+            `, [
+                id, slot_name || 'Main Session', difficulty_level, capacity,
+                day_of_week, start_time, end_time, location
+            ]);
+            
+            // Get slot ID
+            let slotId;
+            if (dbConfig.isProduction) {
+                slotId = slotResult[0]?.id;
+            } else {
+                slotId = slotResult.lastID;
+            }
+            
+            if (!slotId) {
+                return res.status(500).json({ error: 'Failed to create slot' });
+            }
+            
+            // Create pricing records
+            if (pricing.full_package) {
+                await dbConfig.run(`
+                    INSERT INTO course_pricing (course_slot_id, pricing_type, price)
+                    VALUES ($1, 'full_package', $2)
+                `, [slotId, pricing.full_package]);
+            }
+            
+            if (pricing.drop_in) {
+                await dbConfig.run(`
+                    INSERT INTO course_pricing (course_slot_id, pricing_type, price)
+                    VALUES ($1, 'drop_in', $2)
+                `, [slotId, pricing.drop_in]);
+            }
+        }
+    }
+    
+    res.json({ success: true });
+}));
+
+// Slot Management Endpoints
+app.post('/api/courses/:id/slots', requireAuth, asyncHandler(async (req, res) => {
+    const { id: courseId } = req.params;
+    const {
+        slot_name, difficulty_level, capacity, day_of_week,
+        start_time, end_time, location, pricing
+    } = req.body;
+    
+    if (!difficulty_level || !capacity || !pricing) {
+        return res.status(400).json({ error: 'difficulty_level, capacity, and pricing are required' });
+    }
+    
+    // Check if course exists and get course type
+    const course = await dbConfig.get('SELECT course_type FROM courses WHERE id = $1', [courseId]);
+    if (!course) {
+        return res.status(404).json({ error: 'Course not found' });
+    }
+    
+    // Check crew practice constraint
+    if (course.course_type === 'crew_practice') {
+        const existingSlots = await dbConfig.get('SELECT COUNT(*) as count FROM course_slots WHERE course_id = $1', [courseId]);
+        if (existingSlots.count >= 1) {
+            return res.status(400).json({ error: 'Crew Practice can only have one slot' });
+        }
+    }
+    
+    // Create slot
+    const slotResult = await dbConfig.run(`
+        INSERT INTO course_slots (
+            course_id, slot_name, difficulty_level, capacity,
+            day_of_week, start_time, end_time, location
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        ${dbConfig.isProduction ? 'RETURNING id' : ''}
+    `, [
+        courseId, slot_name || 'Main Session', difficulty_level, capacity,
+        day_of_week, start_time, end_time, location
+    ]);
+    
+    // Get slot ID
+    let slotId;
+    if (dbConfig.isProduction) {
+        slotId = slotResult[0]?.id;
+    } else {
+        slotId = slotResult.lastID;
+    }
+    
+    if (!slotId) {
+        return res.status(500).json({ error: 'Failed to create slot' });
+    }
+    
+    // Create pricing records
+    if (pricing.full_package) {
+        await dbConfig.run(`
+            INSERT INTO course_pricing (course_slot_id, pricing_type, price)
+            VALUES ($1, 'full_package', $2)
+        `, [slotId, pricing.full_package]);
+    }
+    
+    if (pricing.drop_in) {
+        await dbConfig.run(`
+            INSERT INTO course_pricing (course_slot_id, pricing_type, price)
+            VALUES ($1, 'drop_in', $2)
+        `, [slotId, pricing.drop_in]);
+    }
+    
+    res.json({ success: true, slotId: slotId });
+}));
+
+app.put('/api/courses/:courseId/slots/:slotId', requireAuth, asyncHandler(async (req, res) => {
+    const { courseId, slotId } = req.params;
+    const {
+        slot_name, difficulty_level, capacity, day_of_week,
+        start_time, end_time, location, pricing
+    } = req.body;
+    
+    // Update slot
+    await dbConfig.run(`
+        UPDATE course_slots SET
+            slot_name = $1, difficulty_level = $2, capacity = $3,
+            day_of_week = $4, start_time = $5, end_time = $6, location = $7
+        WHERE id = $8 AND course_id = $9
+    `, [
+        slot_name, difficulty_level, capacity, day_of_week,
+        start_time, end_time, location, slotId, courseId
+    ]);
+    
+    // Update pricing if provided
+    if (pricing) {
+        // Delete existing pricing
+        await dbConfig.run('DELETE FROM course_pricing WHERE course_slot_id = $1', [slotId]);
+        
+        // Create new pricing records
+        if (pricing.full_package) {
+            await dbConfig.run(`
+                INSERT INTO course_pricing (course_slot_id, pricing_type, price)
+                VALUES ($1, 'full_package', $2)
+            `, [slotId, pricing.full_package]);
+        }
+        
+        if (pricing.drop_in) {
+            await dbConfig.run(`
+                INSERT INTO course_pricing (course_slot_id, pricing_type, price)
+                VALUES ($1, 'drop_in', $2)
+            `, [slotId, pricing.drop_in]);
+        }
+    }
+    
+    res.json({ success: true });
+}));
+
+app.delete('/api/courses/:courseId/slots/:slotId', requireAuth, asyncHandler(async (req, res) => {
+    const { courseId, slotId } = req.params;
+    
+    // Check if this is the last slot for a course
+    const slotCount = await dbConfig.get('SELECT COUNT(*) as count FROM course_slots WHERE course_id = $1', [courseId]);
+    if (slotCount.count <= 1) {
+        return res.status(400).json({ error: 'Cannot delete the last slot. A course must have at least one slot.' });
+    }
+    
+    // Delete slot (pricing will be deleted by cascade)
+    await dbConfig.run('DELETE FROM course_slots WHERE id = $1 AND course_id = $2', [slotId, courseId]);
     
     res.json({ success: true });
 }));
