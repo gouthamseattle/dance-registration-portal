@@ -113,3 +113,22 @@ flowchart TD
 Note: When triggered by **update memory bank**, I MUST review every memory bank file, even if some don't require updates. Focus particularly on activeContext.md and progress.md as they track current state.
 
 REMEMBER: After every memory reset, I begin completely fresh. The Memory Bank is my only link to previous work. It must be maintained with precision and clarity, as my effectiveness depends entirely on its accuracy.
+
+## Testing and Validation Rules
+
+### No Local Console Testing
+- **NEVER** use browser_action or local testing to validate functionality
+- **ALWAYS** deploy code changes to Railway for user validation
+- After implementing features, commit and push changes to trigger deployment
+- Ask the user to test the deployed functionality and provide feedback
+- Focus on code implementation and deployment, not local testing
+
+### Deployment-First Approach
+1. Implement requested features
+2. Commit changes with descriptive messages
+3. Push to trigger Railway deployment
+4. Confirm deployment success via logs
+5. Request user validation of deployed functionality
+6. Iterate based on user feedback
+
+This approach ensures testing happens in the actual production environment where users will interact with the application.
