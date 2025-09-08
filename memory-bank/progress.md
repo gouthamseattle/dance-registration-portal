@@ -29,6 +29,7 @@
 - **Registration Monitoring**: Real-time registration and payment tracking
 - **Dashboard Stats**: Total registrations, revenue, active courses, pending payments
 - **Course Types**: Support for multi-week courses and drop-in classes
+- **Start Date Optional**: Start Date is optional in new Dance Series creation; backend accepts NULL `start_date`
 
 ### ✅ Database Management
 - **Dual Database Support**: SQLite for development, PostgreSQL for production

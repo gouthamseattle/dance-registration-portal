@@ -677,8 +677,35 @@ class AdminDashboard {
             }
         };
         
-        courseTypeField.addEventListener('change', updateSlotConstraints);
+        courseTypeField.addEventListener('change', () => {
+            updateSlotConstraints();
+            this.updatePricingUIForCourseType();
+        });
         updateSlotConstraints(); // Initial call
+        this.updatePricingUIForCourseType();
+    }
+
+    updatePricingUIForCourseType() {
+        const courseType = document.getElementById('courseType').value;
+        const slotsContainer = document.getElementById('slotsContainer');
+        Array.from(slotsContainer.children).forEach(slotCard => {
+            const fullGroup = slotCard.querySelector('.full-price-group');
+            const fullInput = slotCard.querySelector('.slot-full-price');
+            const dropInInput = slotCard.querySelector('.slot-drop-in-price');
+            if (!dropInInput) return;
+            if (courseType === 'dance_series') {
+                if (fullGroup) fullGroup.style.display = '';
+                if (fullInput) fullInput.required = true;
+                dropInInput.required = true;
+            } else {
+                if (fullGroup) fullGroup.style.display = 'none';
+                if (fullInput) {
+                    fullInput.required = false;
+                    fullInput.value = '';
+                }
+                dropInInput.required = true;
+            }
+        });
     }
 
     addSlot() {
@@ -755,7 +782,7 @@ class AdminDashboard {
                     <div class="pricing-section">
                         <h6 class="mb-3">Pricing for this Slot</h6>
                         <div class="row">
-                            <div class="col-md-6 mb-3">
+                            <div class="col-md-6 mb-3 full-price-group">
                                 <label class="form-label">Full Package Price *</label>
                                 <div class="input-group">
                                     <span class="input-group-text">$</span>
@@ -763,7 +790,7 @@ class AdminDashboard {
                                 </div>
                                 <div class="form-text">Total price for entire series/class</div>
                             </div>
-                            <div class="col-md-6 mb-3">
+                            <div class="col-md-6 mb-3 drop-in-price-group">
                                 <label class="form-label">Drop In Fee (per class) *</label>
                                 <div class="input-group">
                                     <span class="input-group-text">$</span>
@@ -779,6 +806,9 @@ class AdminDashboard {
         
         slotsContainer.insertAdjacentHTML('beforeend', slotHtml);
         
+        // Adjust pricing UI for current course type
+        this.updatePricingUIForCourseType();
+
         // Update add button visibility
         this.updateAddSlotButton();
     }
@@ -839,12 +869,29 @@ class AdminDashboard {
             const startTime = slotCard.querySelector('.slot-start-time').value || null;
             const endTime = slotCard.querySelector('.slot-end-time').value || null;
             const location = slotCard.querySelector('.slot-location').value || null;
-            const fullPrice = parseFloat(slotCard.querySelector('.slot-full-price').value);
-            const dropInPrice = parseFloat(slotCard.querySelector('.slot-drop-in-price').value);
+            const courseType = document.getElementById('courseType').value;
+            const fullPriceInput = slotCard.querySelector('.slot-full-price');
+            const dropInPriceInput = slotCard.querySelector('.slot-drop-in-price');
+            const fullPrice = fullPriceInput ? parseFloat(fullPriceInput.value) : NaN;
+            const dropInPrice = dropInPriceInput ? parseFloat(dropInPriceInput.value) : NaN;
             
-            // Validate required fields
-            if (!difficulty || !capacity || isNaN(fullPrice) || isNaN(dropInPrice)) {
+            // Validate required fields (pricing depends on course type)
+            if (!difficulty || !capacity) {
                 return; // Skip invalid slots
+            }
+            
+            const pricing = {};
+            if (courseType === 'dance_series') {
+                if (isNaN(fullPrice) || isNaN(dropInPrice)) {
+                    return; // Both required for dance series
+                }
+                pricing.full_package = fullPrice;
+                pricing.drop_in = dropInPrice;
+            } else {
+                if (isNaN(dropInPrice)) {
+                    return; // Drop-in price required for drop_in and crew_practice
+                }
+                pricing.drop_in = dropInPrice;
             }
             
             slots.push({
@@ -855,10 +902,7 @@ class AdminDashboard {
                 start_time: startTime,
                 end_time: endTime,
                 location: location,
-                pricing: {
-                    full_package: fullPrice,
-                    drop_in: dropInPrice
-                }
+                pricing: pricing
             });
         });
         
