@@ -2,154 +2,136 @@
 
 ## Current Work Focus
 
-### Recently Completed (Last Session)
-- ✅ **Memory Bank Setup**: Implementing Cline Memory Bank system for project continuity
-- ✅ **Production Deployment**: Successfully deployed to Railway with PostgreSQL
-- ✅ **PayPal Integration**: Fixed PayPal SDK configuration and payment processing
-- ✅ **Admin Authentication**: Resolved session management issues for Railway deployment
-- ✅ **Course Management**: Enhanced admin course creation with advanced form features
-- ✅ **Database Migration**: Automated SQLite to PostgreSQL migration working
+### Recently Completed (Current Session)
+- ✅ Start Date made optional in New Dance Series form (frontend label updated to "Start Date (optional)")
+- ✅ Verified backend accepts NULL start_date values (server and DB schema already allow NULL)
+- ✅ Schedule Information and Prerequisites removed as required fields in admin form and JS payload
+- ✅ Slot-based course architecture implemented (multi-slot support with per-slot capacity and pricing)
 
 ### Current Status
-- **Project State**: Fully functional dance registration portal
-- **Deployment**: Live on Railway at GouMo-Dance-Portal
-- **Database**: PostgreSQL in production, SQLite for development
-- **Admin Access**: Working with username: admin, password: admin123
-- **Payment Processing**: PayPal integration functional
-- **Memory Bank**: Currently being established for future development continuity
+- Project State: Fully functional dance registration portal
+- Deployment: Live on Railway (auto-deploy from GitHub)
+- Database: PostgreSQL in production, SQLite for local development
+- Admin Access: admin / admin123
+- Payments: PayPal integration functional
+- UI: Bootstrap-based admin dashboard with dynamic slot management
 
 ## Active Decisions and Considerations
 
 ### Technical Decisions Made
-1. **Database Strategy**: Dual database support (SQLite dev, PostgreSQL prod) via DatabaseConfig abstraction
-2. **Session Security**: Disabled secure cookies for Railway compatibility while maintaining httpOnly and sameSite
-3. **Form Validation**: Server-side validation with client-side field mapping fixes
-4. **Migration Strategy**: Automatic migration on production deployment with bcrypt password refresh
+1. Database Strategy: Dual DB support via DatabaseConfig (SQLite dev, PostgreSQL prod)
+2. Session Security: secure=false for Railway proxy compatibility; httpOnly + sameSite=lax
+3. Validation: Server-side validation; client-side ID mapping explicit
+4. Migration Strategy: Automatic migration on production with bcrypt hash regeneration
+5. Course Creation:
+   - Slot-based model replaces legacy single-course fields for capacity/pricing
+   - Crew Practice limited to a single slot; Dance Series/Drop In can have multiple slots
+   - Start Date is optional for all series types
+   - Schedule Information and Prerequisites are non-required metadata (safe to omit)
 
 ### Current Architecture Patterns
-- **Database Abstraction**: Single DatabaseConfig class handles both SQLite and PostgreSQL
-- **Error Handling**: Consistent asyncHandler pattern for all async routes
-- **Authentication**: Session-based admin auth with bcrypt password hashing
-- **Payment Flow**: PayPal SDK → Registration → Payment Confirmation → Database Update
+- Slot-Based Courses:
+  - Tables: course_slots (difficulty_level, capacity, timing, location), course_pricing (full_package, drop_in)
+  - Per-slot pricing and capacity; total capacity computed as sum of slot capacities
+- Database Abstraction: DatabaseConfig with `run/get/all` and isProduction branching
+- Error Handling: asyncHandler wrapper for all async routes
+- Auth: Session-based admin auth with bcrypt password hashing
+- Frontend: Vanilla JS admin dashboard; Bootstrap modals; dynamic slot cards
 
 ## Important Patterns and Preferences
 
 ### Code Organization Preferences
-- **Minimal Dependencies**: Vanilla JavaScript frontend, no frameworks
-- **Self-Contained**: All functionality in single repository
-- **Environment Agnostic**: Code works in both development and production without changes
-- **Mobile-First**: All UI decisions prioritize mobile experience
+- Minimal dependencies; no frontend framework
+- Single-repo, self-contained application
+- Environment-agnostic code paths for dev/prod
+- Mobile-first UI considerations
 
 ### Development Workflow Patterns
 ```bash
-# Standard development cycle
-npm run dev                    # Local development with auto-restart
-git add . && git commit -m ""  # Commit changes
-git push origin main           # Auto-deploy to Railway
-railway logs                   # Monitor deployment
+npm run dev
+git add .
+git commit -m "..."
+git push origin main   # triggers Railway deployment
+# Optionally: railway logs (if CLI authed) to monitor deploy
 ```
 
 ### Database Patterns
 ```javascript
-// Consistent query pattern
 const result = await dbConfig.run(query, params);
 const data = await dbConfig.get(query, params);
 const list = await dbConfig.all(query, params);
 
-// Production vs Development handling
 if (dbConfig.isProduction) {
-    // PostgreSQL specific syntax
+  // PostgreSQL specifics
 } else {
-    // SQLite specific syntax
+  // SQLite specifics
 }
 ```
 
 ## Learnings and Project Insights
 
 ### Key Technical Insights
-1. **Railway Deployment**: Session cookies must have `secure: false` for Railway's proxy setup
-2. **Form Field Mapping**: HTML form field IDs must exactly match JavaScript getElementById calls
-3. **Database Migration**: bcrypt hashes must be regenerated during migration, not copied
-4. **PayPal Integration**: Client ID configuration through system settings works better than environment variables
+1. Railway proxies require session cookies with secure=false
+2. Form field IDs must exactly match JS selectors
+3. Bcrypt hashes must be regenerated during migration
+4. PayPal Client ID via system settings improves operational flexibility
+5. Legacy course fields should not be treated as required under slot model
 
 ### User Experience Insights
-1. **Mobile Optimization**: WhatsApp sharing is primary distribution method
-2. **Admin Workflow**: Course creation should be streamlined with auto-populated fields
-3. **Payment Flow**: Students prefer not creating PayPal accounts - guest checkout essential
-4. **Real-time Updates**: Capacity tracking must be immediate to prevent overbooking
+1. Mobile optimization and WhatsApp sharing are primary channels
+2. Admin course creation must be streamlined; dynamic slots improve UX
+3. Guest checkout preferred; keep PayPal UX minimal
+4. Capacity and availability should reflect slot-level reality
 
 ### Performance Insights
-1. **Database Queries**: JOIN queries for registration counts are efficient enough for expected load
-2. **Session Management**: 24-hour session timeout balances security and usability
-3. **Static Files**: Express static middleware sufficient for current asset size
-4. **Mobile Performance**: Vanilla JavaScript loads faster than framework alternatives
+1. Aggregations for registration counts are acceptable for current scale
+2. Session timeout 24h strikes reasonable balance
+3. Static asset serving from Express is fine for current footprint
+4. Vanilla JS remains performant and lightweight
 
 ## Next Steps and Priorities
 
-### Immediate Tasks (Current Session)
-- [ ] Complete memory bank file creation (progress.md remaining)
-- [ ] Verify memory bank structure and content
-- [ ] Test memory bank integration with Cline workflow
+### Immediate Tasks
+- Deploy "Start Date optional" change to Railway
+- Validate course creation without start_date in production
+- Update memory bank progress to reflect deployment outcome
 
 ### Short-term Enhancements
-- [ ] Add QR code generation for course sharing
-- [ ] Implement bulk email functionality for student communication
-- [ ] Add CSV export for student lists
-- [ ] Create WhatsApp message templates
+- QR code generation exposed in UI
+- CSV export connected to admin actions
+- WhatsApp message templates for sharing
 
 ### Medium-term Features
-- [ ] Email notification system for registration confirmations
-- [ ] Advanced course scheduling (recurring classes)
-- [ ] Student dashboard for registration history
-- [ ] Payment receipt generation
+- Email notifications and templates in registration flow
+- Recurring classes scheduling UX
+- Student dashboard and receipt generation
 
 ### Long-term Considerations
-- [ ] Multi-instructor support
-- [ ] Advanced reporting and analytics
-- [ ] Integration with calendar systems
-- [ ] Mobile app development
+- Multi-instructor support
+- Advanced reporting and analytics
+- Calendar integrations
+- Mobile app exploration
 
 ## Development Environment Notes
 
-### Current Setup
-- **Local Database**: SQLite at `./database/registrations.db`
-- **Production Database**: PostgreSQL via Railway DATABASE_URL
-- **Admin Credentials**: admin/admin123 (configured in migration)
-- **PayPal**: Sandbox mode for testing, production client ID configurable
-- **Port**: 3000 (configurable via PORT environment variable)
+- Local DB: ./database/registrations.db (SQLite)
+- Production DB: PostgreSQL via DATABASE_URL
+- Admin: admin/admin123 (set during migration)
+- PayPal: Sandbox/production controlled via settings
+- Port: 3000 (configurable)
 
-### Known Issues and Workarounds
-1. **Railway Session Issues**: Resolved by setting `secure: false` in session config
-2. **Form Field Validation**: Fixed by using getElementById instead of FormData
-3. **Database Migration**: Automated with proper bcrypt hash generation
-4. **PayPal SDK Loading**: Requires valid client ID, empty string causes 400 error
-
-### Testing Patterns
+## Testing Patterns
 ```bash
-# Local testing
+# Local
 npm start
 open http://localhost:3000
 open http://localhost:3000/admin
 
-# Network testing (same WiFi)
-open http://10.0.0.24:3000
-
-# Production testing
+# Production
 open https://dance-registration-portal-production.up.railway.app
 ```
 
 ## Memory Bank Integration
-
-### Current Memory Bank Status
-- **Setup Phase**: Currently implementing memory bank structure
-- **Files Created**: projectbrief.md, productContext.md, systemPatterns.md, techContext.md
-- **Remaining**: activeContext.md (this file), progress.md
-- **Integration**: Will enable seamless context preservation across Cline sessions
-
-### Memory Bank Usage Pattern
-```
-1. Start new Cline session
-2. "follow your custom instructions" - loads memory bank
-3. Cline reads all memory bank files for context
-4. Continue development with full project understanding
-5. "update memory bank" when significant changes made
+- Status: Active and updated (this session)
+- This update documents: Slot-based architecture, form field simplifications, and Start Date now optional
+- Keep activeContext.md and progress.md synchronized with deployment changes
