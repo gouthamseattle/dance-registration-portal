@@ -361,40 +361,58 @@ app.put('/api/courses/:id', requireAuth, asyncHandler(async (req, res) => {
         start_date, end_date, instructor, schedule_info, prerequisites, is_active,
         slots // Array of slot objects for updating
     } = req.body;
-    
-    // Update course basic info
-    await dbConfig.run(`
-        UPDATE courses SET
-            name = $1, description = $2, course_type = $3, duration_weeks = $4,
-            start_date = $5, end_date = $6, instructor = $7, schedule_info = $8,
-            prerequisites = $9, is_active = $10, updated_at = CURRENT_TIMESTAMP
-        WHERE id = $11
-    `, [
-        name, description, course_type, duration_weeks,
-        start_date, end_date, instructor, schedule_info, prerequisites, is_active, id
-    ]);
-    
-    // If slots are provided, update them
+
+    // Partially update only fields provided to avoid overwriting required columns with NULL
+    const fields = {
+        name,
+        description,
+        course_type,
+        duration_weeks,
+        start_date,
+        end_date,
+        instructor,
+        schedule_info,
+        prerequisites,
+        is_active
+    };
+
+    const sets = [];
+    const params = [];
+    let i = 1;
+    for (const [col, val] of Object.entries(fields)) {
+        if (val !== undefined) {
+            sets.push(`${col} = $${i++}`);
+            params.push(val);
+        }
+    }
+    if (sets.length > 0) {
+        // updated_at is set directly, no param
+        const sql = `UPDATE courses SET ${sets.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = $${i}`;
+        params.push(id);
+        await dbConfig.run(sql, params);
+    }
+
+    // If slots are provided, replace them
     if (slots && Array.isArray(slots)) {
-        // Validate course type constraints
+        // Validate course type constraints if provided
         if (course_type === 'crew_practice' && slots.length > 1) {
             return res.status(400).json({ error: 'Crew Practice can only have one slot' });
         }
-        
+
         // Delete existing slots and pricing (cascade will handle pricing)
         await dbConfig.run('DELETE FROM course_slots WHERE course_id = $1', [id]);
-        
+
         // Create new slots
         for (const slot of slots) {
             const {
                 slot_name, difficulty_level, capacity, day_of_week,
                 start_time, end_time, location, pricing
             } = slot;
-            
+
             if (!difficulty_level || !capacity || !pricing) {
                 return res.status(400).json({ error: 'Each slot must have difficulty_level, capacity, and pricing' });
             }
-            
+
             // Create slot
             const slotResult = await dbConfig.run(`
                 INSERT INTO course_slots (
@@ -406,7 +424,7 @@ app.put('/api/courses/:id', requireAuth, asyncHandler(async (req, res) => {
                 id, slot_name || 'Main Session', difficulty_level, capacity,
                 day_of_week, start_time, end_time, location
             ]);
-            
+
             // Get slot ID
             let slotId;
             if (dbConfig.isProduction) {
@@ -414,11 +432,11 @@ app.put('/api/courses/:id', requireAuth, asyncHandler(async (req, res) => {
             } else {
                 slotId = slotResult.lastID;
             }
-            
+
             if (!slotId) {
                 return res.status(500).json({ error: 'Failed to create slot' });
             }
-            
+
             // Create pricing records
             if (pricing.full_package) {
                 await dbConfig.run(`
@@ -426,7 +444,7 @@ app.put('/api/courses/:id', requireAuth, asyncHandler(async (req, res) => {
                     VALUES ($1, 'full_package', $2)
                 `, [slotId, pricing.full_package]);
             }
-            
+
             if (pricing.drop_in) {
                 await dbConfig.run(`
                     INSERT INTO course_pricing (course_slot_id, pricing_type, price)
@@ -435,7 +453,7 @@ app.put('/api/courses/:id', requireAuth, asyncHandler(async (req, res) => {
             }
         }
     }
-    
+
     res.json({ success: true });
 }));
 
