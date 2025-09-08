@@ -1327,7 +1327,7 @@ main {
         radial-gradient(circle at 20% 80%, rgba(0, 212, 255, 0.03) 0%, transparent 50%),
         radial-gradient(circle at 80% 20%, rgba(124, 58, 237, 0.03) 0%, transparent 50%),
         radial-gradient(circle at 40% 40%, rgba(245, 158, 11, 0.02) 0%, transparent 50%),
-        url('images/crew-background.jpg');
+        url('../images/crew-background.jpg');
     background-size: 
         100% 100%,
         100% 100%,
@@ -1342,6 +1342,21 @@ main {
         radial-gradient(circle at 20% 80%, rgba(0, 212, 255, 0.02) 0%, transparent 50%),
         radial-gradient(circle at 80% 20%, rgba(124, 58, 237, 0.02) 0%, transparent 50%),
         radial-gradient(circle at 40% 40%, rgba(245, 158, 11, 0.01) 0%, transparent 50%);
+}
+
+/* DDC Header Logo */
+.ddc-header-logo {
+    width: 60px;
+    height: 60px;
+    vertical-align: middle;
+    margin-right: 12px;
+    filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.3));
+    animation: bounce 2s infinite;
+}
+
+/* Hide footer text in crew practice mode */
+.crew-practice-mode .footer p {
+    display: none !important;
 }
 
 /* DDC Logo Styling */
@@ -1402,6 +1417,12 @@ main {
 
 /* Responsive DDC Logo */
 @media (max-width: 768px) {
+    .ddc-header-logo {
+        width: 44px;
+        height: 44px;
+        margin-right: 10px;
+    }
+    
     .ddc-card-logo {
         width: 30px;
         height: 30px;

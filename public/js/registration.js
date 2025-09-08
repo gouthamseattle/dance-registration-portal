@@ -374,9 +374,9 @@ class DanceRegistrationApp {
         
         // Check if selected course is Crew Practice
         if (this.selectedCourse && this.selectedCourse.course_type === 'crew_practice') {
-            // Apply crew practice branding
+            // Apply crew practice branding with DDC logo instead of music icon
             headerTitle.innerHTML = `
-                <i class="fas fa-music text-primary"></i>
+                <img src="images/ddc-logo.png" alt="DDC" class="ddc-header-logo">
                 Dreamers Dance Crew
             `;
             headerSubtitle.textContent = 'Dancing the American Dream';
