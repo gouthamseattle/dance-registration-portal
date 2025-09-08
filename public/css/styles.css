@@ -1324,9 +1324,9 @@ main {
 /* Crew Practice Mode Styling */
 .crew-practice-mode {
     background: 
-        radial-gradient(circle at 20% 80%, rgba(0, 212, 255, 0.03) 0%, transparent 50%),
-        radial-gradient(circle at 80% 20%, rgba(124, 58, 237, 0.03) 0%, transparent 50%),
-        radial-gradient(circle at 40% 40%, rgba(245, 158, 11, 0.02) 0%, transparent 50%),
+        radial-gradient(circle at 20% 80%, rgba(0, 212, 255, 0.08) 0%, transparent 50%),
+        radial-gradient(circle at 80% 20%, rgba(124, 58, 237, 0.08) 0%, transparent 50%),
+        radial-gradient(circle at 40% 40%, rgba(245, 158, 11, 0.05) 0%, transparent 50%),
         url('../images/crew-background.jpg');
     background-size: 
         100% 100%,
@@ -1335,13 +1335,25 @@ main {
         cover;
     background-position: center top;
     background-repeat: no-repeat;
-    background-blend-mode: overlay, overlay, overlay, multiply;
+    background-blend-mode: overlay, overlay, overlay, soft-light;
     background-attachment: fixed;
 }
 
 /* Stronger background variant */
 .crew-practice-mode.crew-bg-strong {
     background-blend-mode: overlay, overlay, overlay, normal;
+    background: 
+        radial-gradient(circle at 20% 80%, rgba(0, 212, 255, 0.12) 0%, transparent 50%),
+        radial-gradient(circle at 80% 20%, rgba(124, 58, 237, 0.12) 0%, transparent 50%),
+        radial-gradient(circle at 40% 40%, rgba(245, 158, 11, 0.08) 0%, transparent 50%),
+        url('../images/crew-background.jpg');
+    background-size: 
+        100% 100%,
+        100% 100%,
+        100% 100%,
+        cover;
+    background-position: center top;
+    background-repeat: no-repeat;
 }
 
 .crew-practice-mode::before {
@@ -1370,25 +1382,82 @@ main {
 
 .ddc-hero-text {
     display: inline-block;
+    font-family: 'Orbitron', monospace;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    font-size: 1.1em;
+    color: #ffffff;
+    text-shadow: 
+        0 0 10px rgba(0, 212, 255, 0.8),
+        0 0 20px rgba(0, 212, 255, 0.6),
+        0 0 30px rgba(0, 212, 255, 0.4),
+        2px 2px 0px #000000,
+        -2px -2px 0px #000000,
+        2px -2px 0px #000000,
+        -2px 2px 0px #000000;
+    position: relative;
+}
+
+.ddc-hero-text::before {
+    content: attr(data-text);
+    position: absolute;
+    top: 0;
+    left: 0;
     background: linear-gradient(135deg, #00d4ff 0%, #7c3aed 50%, #f59e0b 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
-    font-weight: 900;
-    text-shadow: 0 0 20px rgba(0, 212, 255, 0.3);
-    letter-spacing: -0.01em;
+    z-index: 1;
+}
+
+.ddc-hero-text::after {
+    content: '';
+    position: absolute;
+    top: -2px;
+    left: -2px;
+    right: -2px;
+    bottom: -2px;
+    background: linear-gradient(45deg, transparent, rgba(0, 212, 255, 0.1), transparent);
+    border-radius: 4px;
+    z-index: -1;
+    animation: crewGlow 2s ease-in-out infinite alternate;
+}
+
+@keyframes crewGlow {
+    0% { opacity: 0.5; transform: scale(1); }
+    100% { opacity: 1; transform: scale(1.02); }
 }
 
 /* DDC Header Subtitle Styling */
 .crew-practice-mode .header-section .lead {
-    background: linear-gradient(135deg, #00d4ff 0%, #ffffff 50%, #f59e0b 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    font-weight: 600;
-    font-style: italic;
-    text-shadow: 0 0 15px rgba(0, 212, 255, 0.2);
-    letter-spacing: 0.5px;
+    font-family: 'Orbitron', monospace;
+    font-weight: 700;
+    font-style: normal;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: #ffffff;
+    text-shadow: 
+        0 0 8px rgba(0, 212, 255, 0.6),
+        0 0 16px rgba(124, 58, 237, 0.4),
+        1px 1px 0px #000000,
+        -1px -1px 0px #000000,
+        1px -1px 0px #000000,
+        -1px 1px 0px #000000;
+    position: relative;
+}
+
+.crew-practice-mode .header-section .lead::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: -20px;
+    right: -20px;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, #00d4ff, #7c3aed, #f59e0b, transparent);
+    transform: translateY(-50%);
+    opacity: 0.6;
+    z-index: -1;
 }
 
 /* DDC Card Header Logo */

@@ -378,7 +378,7 @@ class DanceRegistrationApp {
             headerTitle.innerHTML = `
                 <span class="ddc-hero">
                     <img src="images/ddc-logo.png" alt="DDC" class="ddc-header-logo">
-                    <span class="ddc-hero-text">Dreamers Dance Crew</span>
+                    <span class="ddc-hero-text" data-text="Dreamers Dance Crew">Dreamers Dance Crew</span>
                 </span>
             `;
             headerSubtitle.textContent = 'Dancing the American Dream';
