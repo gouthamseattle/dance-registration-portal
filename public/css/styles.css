@@ -1333,8 +1333,15 @@ main {
         100% 100%,
         100% 100%,
         cover;
+    background-position: center top;
+    background-repeat: no-repeat;
     background-blend-mode: overlay, overlay, overlay, multiply;
     background-attachment: fixed;
+}
+
+/* Stronger background variant */
+.crew-practice-mode.crew-bg-strong {
+    background-blend-mode: overlay, overlay, overlay, normal;
 }
 
 .crew-practice-mode::before {
@@ -1346,11 +1353,32 @@ main {
 
 /* DDC Header Logo */
 .ddc-header-logo {
-    width: 60px;
-    height: 60px;
+    width: 80px;
+    height: 80px;
     vertical-align: middle;
     margin-right: 12px;
     filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.3));
+    animation: bounce 2s infinite;
+}
+
+/* DDC Hero Layout */
+.ddc-hero {
+    display: inline-flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.ddc-hero-text {
+    display: inline-block;
+}
+
+/* DDC Card Header Logo */
+.ddc-card-header-logo {
+    width: 44px;
+    height: 44px;
+    margin-right: 10px;
+    vertical-align: middle;
+    filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.2));
     animation: bounce 2s infinite;
 }
 
@@ -1388,10 +1416,10 @@ main {
 }
 
 .ddc-footer-img {
-    width: 60px;
-    height: 60px;
-    opacity: 0.8;
-    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+    width: 96px;
+    height: 96px;
+    opacity: 1;
+    filter: invert(1) brightness(1.15) drop-shadow(0 0 8px rgba(255, 255, 255, 0.35));
     transition: var(--transition-smooth);
 }
 

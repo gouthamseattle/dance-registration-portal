@@ -374,22 +374,26 @@ class DanceRegistrationApp {
         
         // Check if selected course is Crew Practice
         if (this.selectedCourse && this.selectedCourse.course_type === 'crew_practice') {
-            // Apply crew practice branding with DDC logo instead of music icon
+            // Apply crew practice branding with Option B (badge + title layout)
             headerTitle.innerHTML = `
-                <img src="images/ddc-logo.png" alt="DDC" class="ddc-header-logo">
-                Dreamers Dance Crew
+                <span class="ddc-hero">
+                    <img src="images/ddc-logo.png" alt="DDC" class="ddc-header-logo">
+                    <span class="ddc-hero-text">Dreamers Dance Crew</span>
+                </span>
             `;
             headerSubtitle.textContent = 'Dancing the American Dream';
             
-            // Add crew practice styling to body
-            document.body.classList.add('crew-practice-mode');
+            // Add crew practice styling to body with stronger background
+            document.body.classList.add('crew-practice-mode', 'crew-bg-strong');
             
-            // Add DDC logo to registration card
-            if (registrationCard && !registrationCard.querySelector('.ddc-logo-accent')) {
-                const logoAccent = document.createElement('div');
-                logoAccent.className = 'ddc-logo-accent';
-                logoAccent.innerHTML = '<img src="images/ddc-logo.png" alt="DDC Logo" class="ddc-card-logo">';
-                registrationCard.appendChild(logoAccent);
+            // Option 2: Add DDC logo to registration card header
+            const regHeader = document.querySelector('#registrationForm .card .card-header h3');
+            if (regHeader && !regHeader.querySelector('.ddc-card-header-logo')) {
+                const img = document.createElement('img');
+                img.src = 'images/ddc-logo.png';
+                img.alt = 'DDC';
+                img.className = 'ddc-card-header-logo';
+                regHeader.prepend(img);
             }
             
             // Add DDC logo to footer
@@ -408,12 +412,12 @@ class DanceRegistrationApp {
             headerSubtitle.textContent = 'Register for amazing dance experiences';
             
             // Remove crew practice styling
-            document.body.classList.remove('crew-practice-mode');
+            document.body.classList.remove('crew-practice-mode', 'crew-bg-strong');
             
             // Remove DDC logos
-            const cardLogo = registrationCard?.querySelector('.ddc-logo-accent');
+            const cardHeaderLogo = document.querySelector('#registrationForm .card .card-header .ddc-card-header-logo');
             const footerLogo = footer?.querySelector('.ddc-footer-logo');
-            if (cardLogo) cardLogo.remove();
+            if (cardHeaderLogo) cardHeaderLogo.remove();
             if (footerLogo) footerLogo.remove();
         }
     }
@@ -869,12 +873,12 @@ class DanceRegistrationApp {
         headerSubtitle.textContent = 'Register for amazing dance experiences';
         
         // Remove crew practice styling
-        document.body.classList.remove('crew-practice-mode');
+        document.body.classList.remove('crew-practice-mode', 'crew-bg-strong');
         
         // Remove DDC logos
-        const cardLogo = registrationCard?.querySelector('.ddc-logo-accent');
+        const cardHeaderLogo = document.querySelector('#registrationForm .card .card-header .ddc-card-header-logo');
         const footerLogo = footer?.querySelector('.ddc-footer-logo');
-        if (cardLogo) cardLogo.remove();
+        if (cardHeaderLogo) cardHeaderLogo.remove();
         if (footerLogo) footerLogo.remove();
     }
 
