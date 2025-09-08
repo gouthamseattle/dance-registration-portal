@@ -1286,20 +1286,67 @@ Questions? Reply to this message`;
         const course = this.courses.find(c => c.id === courseId);
         if (!course) return;
 
+        // Set modal title and base fields
         document.getElementById('courseModalTitle').textContent = 'Edit Dance Series';
         document.getElementById('courseId').value = course.id;
-        
-        document.getElementById('courseName').value = course.name;
+        document.getElementById('courseName').value = course.name || '';
         document.getElementById('courseDescription').value = course.description || '';
-        document.getElementById('courseType').value = course.course_type;
-        document.getElementById('courseDuration').value = course.duration_weeks || '';
-        const levelEl = document.getElementById('courseLevel'); if (levelEl) levelEl.value = course.level || 'All Levels';
-        const capEl = document.getElementById('courseCapacity'); if (capEl) capEl.value = course.capacity;
-        const fullPriceEl = document.getElementById('fullCoursePrice'); if (fullPriceEl) fullPriceEl.value = course.full_course_price || '';
-        const perClassEl = document.getElementById('perClassPrice'); if (perClassEl) perClassEl.value = course.per_class_price || '';
-        const schedEl = document.getElementById('scheduleInfo'); if (schedEl) schedEl.value = course.schedule_info || '';
-        const prereqEl = document.getElementById('prerequisites'); if (prereqEl) prereqEl.value = course.prerequisites || '';
-        
+        document.getElementById('courseType').value = course.course_type || 'dance_series';
+        document.getElementById('courseDuration').value = course.duration_weeks || '1';
+        const startDateEl = document.getElementById('startDate');
+        if (startDateEl) {
+            startDateEl.value = course.start_date ? new Date(course.start_date).toISOString().split('T')[0] : '';
+        }
+
+        // Clear and populate slots based on existing course data
+        const slotsContainer = document.getElementById('slotsContainer');
+        slotsContainer.innerHTML = '';
+
+        const courseSlots = Array.isArray(course.slots) && course.slots.length > 0 ? course.slots : [];
+        if (courseSlots.length === 0) {
+            // Fallback: ensure at least one slot exists so form can be saved
+            this.addSlot();
+        } else {
+            // Ensure course type listener is set before adding slots (affects UI constraints)
+            this.setupCourseTypeListener();
+
+            courseSlots.forEach((slot, index) => {
+                // Add a new slot card
+                this.addSlot();
+                const slotCard = slotsContainer.children[index];
+
+                if (!slotCard) return;
+
+                // Populate slot fields
+                const nameEl = slotCard.querySelector('.slot-name');
+                const diffEl = slotCard.querySelector('.slot-difficulty');
+                const capEl = slotCard.querySelector('.slot-capacity');
+                const dayEl = slotCard.querySelector('.slot-day');
+                const stEl = slotCard.querySelector('.slot-start-time');
+                const etEl = slotCard.querySelector('.slot-end-time');
+                const locEl = slotCard.querySelector('.slot-location');
+                const fullPriceEl = slotCard.querySelector('.slot-full-price');
+                const dropInPriceEl = slotCard.querySelector('.slot-drop-in-price');
+
+                if (nameEl) nameEl.value = slot.slot_name || 'Main Session';
+                if (diffEl) diffEl.value = slot.difficulty_level || 'All Levels';
+                if (capEl) capEl.value = slot.capacity || 20;
+                if (dayEl) dayEl.value = slot.day_of_week || '';
+                if (stEl) stEl.value = slot.start_time || '';
+                if (etEl) etEl.value = slot.end_time || '';
+                if (locEl) locEl.value = slot.location || '';
+
+                // Pricing
+                const pricing = slot.pricing || {};
+                if (fullPriceEl) fullPriceEl.value = pricing.full_package != null ? pricing.full_package : '';
+                if (dropInPriceEl) dropInPriceEl.value = pricing.drop_in != null ? pricing.drop_in : '';
+            });
+        }
+
+        // Update pricing UI visibility/requirements based on course type
+        this.updatePricingUIForCourseType();
+
+        // Show modal
         const modal = new bootstrap.Modal(document.getElementById('courseModal'));
         modal.show();
     }
