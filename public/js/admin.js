@@ -591,8 +591,6 @@ class AdminDashboard {
         const description = document.getElementById('courseDescription').value || null;
         const duration = parseInt(document.getElementById('courseDuration').value) || 1;
         const startDate = document.getElementById('startDate').value || null;
-        const scheduleInfo = document.getElementById('scheduleInfo').value || null;
-        const prerequisites = document.getElementById('prerequisites').value || null;
         
         // Validate required fields
         if (!name || !courseType) {
@@ -619,8 +617,6 @@ class AdminDashboard {
             course_type: courseType,
             duration_weeks: duration,
             start_date: startDate,
-            schedule_info: scheduleInfo,
-            prerequisites: prerequisites,
             slots: slots
         };
 
@@ -1253,12 +1249,12 @@ Questions? Reply to this message`;
         document.getElementById('courseDescription').value = course.description || '';
         document.getElementById('courseType').value = course.course_type;
         document.getElementById('courseDuration').value = course.duration_weeks || '';
-        document.getElementById('courseLevel').value = course.level || 'All Levels';
-        document.getElementById('courseCapacity').value = course.capacity;
-        document.getElementById('fullCoursePrice').value = course.full_course_price || '';
-        document.getElementById('perClassPrice').value = course.per_class_price || '';
-        document.getElementById('scheduleInfo').value = course.schedule_info || '';
-        document.getElementById('prerequisites').value = course.prerequisites || '';
+        const levelEl = document.getElementById('courseLevel'); if (levelEl) levelEl.value = course.level || 'All Levels';
+        const capEl = document.getElementById('courseCapacity'); if (capEl) capEl.value = course.capacity;
+        const fullPriceEl = document.getElementById('fullCoursePrice'); if (fullPriceEl) fullPriceEl.value = course.full_course_price || '';
+        const perClassEl = document.getElementById('perClassPrice'); if (perClassEl) perClassEl.value = course.per_class_price || '';
+        const schedEl = document.getElementById('scheduleInfo'); if (schedEl) schedEl.value = course.schedule_info || '';
+        const prereqEl = document.getElementById('prerequisites'); if (prereqEl) prereqEl.value = course.prerequisites || '';
         
         const modal = new bootstrap.Modal(document.getElementById('courseModal'));
         modal.show();
