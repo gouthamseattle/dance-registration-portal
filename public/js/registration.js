@@ -79,19 +79,6 @@ class DanceRegistrationApp {
         col.className = 'col-lg-6 col-xl-4 mb-4';
 
         const availableSpots = course.available_spots || 0;
-        const capacity = course.capacity || 0;
-        const fillPercentage = capacity > 0 ? ((capacity - availableSpots) / capacity) * 100 : 0;
-        
-        let capacityClass = '';
-        let spotsClass = '';
-        if (availableSpots <= 0) {
-            capacityClass = 'danger';
-            spotsClass = 'danger';
-        } else if (availableSpots <= capacity * 0.2) {
-            capacityClass = 'warning';
-            spotsClass = 'warning';
-        }
-
         const hasFullCoursePrice = course.full_course_price && course.full_course_price > 0;
         const hasPerClassPrice = course.per_class_price && course.per_class_price > 0;
 
@@ -111,26 +98,12 @@ class DanceRegistrationApp {
                                 <span>${course.schedule_info}</span>
                             </div>
                         ` : ''}
-                        <div class="course-info-item">
-                            <i class="fas fa-users"></i>
-                            <span>Max ${capacity} students</span>
-                        </div>
                         ${course.prerequisites ? `
                             <div class="course-info-item">
                                 <i class="fas fa-info-circle"></i>
                                 <span>${course.prerequisites}</span>
                             </div>
                         ` : ''}
-                    </div>
-
-                    <div class="capacity-info">
-                        <span class="small">Capacity</span>
-                        <div class="capacity-bar">
-                            <div class="capacity-fill ${capacityClass}" style="width: ${fillPercentage}%"></div>
-                        </div>
-                        <span class="small spots-remaining ${spotsClass}">
-                            ${availableSpots > 0 ? `${availableSpots} left` : 'FULL'}
-                        </span>
                     </div>
 
                     ${(hasFullCoursePrice || hasPerClassPrice) ? `
@@ -283,6 +256,7 @@ class DanceRegistrationApp {
 
         this.populateSelectedCourseInfo();
         this.setupPaymentOptions();
+        this.setupDanceExperienceField();
         this.scrollToTop();
     }
 
@@ -373,6 +347,23 @@ class DanceRegistrationApp {
         }
     }
 
+    setupDanceExperienceField() {
+        const danceExperienceField = document.getElementById('dance_experience').closest('.col-12');
+        
+        // Check if selected course is Crew Practice
+        if (this.selectedCourse && this.selectedCourse.course_type === 'crew_practice') {
+            // Hide dance experience field for Crew Practice
+            danceExperienceField.style.display = 'none';
+            // Remove required attribute
+            document.getElementById('dance_experience').removeAttribute('required');
+        } else {
+            // Show dance experience field for other course types
+            danceExperienceField.style.display = 'block';
+            // Add required attribute
+            document.getElementById('dance_experience').setAttribute('required', 'required');
+        }
+    }
+
     setupEventListeners() {
         // Back to courses button
         document.getElementById('backToCourses').addEventListener('click', () => {
@@ -415,7 +406,7 @@ class DanceRegistrationApp {
         this.registrationData = {
             email: formData.get('email'),
             instagram_id: formData.get('instagram_id'),
-            dance_experience: formData.get('dance_experience')
+            dance_experience: formData.get('dance_experience') || null // Allow null for crew practice
         };
 
         if (this.selectedCourse) {
