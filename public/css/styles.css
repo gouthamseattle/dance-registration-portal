@@ -1320,3 +1320,100 @@ main {
     color: var(--text-muted);
     font-size: 1.1rem;
 }
+
+/* Crew Practice Mode Styling */
+.crew-practice-mode {
+    background: 
+        radial-gradient(circle at 20% 80%, rgba(0, 212, 255, 0.03) 0%, transparent 50%),
+        radial-gradient(circle at 80% 20%, rgba(124, 58, 237, 0.03) 0%, transparent 50%),
+        radial-gradient(circle at 40% 40%, rgba(245, 158, 11, 0.02) 0%, transparent 50%),
+        url('images/crew-background.jpg');
+    background-size: 
+        100% 100%,
+        100% 100%,
+        100% 100%,
+        cover;
+    background-blend-mode: overlay, overlay, overlay, multiply;
+    background-attachment: fixed;
+}
+
+.crew-practice-mode::before {
+    background: 
+        radial-gradient(circle at 20% 80%, rgba(0, 212, 255, 0.02) 0%, transparent 50%),
+        radial-gradient(circle at 80% 20%, rgba(124, 58, 237, 0.02) 0%, transparent 50%),
+        radial-gradient(circle at 40% 40%, rgba(245, 158, 11, 0.01) 0%, transparent 50%);
+}
+
+/* DDC Logo Styling */
+.ddc-logo-accent {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    z-index: 10;
+}
+
+.ddc-card-logo {
+    width: 40px;
+    height: 40px;
+    opacity: 0.7;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+    transition: var(--transition-smooth);
+}
+
+.ddc-card-logo:hover {
+    opacity: 1;
+    transform: scale(1.1);
+}
+
+.ddc-footer-logo {
+    text-align: center;
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.ddc-footer-img {
+    width: 60px;
+    height: 60px;
+    opacity: 0.8;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+    transition: var(--transition-smooth);
+}
+
+.ddc-footer-img:hover {
+    opacity: 1;
+    transform: scale(1.05);
+}
+
+/* Crew Practice Background Pattern */
+.crew-practice-mode .card {
+    backdrop-filter: blur(5px);
+    background: rgba(30, 30, 30, 0.95);
+}
+
+.crew-practice-mode .header-section {
+    backdrop-filter: blur(10px);
+}
+
+.crew-practice-mode .footer {
+    backdrop-filter: blur(5px);
+    background: linear-gradient(135deg, rgba(26, 26, 26, 0.95) 0%, rgba(42, 42, 42, 0.95) 100%);
+}
+
+/* Responsive DDC Logo */
+@media (max-width: 768px) {
+    .ddc-card-logo {
+        width: 30px;
+        height: 30px;
+    }
+    
+    .ddc-footer-img {
+        width: 50px;
+        height: 50px;
+    }
+    
+    .ddc-logo-accent {
+        top: 10px;
+        right: 10px;
+    }
+}

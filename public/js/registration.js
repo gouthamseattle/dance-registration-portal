@@ -257,6 +257,7 @@ class DanceRegistrationApp {
         this.populateSelectedCourseInfo();
         this.setupPaymentOptions();
         this.setupDanceExperienceField();
+        this.setupCrewPracticeBranding();
         this.scrollToTop();
     }
 
@@ -361,6 +362,59 @@ class DanceRegistrationApp {
             danceExperienceField.style.display = 'block';
             // Add required attribute
             document.getElementById('dance_experience').setAttribute('required', 'required');
+        }
+    }
+
+    setupCrewPracticeBranding() {
+        const headerSection = document.querySelector('.header-section');
+        const headerTitle = headerSection.querySelector('h1');
+        const headerSubtitle = headerSection.querySelector('.lead');
+        const footer = document.querySelector('.footer');
+        const registrationCard = document.querySelector('#registrationForm .card');
+        
+        // Check if selected course is Crew Practice
+        if (this.selectedCourse && this.selectedCourse.course_type === 'crew_practice') {
+            // Apply crew practice branding
+            headerTitle.innerHTML = `
+                <i class="fas fa-music text-primary"></i>
+                Dreamers Dance Crew
+            `;
+            headerSubtitle.textContent = 'Dancing the American Dream';
+            
+            // Add crew practice styling to body
+            document.body.classList.add('crew-practice-mode');
+            
+            // Add DDC logo to registration card
+            if (registrationCard && !registrationCard.querySelector('.ddc-logo-accent')) {
+                const logoAccent = document.createElement('div');
+                logoAccent.className = 'ddc-logo-accent';
+                logoAccent.innerHTML = '<img src="images/ddc-logo.png" alt="DDC Logo" class="ddc-card-logo">';
+                registrationCard.appendChild(logoAccent);
+            }
+            
+            // Add DDC logo to footer
+            if (footer && !footer.querySelector('.ddc-footer-logo')) {
+                const footerLogo = document.createElement('div');
+                footerLogo.className = 'ddc-footer-logo';
+                footerLogo.innerHTML = '<img src="images/ddc-logo.png" alt="Dreamers Dance Crew" class="ddc-footer-img">';
+                footer.appendChild(footerLogo);
+            }
+        } else {
+            // Restore regular branding
+            headerTitle.innerHTML = `
+                <i class="fas fa-music text-primary"></i>
+                GouMo Dance Chronicles
+            `;
+            headerSubtitle.textContent = 'Register for amazing dance experiences';
+            
+            // Remove crew practice styling
+            document.body.classList.remove('crew-practice-mode');
+            
+            // Remove DDC logos
+            const cardLogo = registrationCard?.querySelector('.ddc-logo-accent');
+            const footerLogo = footer?.querySelector('.ddc-footer-logo');
+            if (cardLogo) cardLogo.remove();
+            if (footerLogo) footerLogo.remove();
         }
     }
 
@@ -784,6 +838,9 @@ class DanceRegistrationApp {
         document.getElementById('registrationForm').style.display = 'none';
         document.getElementById('paymentSection').style.display = 'none';
         document.getElementById('confirmationSection').style.display = 'none';
+        
+        // Reset to regular branding when going back to course selection
+        this.resetBranding();
         this.scrollToTop();
     }
 
@@ -792,8 +849,33 @@ class DanceRegistrationApp {
         this.selectedDropIn = null;
         this.registrationData = {};
         document.getElementById('studentRegistrationForm').reset();
+        this.resetBranding();
         this.showCourseSelection();
         this.loadCourses(); // Refresh course availability
+    }
+
+    resetBranding() {
+        const headerSection = document.querySelector('.header-section');
+        const headerTitle = headerSection.querySelector('h1');
+        const headerSubtitle = headerSection.querySelector('.lead');
+        const footer = document.querySelector('.footer');
+        const registrationCard = document.querySelector('#registrationForm .card');
+        
+        // Restore regular branding
+        headerTitle.innerHTML = `
+            <i class="fas fa-music text-primary"></i>
+            GouMo Dance Chronicles
+        `;
+        headerSubtitle.textContent = 'Register for amazing dance experiences';
+        
+        // Remove crew practice styling
+        document.body.classList.remove('crew-practice-mode');
+        
+        // Remove DDC logos
+        const cardLogo = registrationCard?.querySelector('.ddc-logo-accent');
+        const footerLogo = footer?.querySelector('.ddc-footer-logo');
+        if (cardLogo) cardLogo.remove();
+        if (footerLogo) footerLogo.remove();
     }
 
     shareRegistration() {

@@ -2,11 +2,24 @@
 
 ## Current Work Focus
 
-### Recently Completed (Current Session)
+### Recently Completed (Previous Sessions)
 - ✅ Start Date made optional in New Dance Series form (frontend label updated to "Start Date (optional)")
 - ✅ Verified backend accepts NULL start_date values (server and DB schema already allow NULL)
 - ✅ Schedule Information and Prerequisites removed as required fields in admin form and JS payload
 - ✅ Slot-based course architecture implemented (multi-slot support with per-slot capacity and pricing)
+- ✅ Transformed student portal to "GouMo Dance Chronicles" with modern dark theme
+- ✅ Updated branding from "Dance Classes" to "GouMo Dance Chronicles" 
+- ✅ Implemented complete dark theme with Inter/Orbitron fonts and cyan/purple accents
+- ✅ Removed capacity/spots display from course cards as requested
+- ✅ Added conditional logic to hide dance experience field for Crew Practice courses
+- ✅ Deployed GouMo Dance Chronicles transformation to Railway (commit 994a2ec)
+
+### Current Active Work (Current Session)
+- 🔄 Implementing Dreamers Dance Crew branding for crew practice registration
+- 🔄 Adding crew-specific branding: "Dreamers Dance Crew" + "Dancing the American Dream" caption
+- 🔄 Integrating DDC logo as card accent and footer branding
+- 🔄 Converting crew picture to subtle background pattern
+- 🔄 Maintaining conditional logic for crew vs regular course branding
 
 ### Current Status
 - Project State: Fully functional dance registration portal
@@ -28,6 +41,13 @@
    - Crew Practice limited to a single slot; Dance Series/Drop In can have multiple slots
    - Start Date is optional for all series types
    - Schedule Information and Prerequisites are non-required metadata (safe to omit)
+6. UI/UX Design:
+   - Modern dark theme with Inter/Orbitron fonts for contemporary look
+   - Conditional branding: GouMo Dance Chronicles (general) vs Dreamers Dance Crew (crew practice)
+   - Logo placement strategy: Card accent + footer branding for crew practice
+   - Background implementation: Subtle pattern from crew picture for crew practice
+   - Capacity display removed from course cards per user request
+   - Dance experience field hidden for crew practice courses
 
 ### Current Architecture Patterns
 - Slot-Based Courses:
@@ -91,10 +111,19 @@ if (dbConfig.isProduction) {
 
 ## Next Steps and Priorities
 
-### Immediate Tasks
-- Deploy "Start Date optional" change to Railway
-- Validate course creation without start_date in production
-- Update memory bank progress to reflect deployment outcome
+### Immediate Tasks (Current Session)
+- Convert HEIC crew picture to web-compatible format
+- Move crew assets to public/images directory
+- Implement conditional crew practice branding logic
+- Add "Dreamers Dance Crew" header and "Dancing the American Dream" caption
+- Integrate DDC logo as card accent and footer branding
+- Apply crew picture as subtle background pattern
+- Test responsive design with new crew imagery
+- Deploy crew practice customizations to Railway
+
+### Project Assets Added
+- IMG_6228.HEIC (crew picture for background pattern)
+- DDC_Logo_inverted_transparent.png (Dreamers Dance Crew logo)
 
 ### Short-term Enhancements
 - QR code generation exposed in UI
