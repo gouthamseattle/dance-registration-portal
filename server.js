@@ -381,8 +381,16 @@ app.put('/api/courses/:id', requireAuth, asyncHandler(async (req, res) => {
     let i = 1;
     for (const [col, val] of Object.entries(fields)) {
         if (val !== undefined) {
+            let v = val;
+            if (col === 'is_active') {
+                if (dbConfig.isProduction) {
+                    v = (val === true || val === 'true' || val === 1 || val === '1');
+                } else {
+                    v = (val === true || val === 'true' || val === 1 || val === '1') ? 1 : 0;
+                }
+            }
             sets.push(`${col} = $${i++}`);
-            params.push(val);
+            params.push(v);
         }
     }
     if (sets.length > 0) {
