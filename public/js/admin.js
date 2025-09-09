@@ -1805,6 +1805,7 @@ Questions? Reply to this message`;
  * These do not expose secrets and will show alerts if toasts are unavailable.
  */
 window.quickConfirmPayment = async function(registrationId) {
+    console.info('UI: quickConfirmPayment clicked', { registrationId, time: new Date().toISOString() });
     try {
         const response = await fetch(`/api/admin/registrations/${registrationId}/confirm-payment`, {
             method: 'PUT',
@@ -1861,6 +1862,7 @@ window.quickConfirmPayment = async function(registrationId) {
 };
 
 window.markPaidModal = function(registrationId) {
+    console.info('UI: markPaidModal clicked', { registrationId, time: new Date().toISOString() });
     if (window.admin && typeof admin.markPaid === 'function') {
         admin.markPaid(registrationId);
     } else {

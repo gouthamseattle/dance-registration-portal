@@ -99,6 +99,8 @@ body::before {
     align-items: center;
     z-index: 9999;
     backdrop-filter: blur(10px);
+    /* Safety: never intercept clicks if it accidentally remains visible */
+    pointer-events: none;
 }
 
 .loading-overlay .spinner-border {
