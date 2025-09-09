@@ -257,6 +257,7 @@ class DanceRegistrationApp {
         this.populateSelectedCourseInfo();
         this.setupPaymentOptions();
         this.setupDanceExperienceField();
+        this.setupInstagramIdField();
         this.setupCrewPracticeBranding();
         this.scrollToTop();
     }
@@ -273,8 +274,7 @@ class DanceRegistrationApp {
                         <strong>Level:</strong> ${this.selectedCourse.level || 'All Levels'}
                     </div>
                     <div class="col-sm-6">
-                        <strong>Capacity:</strong> ${this.selectedCourse.capacity} students<br>
-                        <strong>Available:</strong> ${this.selectedCourse.available_spots} spots
+                        <strong>Capacity:</strong> ${this.selectedCourse.capacity} students
                     </div>
                 </div>
                 ${this.selectedCourse.schedule_info ? `<div class="mt-2"><strong>Schedule:</strong> ${this.selectedCourse.schedule_info}</div>` : ''}
@@ -289,8 +289,7 @@ class DanceRegistrationApp {
                         <strong>Time:</strong> ${this.selectedDropIn.class_time}
                     </div>
                     <div class="col-sm-6">
-                        <strong>Price:</strong> $${this.selectedDropIn.price}<br>
-                        <strong>Available:</strong> ${this.selectedDropIn.available_spots} spots
+                        <strong>Price:</strong> $${this.selectedDropIn.price}
                     </div>
                 </div>
                 ${this.selectedDropIn.instructor ? `<div class="mt-2"><strong>Instructor:</strong> ${this.selectedDropIn.instructor}</div>` : ''}
@@ -362,6 +361,46 @@ class DanceRegistrationApp {
             danceExperienceField.style.display = 'block';
             // Add required attribute
             document.getElementById('dance_experience').setAttribute('required', 'required');
+        }
+    }
+
+    setupInstagramIdField() {
+        const instagramLabel = document.querySelector('label[for="instagram_id"]');
+        const instagramInput = document.getElementById('instagram_id');
+        const inputGroup = instagramInput.closest('.input-group');
+        const inputGroupText = inputGroup.querySelector('.input-group-text');
+        
+        // Check if selected course is Crew Practice
+        if (this.selectedCourse && this.selectedCourse.course_type === 'crew_practice') {
+            // Change to Name field for Crew Practice
+            instagramLabel.innerHTML = `
+                <i class="fas fa-user text-primary"></i>
+                Full Name *
+            `;
+            instagramInput.placeholder = 'Enter your full name';
+            instagramInput.name = 'student_name';
+            instagramInput.id = 'student_name';
+            instagramLabel.setAttribute('for', 'student_name');
+            
+            // Hide the @ symbol for name field
+            inputGroupText.style.display = 'none';
+            instagramInput.classList.remove('form-control');
+            instagramInput.classList.add('form-control', 'form-control-lg');
+            instagramInput.style.borderRadius = 'var(--radius-md)';
+        } else {
+            // Show Instagram ID field for other course types
+            instagramLabel.innerHTML = `
+                <i class="fab fa-instagram text-primary"></i>
+                Instagram ID *
+            `;
+            instagramInput.placeholder = '';
+            instagramInput.name = 'instagram_id';
+            instagramInput.id = 'instagram_id';
+            instagramLabel.setAttribute('for', 'instagram_id');
+            
+            // Show the @ symbol for Instagram field
+            inputGroupText.style.display = 'block';
+            instagramInput.style.borderRadius = '';
         }
     }
 
@@ -667,7 +706,6 @@ class DanceRegistrationApp {
                     <div class="payment-confirmation mt-4">
                         <div class="alert alert-warning">
                             <h6><i class="fas fa-clock me-2"></i>After Payment</h6>
-                            <p class="mb-2">Your registration is saved with ID: <strong>#${this.registrationData.registrationId}</strong></p>
                             <p class="mb-0 small">We'll confirm your payment within a few minutes and send you a confirmation email.</p>
                         </div>
                         
