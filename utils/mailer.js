@@ -49,7 +49,17 @@ function getTransportOptions() {
     };
   }
 
-  throw new Error('Email transport is not configured. Provide EMAIL_SERVICE=gmail or EMAIL_HOST/EMAIL_PORT and credentials.');
+  // Implicit Gmail SMTP fallback if credentials provided (no EMAIL_SERVICE/EMAIL_HOST set)
+  if (EMAIL_USER && pass) {
+    return {
+      host: 'smtp.gmail.com',
+      port: 587,
+      secure: false,
+      auth: { user: EMAIL_USER, pass }
+    };
+  }
+
+  throw new Error('Email transport is not configured. Provide EMAIL_SERVICE=gmail or EMAIL_HOST/EMAIL_PORT with credentials, or ensure EMAIL_USER and EMAIL_PASSWORD are set for Gmail fallback.');
 }
 
 function getTransporter() {
