@@ -1576,7 +1576,9 @@ Questions? Reply to this message`;
                 // Reload data
                 await this.loadInitialData();
 
-                if (result.email_sent) {
+                if (result.email_queued) {
+                    this.showSuccess('Payment confirmed. Confirmation email is being sent.');
+                } else if (result.email_sent) {
                     this.showSuccess('Payment confirmed. Confirmation email sent.');
                 } else if (result.email_skipped) {
                     this.showSuccess('Payment confirmed. Email notifications are disabled.');
@@ -1625,7 +1627,9 @@ Questions? Reply to this message`;
                 // Reload data
                 await this.loadInitialData();
 
-                if (result.email_sent) {
+                if (result.email_queued) {
+                    this.showSuccess('Payment confirmed. Confirmation email is being sent.');
+                } else if (result.email_sent) {
                     this.showSuccess('Payment confirmed. Confirmation email sent.');
                 } else if (result.email_skipped) {
                     this.showSuccess('Payment confirmed. Email notifications are disabled.');
@@ -1844,7 +1848,9 @@ window.quickConfirmPayment = async function(registrationId, el) {
             // Prefer toast UI if AdminDashboard is ready
             if (window.admin && typeof admin.loadInitialData === 'function') {
                 await admin.loadInitialData();
-                if (result.email_sent) {
+                if (result.email_queued) {
+                    admin.showSuccess('Payment confirmed. Confirmation email is being sent.');
+                } else if (result.email_sent) {
                     admin.showSuccess('Payment confirmed. Confirmation email sent.');
                 } else if (result.email_skipped) {
                     admin.showSuccess('Payment confirmed. Email notifications are disabled.');

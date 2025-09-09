@@ -49,11 +49,21 @@ function getTransportOptions() {
     port
   });
 
+  // Common network hardening options
+  const commonTimeouts = {
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 10000,
+    // Force IPv4 to avoid some IPv6 ETIMEDOUT cases
+    family: 4
+  };
+
   // Service-based config (e.g., gmail)
   if (service) {
     const opts = {
       service,
-      auth: user && pass ? { user, pass } : undefined
+      auth: user && pass ? { user, pass } : undefined,
+      ...commonTimeouts
     };
     dbg('using service transport', { service, hasAuth: !!opts.auth });
     return opts;
@@ -66,7 +76,8 @@ function getTransportOptions() {
       host,
       port: p,
       secure: p === 465,
-      auth: user && pass ? { user, pass } : undefined
+      auth: user && pass ? { user, pass } : undefined,
+      ...commonTimeouts
     };
     dbg('using host/port transport', { host, port: p, secure: opts.secure, hasAuth: !!opts.auth });
     return opts;
@@ -78,7 +89,8 @@ function getTransportOptions() {
       host: 'smtp.gmail.com',
       port: 587,
       secure: false,
-      auth: { user, pass }
+      auth: { user, pass },
+      ...commonTimeouts
     };
     dbg('using gmail fallback transport', { host: opts.host, port: opts.port, secure: opts.secure, hasAuth: true });
     return opts;
@@ -154,7 +166,13 @@ function escapeHtml(str) {
     .replace(/'/g, '&#39;');
 }
 
+async function verifyEmailTransport() {
+  const transporter = getTransporter();
+  return transporter.verify();
+}
+
 module.exports = {
   getTransporter,
-  sendRegistrationConfirmationEmail
+  sendRegistrationConfirmationEmail,
+  verifyEmailTransport
 };

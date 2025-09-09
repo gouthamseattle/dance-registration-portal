@@ -41,7 +41,7 @@
 - Railway auto-deploys on git push
 - PostgreSQL managed by Railway
 - HTTPS domain for production
-- Cache-busting added for registration.js to mitigate stale caching
+- Cache-busting added for client assets to mitigate stale caching
 
 ### ✅ Security Implementation
 - Password hashing (bcryptjs)
@@ -49,36 +49,61 @@
 - Parameterized queries throughout
 - Server-side validation
 
-### ✅ Student Portal UX Improvements (Latest)
-- Schedule now shows Day + Start-End time + Location across UI
+### ✅ Student Portal UX Improvements
+- Schedule shows Day + Start-End time + Location across UI
   - Cards: slot-based details with date range appended
-  - Selected Course Info: per-slot lines + Dates section
+  - Selected Course Info: per-slot lines + separate Dates section
   - Confirmation: server-computed schedule_info ensures times/dates
 - Removed technical “saved with ID” messaging from payment UI
 - Hidden “Available spots” from student-facing UI
 - Crew Practice: Instagram ID field changes to “Full Name”; Dance Experience hidden
 - Removed 💰 emoji from total amount; cleaner total display
-- Cache-busting for registration.js to avoid stale assets after deploy
+- Cache-busting for registration.js
+
+### ✅ Transactional Emails (New)
+- Nodemailer integration with multi-mode transport detection:
+  - EMAIL_SERVICE (e.g., gmail), or EMAIL_HOST/EMAIL_PORT, or implicit Gmail fallback with EMAIL_USER/EMAIL_PASSWORD
+- Email sender resolution via EMAIL_FROM or NAME + ADDRESS fallback
+- Confirmation email automatically sent on admin payment approval:
+  - PUT /api/admin/registrations/:id/confirm-payment updates status and sends email (when system setting email_notifications_enabled='true')
+  - Email includes courseName, computed schedule_info, amount, registrationId, and studentName
+  - Endpoint never fails due to email errors; returns flags: email_sent, email_skipped, email_error
+- Resend endpoint: POST /api/admin/registrations/:id/resend-confirmation
+- Debug endpoint: GET /api/admin/debug-email-config (no secrets; shows chosen transport, presence of envs)
+- EMAIL_DEBUG=true enables safe runtime detection logs
+
+### ✅ Admin UI Reliability (New)
+- Loading overlay made non-interactive to avoid intercepting clicks if it remains visible (pointer-events: none)
+- Overlay is also hidden in finally blocks and on window load as a safety
+- Global handlers exposed on window:
+  - window.quickConfirmPayment(regId)
+  - window.markPaidModal(regId)
+- Click diagnostics added via console.info in global handlers
+- Cache-busting bumped for admin assets:
+  - admin.html -> js/admin.js?v=5, css/admin-styles.css?v=3
 
 ## What Changed Recently (Server + Frontend)
 
-### Server (Courses endpoint)
-- schedule_info is now computed from slots and course dates
-  - Format example: “Fridays 7:00 PM - 8:30 PM at Studio G (9/20/2025 - 11/1/2025)”
-  - If only start_date: “(Starts 9/20/2025)”
-- Returns slots with pricing, capacity aggregates, available spots
-- Normalizes is_active for SQLite (1/0) vs Postgres (true/false) on updates
+### Server
+- GET /api/courses computes schedule_info from slots + course dates
+- Confirm payment flow:
+  - PUT /api/admin/registrations/:id/confirm-payment
+  - POST /api/admin/registrations/:id/resend-confirmation
+  - GET /api/admin/debug-email-config
+- Capacity check rewritten with subqueries and numeric coercion
 
-### Frontend (registration.js, index.html)
-- Course cards: schedule built from course.slots; date range appended
-- Selected Course Info: per-slot schedule + separate Dates section
-- Fallback to course-level times if slot times are missing
-- Confirmation relies on server-computed schedule_info (now time-aware)
-- Cache-busting query param added to registration.js script tag
+### Frontend
+- registration.js/card rendering: slot-based schedule display with time-aware details
+- admin.js/admin.html:
+  - Global quick confirm and mark-paid handlers wired via window.*
+  - Click logging added to global handlers for diagnostics
+  - Overlay safety changes
+  - Cache-busting for admin.js and admin-styles.css
 
 ### Commits Deployed
 - 45ddfb5 — Show slot times on cards and form; add fallback to course-level times; fix duplicate variable declarations
 - 75511bb — Compute schedule_info on server from slots (include start/end times and dates) and cache-bust registration.js
+- 43aeef1 — Admin UI: make loading overlay non-interactive; add click logging; bump cache-busters (admin.js v=5, admin-styles.css v=3). Update memory bank with email workflow and UI fixes.
 
 ## Current Status Overview
 
@@ -88,14 +113,14 @@
 - Admin management and dashboard stats
 - Production deployment and auto-deploy flow
 - Time-aware schedule visible across UI
+- Transactional email on admin payment approval (with resend support and config debug endpoint)
+- Admin UI approval buttons responsive; overlay cannot block clicks
 
 ### 🟡 Partially Implemented
-- Email system (nodemailer configured; not wired into registration flow)
-- CSV export wiring in UI
-- QR codes surfaced for Venmo desktop flow; admin QR tooling TBD
+- CSV export surface in admin UI (core export exists; enhance per-course export UX)
 
 ### 🔴 Not Started
-- WhatsApp message templates (admin-side)
+- Bulk email interface in Admin
 - Advanced analytics/reporting
 - Multi-instructor support
 - Student self-service dashboard
@@ -103,17 +128,14 @@
 
 ## Known Issues and Limitations
 
-### ⚠️ Current Limitations
-1. Email notifications not yet triggered on registration/payment
-2. CSV export not exposed in admin UI
-3. Admin bulk comms tooling not implemented
-4. Drop-in classes endpoint currently returns an empty array
-5. Some browser caches may retain older JS without cache-busting
+### ⚠️ Current Considerations
+1. Email delivery depends on valid SMTP credentials and provider policies; use GET /api/admin/debug-email-config and set EMAIL_DEBUG=true for diagnostics.
+2. Drop-in classes endpoint currently returns an empty array (placeholder).
 
 ### 🐛 Minor Issues
-1. Error UI copy could be improved for clarity in some flows
+1. Error UI copy could be improved in some flows
 2. Some admin features could be more mobile-friendly
-3. Loading indicators could be enhanced in payment steps
+3. Loading indicators could be further enhanced in payment steps
 
 ## Evolution of Project Decisions
 
@@ -127,38 +149,38 @@
 - Server-computed schedule_info replaces hand-authored schedule text for consistency
 - Student payment UX prioritizes Venmo deep link/QR flow
 - Cache-busting added to client asset URLs to ensure immediate rollout
+- Transactional emails sent on admin approval with resilient error handling and explicit resend
 
 ## Success Metrics Achieved
 
 ### ✅ Technical
 - Mobile load performance sustained
 - Reliable deployment pipeline via git push
-- Consistent schedule rendering across all views
+- Consistent, time-aware schedule rendering across views
+- Transactional emails integrated and configurable
 
 ### ✅ UX
-- Clear, time-explicit schedule presentation
+- Clear schedule presentation
 - Cleaner payment UI without technical noise
-- Conditional form fields for crew practice
+- Reliable admin approval actions with helpful toasts
 
 ### ✅ Business
 - Professional student-facing presentation
-- Fewer student follow-ups on schedule ambiguity
-- Admins can confidently confirm Venmo payments
+- Fewer schedule-related student questions
+- Post-payment confirmations emailed on approval
 
 ## Next Development Priorities
 
 ### High Priority (Next Sprint)
-1. Email Integration: Send confirmation emails with the computed schedule (server-side)
-2. CSV Export: Admin UI button to export registrations per course
-3. Admin QR/WhatsApp Sharing: Quick-share with schedule snippet
+1. CSV Export UX: Enhance admin export options (per-course, filtered)
+2. Admin diagnostics UI for email config (optional surface for /api/admin/debug-email-config)
 
 ### Medium Priority
 1. Bulk Email Interface in Admin
 2. Enhanced Reporting: Basic analytics views
-3. Improve error and loading states
+3. Improve error and loading states further
 
 ### Low Priority
 1. Multi-instructor support and roles
-2. Advanced analytics dashboards
-3. Student dashboard and receipt downloads
-4. Calendar integrations
+2. Student dashboard and receipt downloads
+3. Calendar integrations

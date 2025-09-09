@@ -9,7 +9,7 @@ require('dotenv').config();
 
 // Import our database configuration
 const DatabaseConfig = require('./database-config');
-const { sendRegistrationConfirmationEmail } = require('./utils/mailer');
+const { sendRegistrationConfirmationEmail, verifyEmailTransport } = require('./utils/mailer');
 const { fetchCourseWithSlots } = require('./utils/schedule');
 
 const app = express();
@@ -864,19 +864,20 @@ app.put('/api/admin/registrations/:id/confirm-payment', requireAuth, asyncHandle
         // Compute schedule_info consistently with courses endpoint
         const { schedule_info } = await fetchCourseWithSlots(dbConfig, reg.course_id);
 
-        // Build payload and send
-        await sendRegistrationConfirmationEmail(reg.email, {
+        // Send email in background (don't await)
+        sendRegistrationConfirmationEmail(reg.email, {
             courseName: reg.course_name,
             scheduleInfo: schedule_info,
             amount: reg.payment_amount,
             registrationId: reg.id,
             studentName: [reg.first_name, reg.last_name].filter(Boolean).join(' ')
+        }).then(() => {
+            console.log('✉️  Sent confirmation email to:', reg.email);
+        }).catch(err => {
+            console.error('❌ Error sending confirmation email:', err);
         });
 
-        email_sent = true;
-        console.log('✉️  Sent confirmation email to:', reg.email);
-
-        return res.json({ success: true, message: 'Payment confirmed successfully', email_sent });
+        return res.json({ success: true, message: 'Payment confirmed successfully', email_queued: true });
     } catch (err) {
         console.error('❌ Error sending confirmation email:', err);
         email_error = err.message || String(err);
@@ -922,18 +923,20 @@ app.post('/api/admin/registrations/:id/resend-confirmation', requireAuth, asyncH
 
         const { schedule_info } = await fetchCourseWithSlots(dbConfig, reg.course_id);
 
-        await sendRegistrationConfirmationEmail(reg.email, {
+        // Send email in background (don't await)
+        sendRegistrationConfirmationEmail(reg.email, {
             courseName: reg.course_name,
             scheduleInfo: schedule_info,
             amount: reg.payment_amount,
             registrationId: reg.id,
             studentName: [reg.first_name, reg.last_name].filter(Boolean).join(' ')
+        }).then(() => {
+            console.log('✉️  Resent confirmation email to:', reg.email);
+        }).catch(err => {
+            console.error('❌ Error resending confirmation email:', err);
         });
 
-        email_sent = true;
-        console.log('✉️  Resent confirmation email to:', reg.email);
-
-        res.json({ success: true, message: 'Confirmation email resent', email_sent });
+        res.json({ success: true, message: 'Confirmation email queued', email_queued: true });
     } catch (err) {
         console.error('❌ Error resending confirmation email:', err);
         email_error = err.message || String(err);
@@ -975,6 +978,27 @@ app.get('/api/admin/debug-email-config', requireAuth, asyncHandler(async (req, r
         port: port || 587,
         chosenTransport
     });
+}));
+
+/**
+ * Admin test email transport endpoint - verifies SMTP connectivity
+ */
+app.post('/api/admin/test-email-transport', requireAuth, asyncHandler(async (req, res) => {
+    try {
+        const result = await verifyEmailTransport();
+        res.json({ 
+            success: true, 
+            message: 'Email transport verified successfully',
+            details: result
+        });
+    } catch (error) {
+        console.error('❌ Email transport test failed:', error);
+        res.json({ 
+            success: false, 
+            error: error.message || String(error),
+            details: error
+        });
+    }
 }));
 
 // Generate Venmo payment link
