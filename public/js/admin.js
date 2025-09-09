@@ -1552,13 +1552,24 @@ Questions? Reply to this message`;
             });
 
             if (response.ok) {
+                const result = await response.json();
+
                 // Close modal
                 const modal = bootstrap.Modal.getInstance(document.getElementById('venmoConfirmModal'));
                 modal.hide();
                 
                 // Reload data
                 await this.loadInitialData();
-                this.showSuccess('Venmo payment confirmed successfully!');
+
+                if (result.email_sent) {
+                    this.showSuccess('Payment confirmed. Confirmation email sent.');
+                } else if (result.email_skipped) {
+                    this.showSuccess('Payment confirmed. Email notifications are disabled.');
+                } else if (result.email_error) {
+                    this.showError(`Payment confirmed but email could not be sent: ${result.email_error}`);
+                } else {
+                    this.showSuccess('Venmo payment confirmed successfully!');
+                }
                 
                 if (this.currentSection === 'registrations') {
                     this.loadRegistrations();
