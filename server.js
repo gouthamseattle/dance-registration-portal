@@ -239,11 +239,43 @@ app.get('/api/courses', asyncHandler(async (req, res) => {
         const totalCapacity = slots.reduce((sum, slot) => sum + (slot.capacity || 0), 0);
         const totalAvailableSpots = slots.reduce((sum, slot) => sum + (slot.available_spots || 0), 0);
         
+        // Build computed schedule_info from slots so frontend always gets full schedule text with times
+        let computedScheduleInfo = '';
+        const scheduleItems = slotsWithPricing.map(s => {
+            const parts = [];
+            if (s.day_of_week) parts.push(`${s.day_of_week}s`);
+            const st = s.start_time;
+            const et = s.end_time;
+            if (st && et) {
+                parts.push(`${st} - ${et}`);
+            } else if (st) {
+                parts.push(st);
+            }
+            if (s.location) parts.push(`at ${s.location}`);
+            return parts.join(' ');
+        }).filter(Boolean);
+
+        if (scheduleItems.length > 0) {
+            let dateInfo = '';
+            if (course.start_date && course.end_date) {
+                const startDate = new Date(course.start_date).toLocaleDateString();
+                const endDate = new Date(course.end_date).toLocaleDateString();
+                dateInfo = ` (${startDate} - ${endDate})`;
+            } else if (course.start_date) {
+                const startDate = new Date(course.start_date).toLocaleDateString();
+                dateInfo = ` (Starts ${startDate})`;
+            }
+            computedScheduleInfo = scheduleItems.join(' | ') + dateInfo;
+        } else {
+            computedScheduleInfo = course.schedule_info || '';
+        }
+
         return {
             ...course,
             slots: slotsWithPricing,
             capacity: totalCapacity,
             available_spots: totalAvailableSpots,
+            schedule_info: computedScheduleInfo,
             // Backward compatibility fields
             full_course_price: slotsWithPricing[0]?.pricing?.full_package || 0,
             per_class_price: slotsWithPricing[0]?.pricing?.drop_in || 0
