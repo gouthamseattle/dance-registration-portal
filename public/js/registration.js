@@ -82,6 +82,55 @@ class DanceRegistrationApp {
         const hasFullCoursePrice = course.full_course_price && course.full_course_price > 0;
         const hasPerClassPrice = course.per_class_price && course.per_class_price > 0;
 
+        // Build schedule from slots or fallback to schedule_info
+        let scheduleHtml = '';
+        if (course.slots && course.slots.length > 0) {
+            const scheduleItems = course.slots.map(slot => {
+                const parts = [];
+                if (slot.day_of_week) parts.push(`${slot.day_of_week}s`);
+                const start = slot.start_time || course.start_time;
+                const end = slot.end_time || course.end_time;
+                if (start && end) {
+                    parts.push(`${start} - ${end}`);
+                } else if (start) {
+                    parts.push(start);
+                }
+                if (slot.location) parts.push(`at ${slot.location}`);
+                let scheduleText = parts.join(' ');
+                if (course.slots.length > 1 && slot.difficulty_level) {
+                    scheduleText += ` (${slot.difficulty_level})`;
+                }
+                return scheduleText;
+            }).filter(t => t);
+
+            let dateInfo = '';
+            if (course.start_date && course.end_date) {
+                const startDate = new Date(course.start_date).toLocaleDateString();
+                const endDate = new Date(course.end_date).toLocaleDateString();
+                dateInfo = `<br><small>${startDate} - ${endDate}</small>`;
+            } else if (course.start_date) {
+                const startDate = new Date(course.start_date).toLocaleDateString();
+                dateInfo = `<br><small>Starts ${startDate}</small>`;
+            }
+
+            if (scheduleItems.length > 0) {
+                scheduleHtml = `
+                            <div class="course-info-item">
+                                <i class="fas fa-calendar"></i>
+                                <span>${scheduleItems.join('<br>')}${dateInfo}</span>
+                            </div>
+                `;
+            }
+        }
+        if (!scheduleHtml && course.schedule_info) {
+            scheduleHtml = `
+                            <div class="course-info-item">
+                                <i class="fas fa-calendar"></i>
+                                <span>${course.schedule_info}</span>
+                            </div>
+            `;
+        }
+
         col.innerHTML = `
             <div class="card course-card fade-in">
                 <div class="card-header">
@@ -92,12 +141,7 @@ class DanceRegistrationApp {
                     ${course.description ? `<p class="text-muted mb-3">${course.description}</p>` : ''}
                     
                     <div class="course-info">
-                        ${course.schedule_info ? `
-                            <div class="course-info-item">
-                                <i class="fas fa-calendar"></i>
-                                <span>${course.schedule_info}</span>
-                            </div>
-                        ` : ''}
+                        ${scheduleHtml}
                         ${course.prerequisites ? `
                             <div class="course-info-item">
                                 <i class="fas fa-info-circle"></i>
@@ -277,11 +321,13 @@ class DanceRegistrationApp {
                         parts.push(`${slot.day_of_week}s`);
                     }
                     
-                    // Add time range if available
-                    if (slot.start_time && slot.end_time) {
-                        parts.push(`${slot.start_time} - ${slot.end_time}`);
-                    } else if (slot.start_time) {
-                        parts.push(slot.start_time);
+                    // Add time range if available (fallback to course-level times)
+                    const start = slot.start_time || this.selectedCourse.start_time;
+                    const end = slot.end_time || this.selectedCourse.end_time;
+                    if (start && end) {
+                        parts.push(`${start} - ${end}`);
+                    } else if (start) {
+                        parts.push(start);
                     }
                     
                     // Add location if available
@@ -326,8 +372,13 @@ class DanceRegistrationApp {
                     const debugParts = [];
                     
                     if (slot.day_of_week) debugParts.push(`${slot.day_of_week}s`);
-                    if (slot.start_time) debugParts.push(slot.start_time);
-                    if (slot.end_time) debugParts.push(`- ${slot.end_time}`);
+                    const dbgStart = slot.start_time || this.selectedCourse.start_time;
+                    const dbgEnd = slot.end_time || this.selectedCourse.end_time;
+                    if (dbgStart && dbgEnd) {
+                        debugParts.push(`${dbgStart} - ${dbgEnd}`);
+                    } else if (dbgStart) {
+                        debugParts.push(dbgStart);
+                    }
                     if (slot.location) debugParts.push(`at ${slot.location}`);
                     
                     if (debugParts.length > 0) {
