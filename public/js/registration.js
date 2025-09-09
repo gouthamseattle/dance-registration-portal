@@ -266,10 +266,15 @@ class DanceRegistrationApp {
         const infoContainer = document.getElementById('selectedCourseInfo');
         
         if (this.selectedCourse) {
+            // Debug logging to see what data we have
+            console.log('Selected course data:', this.selectedCourse);
+            console.log('Slots data:', this.selectedCourse.slots);
+            
             // Build schedule information from slots
             let scheduleHtml = '';
             if (this.selectedCourse.slots && this.selectedCourse.slots.length > 0) {
                 const scheduleItems = this.selectedCourse.slots.map(slot => {
+                    console.log('Processing slot:', slot);
                     let scheduleText = '';
                     
                     // Build comprehensive schedule with dates and times
@@ -300,6 +305,7 @@ class DanceRegistrationApp {
                         scheduleText += ` (${slot.difficulty_level})`;
                     }
                     
+                    console.log('Built schedule text:', scheduleText);
                     return scheduleText;
                 }).filter(text => text); // Remove empty strings
                 
@@ -316,12 +322,14 @@ class DanceRegistrationApp {
                 
                 if (scheduleItems.length > 0) {
                     scheduleHtml = `<div class="mt-2"><strong>Schedule:</strong> ${scheduleItems.join('<br>')}</div>${dateInfo}`;
+                    console.log('Final schedule HTML:', scheduleHtml);
                 }
             }
             
-            // Fallback to schedule_info if no slot data available
-            if (!scheduleHtml && this.selectedCourse.schedule_info) {
+            // Only use schedule_info fallback if we have no slot data at all
+            if (!scheduleHtml && this.selectedCourse.schedule_info && (!this.selectedCourse.slots || this.selectedCourse.slots.length === 0)) {
                 scheduleHtml = `<div class="mt-2"><strong>Schedule:</strong> ${this.selectedCourse.schedule_info}</div>`;
+                console.log('Using fallback schedule_info:', this.selectedCourse.schedule_info);
             }
             
             infoContainer.innerHTML = `
