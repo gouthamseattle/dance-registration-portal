@@ -9,6 +9,8 @@ require('dotenv').config();
 
 // Import our database configuration
 const DatabaseConfig = require('./database-config');
+const { sendRegistrationConfirmationEmail } = require('./utils/mailer');
+const { fetchCourseWithSlots } = require('./utils/schedule');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -786,12 +788,17 @@ app.put('/api/registrations/:id/payment', asyncHandler(async (req, res) => {
     res.json({ success: true });
 }));
 
-// Admin confirm payment endpoint
+/**
+ * Admin confirm payment endpoint
+ * - Marks payment as completed
+ * - If email notifications are enabled, sends a confirmation email to the student
+ * - Never fails the payment update due to email errors; returns flags in response
+ */
 app.put('/api/admin/registrations/:id/confirm-payment', requireAuth, asyncHandler(async (req, res) => {
     const { id } = req.params;
     const { venmo_transaction_note } = req.body;
-    
-    // Update registration to completed status
+
+    // 1) Update registration to completed status
     await dbConfig.run(`
         UPDATE registrations SET
             payment_status = 'completed',
@@ -800,10 +807,118 @@ app.put('/api/admin/registrations/:id/confirm-payment', requireAuth, asyncHandle
             updated_at = CURRENT_TIMESTAMP
         WHERE id = $2
     `, [venmo_transaction_note || `Venmo payment confirmed by admin`, id]);
-    
+
     console.log('✅ Admin confirmed Venmo payment for registration:', id);
-    
-    res.json({ success: true, message: 'Payment confirmed successfully' });
+
+    // 2) Prepare to send confirmation email (if enabled)
+    let email_sent = false;
+    let email_error = null;
+    let email_skipped = false;
+
+    try {
+        // Check if email notifications are enabled
+        const setting = await dbConfig.get('SELECT setting_value FROM system_settings WHERE setting_key = $1', ['email_notifications_enabled']);
+        const emailEnabled = setting && setting.setting_value === 'true';
+
+        if (!emailEnabled) {
+            email_skipped = true;
+            return res.json({ success: true, message: 'Payment confirmed successfully', email_sent, email_skipped });
+        }
+
+        // Load registration with student and course info
+        const reg = await dbConfig.get(`
+            SELECT r.id, r.payment_amount, r.course_id,
+                   s.email, s.first_name, s.last_name,
+                   c.name AS course_name, c.start_date, c.end_date
+            FROM registrations r
+            JOIN students s ON s.id = r.student_id
+            JOIN courses c ON c.id = r.course_id
+            WHERE r.id = $1
+        `, [id]);
+
+        if (!reg) {
+            console.warn('⚠️ Registration not found for email send:', id);
+            return res.json({ success: true, message: 'Payment confirmed successfully (registration not found for email)', email_sent: false });
+        }
+
+        // Compute schedule_info consistently with courses endpoint
+        const { schedule_info } = await fetchCourseWithSlots(dbConfig, reg.course_id);
+
+        // Build payload and send
+        await sendRegistrationConfirmationEmail(reg.email, {
+            courseName: reg.course_name,
+            scheduleInfo: schedule_info,
+            amount: reg.payment_amount,
+            registrationId: reg.id,
+            studentName: [reg.first_name, reg.last_name].filter(Boolean).join(' ')
+        });
+
+        email_sent = true;
+        console.log('✉️  Sent confirmation email to:', reg.email);
+
+        return res.json({ success: true, message: 'Payment confirmed successfully', email_sent });
+    } catch (err) {
+        console.error('❌ Error sending confirmation email:', err);
+        email_error = err.message || String(err);
+        // Do not fail the payment update due to email issues
+        return res.json({ success: true, message: 'Payment confirmed successfully', email_sent, email_error });
+    }
+}));
+
+/**
+ * Admin resend confirmation email endpoint
+ * - Allows resending the confirmation email without changing payment status
+ */
+app.post('/api/admin/registrations/:id/resend-confirmation', requireAuth, asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    let email_sent = false;
+    let email_error = null;
+    let email_skipped = false;
+
+    try {
+        // Check if email notifications are enabled
+        const setting = await dbConfig.get('SELECT setting_value FROM system_settings WHERE setting_key = $1', ['email_notifications_enabled']);
+        const emailEnabled = setting && setting.setting_value === 'true';
+
+        if (!emailEnabled) {
+            email_skipped = true;
+            return res.json({ success: true, message: 'Email notifications are disabled', email_sent, email_skipped });
+        }
+
+        // Load registration with student and course info
+        const reg = await dbConfig.get(`
+            SELECT r.id, r.payment_amount, r.course_id,
+                   s.email, s.first_name, s.last_name,
+                   c.name AS course_name, c.start_date, c.end_date
+            FROM registrations r
+            JOIN students s ON s.id = r.student_id
+            JOIN courses c ON c.id = r.course_id
+            WHERE r.id = $1
+        `, [id]);
+
+        if (!reg) {
+            return res.status(404).json({ error: 'Registration not found' });
+        }
+
+        const { schedule_info } = await fetchCourseWithSlots(dbConfig, reg.course_id);
+
+        await sendRegistrationConfirmationEmail(reg.email, {
+            courseName: reg.course_name,
+            scheduleInfo: schedule_info,
+            amount: reg.payment_amount,
+            registrationId: reg.id,
+            studentName: [reg.first_name, reg.last_name].filter(Boolean).join(' ')
+        });
+
+        email_sent = true;
+        console.log('✉️  Resent confirmation email to:', reg.email);
+
+        res.json({ success: true, message: 'Confirmation email resent', email_sent });
+    } catch (err) {
+        console.error('❌ Error resending confirmation email:', err);
+        email_error = err.message || String(err);
+        res.json({ success: true, message: 'Resend attempted', email_sent, email_error });
+    }
 }));
 
 // Generate Venmo payment link
