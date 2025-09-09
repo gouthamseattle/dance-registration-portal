@@ -647,16 +647,35 @@ app.post('/api/register', asyncHandler(async (req, res) => {
     }
     
     // Check capacity using slot-based calculation
+    // Capacity check rewritten to avoid join ambiguities: use subqueries for totals
     const courseCheck = await dbConfig.get(`
-        SELECT c.id, c.name, c.course_type,
-               COALESCE(SUM(cs.capacity), 0) as total_capacity,
-               COUNT(DISTINCT r.id) as current_registrations
+        SELECT
+          c.id,
+          c.name,
+          c.course_type,
+          (
+            SELECT COALESCE(SUM(cs.capacity), 0)
+            FROM course_slots cs
+            WHERE cs.course_id = c.id
+          ) AS total_capacity,
+          (
+            SELECT COUNT(*)
+            FROM registrations r
+            WHERE r.course_id = c.id
+              AND r.payment_status = 'completed'
+          ) AS current_registrations
         FROM courses c
-        LEFT JOIN course_slots cs ON c.id = cs.course_id
-        LEFT JOIN registrations r ON c.id = r.course_id AND r.payment_status = 'completed'
-        WHERE c.id = $1 AND c.is_active = ${dbConfig.isProduction ? 'true' : '1'}
-        GROUP BY c.id, c.name, c.course_type
+        WHERE c.id = $1
+          AND c.is_active = ${dbConfig.isProduction ? 'true' : '1'}
     `, [course_id]);
+
+    if (courseCheck) {
+        console.log('🔎 Capacity check', {
+            courseId: course_id,
+            total_capacity: courseCheck.total_capacity,
+            current_registrations: courseCheck.current_registrations
+        });
+    }
     
     if (!courseCheck) {
         return res.status(400).json({ error: 'Course not found or inactive' });
