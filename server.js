@@ -612,20 +612,27 @@ app.post('/api/register', asyncHandler(async (req, res) => {
         return res.status(400).json({ error: 'Registration is currently closed' });
     }
     
-    // Check capacity
-    const course = await dbConfig.get(`
-        SELECT c.capacity, COUNT(r.id) as current_registrations
+    // Check capacity using slot-based calculation
+    const courseCheck = await dbConfig.get(`
+        SELECT c.id, c.name, c.course_type,
+               COALESCE(SUM(cs.capacity), 0) as total_capacity,
+               COUNT(DISTINCT r.id) as current_registrations
         FROM courses c
+        LEFT JOIN course_slots cs ON c.id = cs.course_id
         LEFT JOIN registrations r ON c.id = r.course_id AND r.payment_status = 'completed'
         WHERE c.id = $1 AND c.is_active = ${dbConfig.isProduction ? 'true' : '1'}
-        GROUP BY c.id
+        GROUP BY c.id, c.name, c.course_type
     `, [course_id]);
     
-    if (!course) {
+    if (!courseCheck) {
         return res.status(400).json({ error: 'Course not found or inactive' });
     }
     
-    if (course.current_registrations >= course.capacity) {
+    if (courseCheck.total_capacity === 0) {
+        return res.status(400).json({ error: 'Course has no available slots configured' });
+    }
+    
+    if (courseCheck.current_registrations >= courseCheck.total_capacity) {
         return res.status(400).json({ error: 'Course is full' });
     }
     
