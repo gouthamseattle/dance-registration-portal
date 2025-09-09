@@ -986,6 +986,105 @@ main {
     color: var(--text-primary);
 }
 
+/* Payment Page Specific Styling */
+.venmo-payment-container {
+    color: var(--text-primary);
+}
+
+.venmo-payment-container .payment-details {
+    color: var(--text-primary);
+}
+
+.venmo-payment-container .payment-details strong {
+    color: var(--text-primary);
+}
+
+.venmo-payment-container .payment-details .text-muted {
+    color: var(--text-secondary) !important;
+}
+
+.venmo-payment-container .alert-light {
+    background: var(--bg-secondary);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: var(--text-primary);
+}
+
+.venmo-payment-container .alert-light h6 {
+    color: var(--text-primary);
+}
+
+.venmo-payment-container .alert-light ol {
+    color: var(--text-primary);
+}
+
+.venmo-payment-container .alert-light strong {
+    color: var(--accent-primary);
+}
+
+.venmo-payment-container .alert-warning {
+    background: var(--bg-secondary);
+    border: 1px solid var(--accent-warning);
+    color: var(--text-primary);
+}
+
+.venmo-payment-container .alert-warning h6 {
+    color: var(--text-primary);
+}
+
+.venmo-payment-container .alert-warning p {
+    color: var(--text-primary);
+}
+
+.venmo-payment-container .alert-warning strong {
+    color: var(--accent-primary);
+}
+
+.venmo-payment-container .alert-warning .small {
+    color: var(--text-secondary);
+}
+
+.venmo-payment-container .text-center p {
+    color: var(--text-primary);
+}
+
+.venmo-payment-container .text-center strong {
+    color: var(--text-primary);
+}
+
+.venmo-payment-container .text-center .text-muted {
+    color: var(--text-secondary) !important;
+}
+
+.venmo-payment-container .text-muted {
+    color: var(--text-secondary) !important;
+}
+
+.venmo-payment-container small.text-muted {
+    color: var(--text-secondary) !important;
+}
+
+/* Registration Summary Styling */
+.registration-summary {
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md);
+    padding: 1.5rem;
+    margin: 1rem 0;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.registration-summary h6 {
+    color: var(--text-primary);
+    margin-bottom: 1rem;
+}
+
+.registration-summary .row {
+    color: var(--text-primary);
+}
+
+.registration-summary strong {
+    color: var(--text-secondary);
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
     .header-section {
