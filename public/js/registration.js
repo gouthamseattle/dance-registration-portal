@@ -269,40 +269,53 @@ class DanceRegistrationApp {
             // Build schedule information from slots
             let scheduleHtml = '';
             if (this.selectedCourse.slots && this.selectedCourse.slots.length > 0) {
-                console.log('Debug - Course slots:', this.selectedCourse.slots); // Debug log
-                
                 const scheduleItems = this.selectedCourse.slots.map(slot => {
                     let scheduleText = '';
                     
-                    console.log('Debug - Processing slot:', slot); // Debug log
+                    // Build comprehensive schedule with dates and times
+                    const parts = [];
                     
-                    // Add day and time if available
-                    if (slot.day_of_week && slot.start_time) {
-                        const timeText = slot.end_time ? `${slot.start_time} - ${slot.end_time}` : slot.start_time;
-                        scheduleText = `${slot.day_of_week}s at ${timeText}`;
-                    } else if (slot.day_of_week) {
-                        scheduleText = `${slot.day_of_week}s`;
+                    // Add day of week if available
+                    if (slot.day_of_week) {
+                        parts.push(`${slot.day_of_week}s`);
+                    }
+                    
+                    // Add time range if available
+                    if (slot.start_time && slot.end_time) {
+                        parts.push(`${slot.start_time} - ${slot.end_time}`);
                     } else if (slot.start_time) {
-                        const timeText = slot.end_time ? `${slot.start_time} - ${slot.end_time}` : slot.start_time;
-                        scheduleText = `${timeText}`;
+                        parts.push(slot.start_time);
                     }
                     
                     // Add location if available
                     if (slot.location) {
-                        scheduleText += scheduleText ? ` at ${slot.location}` : slot.location;
+                        parts.push(`at ${slot.location}`);
                     }
+                    
+                    // Join all parts
+                    scheduleText = parts.join(' ');
                     
                     // Add difficulty level if multiple slots
                     if (this.selectedCourse.slots.length > 1 && slot.difficulty_level) {
-                        scheduleText += scheduleText ? ` (${slot.difficulty_level})` : slot.difficulty_level;
+                        scheduleText += ` (${slot.difficulty_level})`;
                     }
                     
-                    console.log('Debug - Generated schedule text:', scheduleText); // Debug log
                     return scheduleText;
                 }).filter(text => text); // Remove empty strings
                 
+                // Add course dates if available
+                let dateInfo = '';
+                if (this.selectedCourse.start_date && this.selectedCourse.end_date) {
+                    const startDate = new Date(this.selectedCourse.start_date).toLocaleDateString();
+                    const endDate = new Date(this.selectedCourse.end_date).toLocaleDateString();
+                    dateInfo = `<div class="mt-1"><strong>Dates:</strong> ${startDate} - ${endDate}</div>`;
+                } else if (this.selectedCourse.start_date) {
+                    const startDate = new Date(this.selectedCourse.start_date).toLocaleDateString();
+                    dateInfo = `<div class="mt-1"><strong>Start Date:</strong> ${startDate}</div>`;
+                }
+                
                 if (scheduleItems.length > 0) {
-                    scheduleHtml = `<div class="mt-2"><strong>Schedule:</strong> ${scheduleItems.join('<br>')}</div>`;
+                    scheduleHtml = `<div class="mt-2"><strong>Schedule:</strong> ${scheduleItems.join('<br>')}</div>${dateInfo}`;
                 }
             }
             
