@@ -269,25 +269,35 @@ class DanceRegistrationApp {
             // Build schedule information from slots
             let scheduleHtml = '';
             if (this.selectedCourse.slots && this.selectedCourse.slots.length > 0) {
+                console.log('Debug - Course slots:', this.selectedCourse.slots); // Debug log
+                
                 const scheduleItems = this.selectedCourse.slots.map(slot => {
                     let scheduleText = '';
+                    
+                    console.log('Debug - Processing slot:', slot); // Debug log
                     
                     // Add day and time if available
                     if (slot.day_of_week && slot.start_time) {
                         const timeText = slot.end_time ? `${slot.start_time} - ${slot.end_time}` : slot.start_time;
                         scheduleText = `${slot.day_of_week}s at ${timeText}`;
+                    } else if (slot.day_of_week) {
+                        scheduleText = `${slot.day_of_week}s`;
+                    } else if (slot.start_time) {
+                        const timeText = slot.end_time ? `${slot.start_time} - ${slot.end_time}` : slot.start_time;
+                        scheduleText = `${timeText}`;
                     }
                     
                     // Add location if available
                     if (slot.location) {
-                        scheduleText += scheduleText ? ` (${slot.location})` : slot.location;
+                        scheduleText += scheduleText ? ` at ${slot.location}` : slot.location;
                     }
                     
                     // Add difficulty level if multiple slots
                     if (this.selectedCourse.slots.length > 1 && slot.difficulty_level) {
-                        scheduleText += scheduleText ? ` - ${slot.difficulty_level}` : slot.difficulty_level;
+                        scheduleText += scheduleText ? ` (${slot.difficulty_level})` : slot.difficulty_level;
                     }
                     
+                    console.log('Debug - Generated schedule text:', scheduleText); // Debug log
                     return scheduleText;
                 }).filter(text => text); // Remove empty strings
                 
@@ -305,12 +315,10 @@ class DanceRegistrationApp {
                 <h5><i class="fas fa-graduation-cap text-primary"></i> ${this.selectedCourse.name}</h5>
                 <div class="row">
                     <div class="col-sm-6">
-                        <strong>Level:</strong> ${this.selectedCourse.level || 'All Levels'}<br>
-                        <strong>Instructor:</strong> ${this.selectedCourse.instructor || 'TBA'}
+                        <strong>Level:</strong> ${this.selectedCourse.level || 'All Levels'}
                     </div>
                     <div class="col-sm-6">
-                        <strong>Capacity:</strong> ${this.selectedCourse.capacity} students<br>
-                        <strong>Available:</strong> ${this.selectedCourse.available_spots} spots
+                        <strong>Capacity:</strong> ${this.selectedCourse.capacity} students
                     </div>
                 </div>
                 ${scheduleHtml}
