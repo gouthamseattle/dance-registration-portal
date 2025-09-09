@@ -9,7 +9,7 @@ require('dotenv').config();
 
 // Import our database configuration
 const DatabaseConfig = require('./database-config');
-const { sendRegistrationConfirmationEmail, verifyEmailTransport } = require('./utils/mailer');
+const { sendRegistrationConfirmationEmail, sendEmailWithFallback, verifyEmailTransport } = require('./utils/mailer');
 const { fetchCourseWithSlots } = require('./utils/schedule');
 
 const app = express();
@@ -864,8 +864,8 @@ app.put('/api/admin/registrations/:id/confirm-payment', requireAuth, asyncHandle
         // Compute schedule_info consistently with courses endpoint
         const { schedule_info } = await fetchCourseWithSlots(dbConfig, reg.course_id);
 
-        // Send email in background (don't await)
-        sendRegistrationConfirmationEmail(reg.email, {
+        // Send email in background with fallback (don't await)
+        sendEmailWithFallback(reg.email, {
             courseName: reg.course_name,
             scheduleInfo: schedule_info,
             amount: reg.payment_amount,
@@ -923,8 +923,8 @@ app.post('/api/admin/registrations/:id/resend-confirmation', requireAuth, asyncH
 
         const { schedule_info } = await fetchCourseWithSlots(dbConfig, reg.course_id);
 
-        // Send email in background (don't await)
-        sendRegistrationConfirmationEmail(reg.email, {
+        // Send email in background with fallback (don't await)
+        sendEmailWithFallback(reg.email, {
             courseName: reg.course_name,
             scheduleInfo: schedule_info,
             amount: reg.payment_amount,
