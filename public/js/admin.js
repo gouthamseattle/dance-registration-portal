@@ -531,10 +531,10 @@ class AdminDashboard {
                                         <i class="fas fa-eye"></i>
                                     </button>
                                     ${reg.payment_status === 'pending' ? `
-                                    <button class="btn btn-outline-success" onclick="window.markPaidModal(${reg.id})" title="Mark as Paid (with note)">
+                                    <button class="btn btn-outline-success" onclick="window.markPaidModal(${reg.id}, this)" title="Mark as Paid (with note)">
                                         <i class="fas fa-pen"></i>
                                     </button>
-                                    <button class="btn btn-success" onclick="window.quickConfirmPayment(${reg.id})" title="Quick Confirm Payment">
+                                    <button class="btn btn-success" onclick="window.quickConfirmPayment(${reg.id}, this)" title="Quick Confirm Payment">
                                         <i class="fas fa-check"></i>
                                     </button>
                                     ` : ''}
@@ -1519,7 +1519,7 @@ Questions? Reply to this message`;
                         </div>
                         <div class="modal-footer">
                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                            <button type="button" class="btn btn-success" onclick="admin.confirmVenmoPayment(${registrationId})">
+                            <button type="button" class="btn btn-success" onclick="admin.confirmVenmoPayment(${registrationId}, this)">
                                 <i class="fas fa-check me-2"></i>
                                 Confirm Payment Received
                             </button>
@@ -1543,8 +1543,17 @@ Questions? Reply to this message`;
         modal.show();
     }
 
-    async confirmVenmoPayment(registrationId) {
+    async confirmVenmoPayment(registrationId, el) {
+        console.info('UI: confirmVenmoPayment clicked', { registrationId, time: new Date().toISOString() });
         const venmoNote = document.getElementById('venmoNote').value;
+
+        // Optimistic UI on modal button
+        let originalHtml;
+        if (el && el instanceof HTMLElement) {
+            el.disabled = true;
+            originalHtml = el.innerHTML;
+            el.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>Confirming...';
+        }
         
         try {
             const response = await fetch(`/api/admin/registrations/${registrationId}/confirm-payment`, {
@@ -1587,6 +1596,13 @@ Questions? Reply to this message`;
         } catch (error) {
             console.error('Error confirming payment:', error);
             this.showError('Failed to confirm payment');
+        } finally {
+            if (el && el instanceof HTMLElement) {
+                el.disabled = false;
+                if (originalHtml) {
+                    el.innerHTML = originalHtml;
+                }
+            }
         }
     }
 
@@ -1804,8 +1820,15 @@ Questions? Reply to this message`;
  * Global fallback functions so buttons work even if class initialization fails.
  * These do not expose secrets and will show alerts if toasts are unavailable.
  */
-window.quickConfirmPayment = async function(registrationId) {
+window.quickConfirmPayment = async function(registrationId, el) {
     console.info('UI: quickConfirmPayment clicked', { registrationId, time: new Date().toISOString() });
+    // Optimistic UI: disable button and show spinner text
+    let originalHtml;
+    if (el && el instanceof HTMLElement) {
+        el.disabled = true;
+        originalHtml = el.innerHTML;
+        el.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>Confirming...';
+    }
     try {
         const response = await fetch(`/api/admin/registrations/${registrationId}/confirm-payment`, {
             method: 'PUT',
@@ -1858,10 +1881,17 @@ window.quickConfirmPayment = async function(registrationId) {
         }
         // Also log to console for debugging in dev tools
         console.error('quickConfirmPayment error:', err);
+    } finally {
+        if (el && el instanceof HTMLElement) {
+            el.disabled = false;
+            if (originalHtml) {
+                el.innerHTML = originalHtml;
+            }
+        }
     }
 };
 
-window.markPaidModal = function(registrationId) {
+window.markPaidModal = function(registrationId, el) {
     console.info('UI: markPaidModal clicked', { registrationId, time: new Date().toISOString() });
     if (window.admin && typeof admin.markPaid === 'function') {
         admin.markPaid(registrationId);
