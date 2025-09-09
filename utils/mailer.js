@@ -2,6 +2,13 @@ const nodemailer = require('nodemailer');
 
 let _transporter = null;
 
+// Safe debug logger (no secrets). Enable with EMAIL_DEBUG=true
+function dbg(...args) {
+  if (process.env.EMAIL_DEBUG === 'true') {
+    console.log('📧 Email:', ...args);
+  }
+}
+
 function buildFromAddress() {
   const {
     EMAIL_FROM,
@@ -20,43 +27,61 @@ function buildFromAddress() {
 }
 
 function getTransportOptions() {
-  const {
-    EMAIL_SERVICE,
-    EMAIL_HOST,
-    EMAIL_PORT,
-    EMAIL_USER,
-    EMAIL_PASSWORD,
-    EMAIL_PASS
-  } = process.env;
+  // Normalize env values
+  const rawService = process.env.EMAIL_SERVICE;
+  const rawHost = process.env.EMAIL_HOST;
+  const rawUser = process.env.EMAIL_USER;
+  const rawPort = process.env.EMAIL_PORT;
+  const rawPass = process.env.EMAIL_PASSWORD || process.env.EMAIL_PASS;
 
-  const pass = EMAIL_PASSWORD || EMAIL_PASS;
+  const service = rawService ? String(rawService).trim().toLowerCase() : '';
+  const host = rawHost ? String(rawHost).trim() : '';
+  const user = rawUser ? String(rawUser).trim() : '';
+  const pass = rawPass ? String(rawPass).trim() : '';
+  const port = rawPort ? Number(rawPort) : undefined;
 
-  if (EMAIL_SERVICE) {
-    return {
-      service: EMAIL_SERVICE,
-      auth: EMAIL_USER && pass ? { user: EMAIL_USER, pass } : undefined
+  dbg('config detection', {
+    hasService: !!service,
+    service,
+    hasHost: !!host,
+    hasUser: !!user,
+    hasPass: !!pass,
+    port
+  });
+
+  // Service-based config (e.g., gmail)
+  if (service) {
+    const opts = {
+      service,
+      auth: user && pass ? { user, pass } : undefined
     };
+    dbg('using service transport', { service, hasAuth: !!opts.auth });
+    return opts;
   }
 
-  // Fallback to host/port if provided
-  if (EMAIL_HOST) {
-    const port = Number(EMAIL_PORT || 587);
-    return {
-      host: EMAIL_HOST,
-      port,
-      secure: port === 465, // secure for 465, otherwise false
-      auth: EMAIL_USER && pass ? { user: EMAIL_USER, pass } : undefined
+  // Host/port SMTP
+  if (host) {
+    const p = port || 587;
+    const opts = {
+      host,
+      port: p,
+      secure: p === 465,
+      auth: user && pass ? { user, pass } : undefined
     };
+    dbg('using host/port transport', { host, port: p, secure: opts.secure, hasAuth: !!opts.auth });
+    return opts;
   }
 
-  // Implicit Gmail SMTP fallback if credentials provided (no EMAIL_SERVICE/EMAIL_HOST set)
-  if (EMAIL_USER && pass) {
-    return {
+  // Implicit Gmail SMTP fallback if credentials provided
+  if (user && pass) {
+    const opts = {
       host: 'smtp.gmail.com',
       port: 587,
       secure: false,
-      auth: { user: EMAIL_USER, pass }
+      auth: { user, pass }
     };
+    dbg('using gmail fallback transport', { host: opts.host, port: opts.port, secure: opts.secure, hasAuth: true });
+    return opts;
   }
 
   throw new Error('Email transport is not configured. Provide EMAIL_SERVICE=gmail or EMAIL_HOST/EMAIL_PORT with credentials, or ensure EMAIL_USER and EMAIL_PASSWORD are set for Gmail fallback.');
