@@ -669,23 +669,24 @@ app.post('/api/register', asyncHandler(async (req, res) => {
           AND c.is_active = ${dbConfig.isProduction ? 'true' : '1'}
     `, [course_id]);
 
-    if (courseCheck) {
-        console.log('🔎 Capacity check', {
-            courseId: course_id,
-            total_capacity: courseCheck.total_capacity,
-            current_registrations: courseCheck.current_registrations
-        });
-    }
-    
     if (!courseCheck) {
         return res.status(400).json({ error: 'Course not found or inactive' });
     }
+
+    const totalCapacityNum = Number(courseCheck.total_capacity) || 0;
+    const currentRegistrationsNum = Number(courseCheck.current_registrations) || 0;
+
+    console.log('🔎 Capacity check', {
+        courseId: course_id,
+        total_capacity: totalCapacityNum,
+        current_registrations: currentRegistrationsNum
+    });
     
-    if (courseCheck.total_capacity === 0) {
+    if (totalCapacityNum === 0) {
         return res.status(400).json({ error: 'Course has no available slots configured' });
     }
     
-    if (courseCheck.current_registrations >= courseCheck.total_capacity) {
+    if (currentRegistrationsNum >= totalCapacityNum) {
         return res.status(400).json({ error: 'Course is full' });
     }
     
