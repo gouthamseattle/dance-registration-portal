@@ -266,18 +266,54 @@ class DanceRegistrationApp {
         const infoContainer = document.getElementById('selectedCourseInfo');
         
         if (this.selectedCourse) {
+            // Build schedule information from slots
+            let scheduleHtml = '';
+            if (this.selectedCourse.slots && this.selectedCourse.slots.length > 0) {
+                const scheduleItems = this.selectedCourse.slots.map(slot => {
+                    let scheduleText = '';
+                    
+                    // Add day and time if available
+                    if (slot.day_of_week && slot.start_time) {
+                        const timeText = slot.end_time ? `${slot.start_time} - ${slot.end_time}` : slot.start_time;
+                        scheduleText = `${slot.day_of_week}s at ${timeText}`;
+                    }
+                    
+                    // Add location if available
+                    if (slot.location) {
+                        scheduleText += scheduleText ? ` (${slot.location})` : slot.location;
+                    }
+                    
+                    // Add difficulty level if multiple slots
+                    if (this.selectedCourse.slots.length > 1 && slot.difficulty_level) {
+                        scheduleText += scheduleText ? ` - ${slot.difficulty_level}` : slot.difficulty_level;
+                    }
+                    
+                    return scheduleText;
+                }).filter(text => text); // Remove empty strings
+                
+                if (scheduleItems.length > 0) {
+                    scheduleHtml = `<div class="mt-2"><strong>Schedule:</strong> ${scheduleItems.join('<br>')}</div>`;
+                }
+            }
+            
+            // Fallback to schedule_info if no slot data available
+            if (!scheduleHtml && this.selectedCourse.schedule_info) {
+                scheduleHtml = `<div class="mt-2"><strong>Schedule:</strong> ${this.selectedCourse.schedule_info}</div>`;
+            }
+            
             infoContainer.innerHTML = `
                 <h5><i class="fas fa-graduation-cap text-primary"></i> ${this.selectedCourse.name}</h5>
                 <div class="row">
                     <div class="col-sm-6">
-                        <strong>Duration:</strong> ${this.selectedCourse.duration_weeks} weeks<br>
-                        <strong>Level:</strong> ${this.selectedCourse.level || 'All Levels'}
+                        <strong>Level:</strong> ${this.selectedCourse.level || 'All Levels'}<br>
+                        <strong>Instructor:</strong> ${this.selectedCourse.instructor || 'TBA'}
                     </div>
                     <div class="col-sm-6">
-                        <strong>Capacity:</strong> ${this.selectedCourse.capacity} students
+                        <strong>Capacity:</strong> ${this.selectedCourse.capacity} students<br>
+                        <strong>Available:</strong> ${this.selectedCourse.available_spots} spots
                     </div>
                 </div>
-                ${this.selectedCourse.schedule_info ? `<div class="mt-2"><strong>Schedule:</strong> ${this.selectedCourse.schedule_info}</div>` : ''}
+                ${scheduleHtml}
             `;
         } else if (this.selectedDropIn) {
             const classDate = new Date(this.selectedDropIn.class_date).toLocaleDateString();
