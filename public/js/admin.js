@@ -68,6 +68,9 @@ class AdminDashboard {
         } catch (error) {
             console.error('Error loading initial data:', error);
             this.showError('Failed to load dashboard data');
+        } finally {
+            // Always hide overlay to avoid blocking clicks even if data load fails
+            this.hideLoading();
         }
     }
 
@@ -528,12 +531,12 @@ class AdminDashboard {
                                         <i class="fas fa-eye"></i>
                                     </button>
                                     ${reg.payment_status === 'pending' ? `
-                                        <button class="btn btn-outline-success" onclick="admin.markPaid(${reg.id})" title="Mark as Paid (with note)">
-                                            <i class="fas fa-pen"></i>
-                                        </button>
-                                        <button class="btn btn-success" onclick="admin.quickConfirmPayment(${reg.id})" title="Quick Confirm Payment">
-                                            <i class="fas fa-check"></i>
-                                        </button>
+                                    <button class="btn btn-outline-success" onclick="window.markPaidModal(${reg.id})" title="Mark as Paid (with note)">
+                                        <i class="fas fa-pen"></i>
+                                    </button>
+                                    <button class="btn btn-success" onclick="window.quickConfirmPayment(${reg.id})" title="Quick Confirm Payment">
+                                        <i class="fas fa-check"></i>
+                                    </button>
                                     ` : ''}
                                 </div>
                             </td>
@@ -1797,7 +1800,81 @@ Questions? Reply to this message`;
     }
 }
 
+/**
+ * Global fallback functions so buttons work even if class initialization fails.
+ * These do not expose secrets and will show alerts if toasts are unavailable.
+ */
+window.quickConfirmPayment = async function(registrationId) {
+    try {
+        const response = await fetch(`/api/admin/registrations/${registrationId}/confirm-payment`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                venmo_transaction_note: 'Venmo payment confirmed by admin'
+            })
+        });
+
+        if (response.ok) {
+            const result = await response.json();
+
+            // Prefer toast UI if AdminDashboard is ready
+            if (window.admin && typeof admin.loadInitialData === 'function') {
+                await admin.loadInitialData();
+                if (result.email_sent) {
+                    admin.showSuccess('Payment confirmed. Confirmation email sent.');
+                } else if (result.email_skipped) {
+                    admin.showSuccess('Payment confirmed. Email notifications are disabled.');
+                } else if (result.email_error) {
+                    admin.showError(`Payment confirmed but email could not be sent: ${result.email_error}`);
+                } else {
+                    admin.showSuccess('Venmo payment confirmed successfully!');
+                }
+                if (admin.currentSection === 'registrations') {
+                    admin.loadRegistrations();
+                }
+            } else {
+                // Fallback UX
+                if (result.email_error) {
+                    alert(`Payment confirmed but email failed: ${result.email_error}`);
+                } else {
+                    alert('Payment confirmed. If emails are enabled, a confirmation has been sent.');
+                }
+                location.reload();
+            }
+        } else {
+            const error = await response.json().catch(() => ({}));
+            if (window.admin && typeof admin.showError === 'function') {
+                admin.showError(error.error || 'Failed to confirm payment');
+            } else {
+                alert(error.error || 'Failed to confirm payment');
+            }
+        }
+    } catch (err) {
+        if (window.admin && typeof admin.showError === 'function') {
+            admin.showError('Failed to confirm payment');
+        } else {
+            alert('Failed to confirm payment');
+        }
+        // Also log to console for debugging in dev tools
+        console.error('quickConfirmPayment error:', err);
+    }
+};
+
+window.markPaidModal = function(registrationId) {
+    if (window.admin && typeof admin.markPaid === 'function') {
+        admin.markPaid(registrationId);
+    } else {
+        alert('Admin not initialized yet. Please refresh the page and try again.');
+    }
+};
+
 // Initialize the admin dashboard when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
     window.admin = new AdminDashboard();
+});
+
+// Safety: ensure overlay never blocks clicks even if initialization errors
+window.addEventListener('load', () => {
+    const overlay = document.getElementById('loadingOverlay');
+    if (overlay) overlay.style.display = 'none';
 });
