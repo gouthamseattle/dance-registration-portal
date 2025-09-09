@@ -266,18 +266,10 @@ class DanceRegistrationApp {
         const infoContainer = document.getElementById('selectedCourseInfo');
         
         if (this.selectedCourse) {
-            // Debug logging to see what data we have
-            console.log('Selected course data:', this.selectedCourse);
-            console.log('Slots data:', this.selectedCourse.slots);
-            
             // Build schedule information from slots
             let scheduleHtml = '';
             if (this.selectedCourse.slots && this.selectedCourse.slots.length > 0) {
                 const scheduleItems = this.selectedCourse.slots.map(slot => {
-                    console.log('Processing slot:', slot);
-                    let scheduleText = '';
-                    
-                    // Build comprehensive schedule with dates and times
                     const parts = [];
                     
                     // Add day of week if available
@@ -298,14 +290,13 @@ class DanceRegistrationApp {
                     }
                     
                     // Join all parts
-                    scheduleText = parts.join(' ');
+                    let scheduleText = parts.join(' ');
                     
                     // Add difficulty level if multiple slots
                     if (this.selectedCourse.slots.length > 1 && slot.difficulty_level) {
                         scheduleText += ` (${slot.difficulty_level})`;
                     }
                     
-                    console.log('Built schedule text:', scheduleText);
                     return scheduleText;
                 }).filter(text => text); // Remove empty strings
                 
@@ -322,14 +313,32 @@ class DanceRegistrationApp {
                 
                 if (scheduleItems.length > 0) {
                     scheduleHtml = `<div class="mt-2"><strong>Schedule:</strong> ${scheduleItems.join('<br>')}</div>${dateInfo}`;
-                    console.log('Final schedule HTML:', scheduleHtml);
                 }
             }
             
-            // Only use schedule_info fallback if we have no slot data at all
-            if (!scheduleHtml && this.selectedCourse.schedule_info && (!this.selectedCourse.slots || this.selectedCourse.slots.length === 0)) {
-                scheduleHtml = `<div class="mt-2"><strong>Schedule:</strong> ${this.selectedCourse.schedule_info}</div>`;
-                console.log('Using fallback schedule_info:', this.selectedCourse.schedule_info);
+            // If no slot-based schedule was built, check if we should use schedule_info
+            // But prioritize slot data over schedule_info
+            if (!scheduleHtml) {
+                // Force display of available data for debugging
+                if (this.selectedCourse.slots && this.selectedCourse.slots.length > 0) {
+                    // We have slots but no schedule was built - show what we can
+                    const slot = this.selectedCourse.slots[0];
+                    const debugParts = [];
+                    
+                    if (slot.day_of_week) debugParts.push(`${slot.day_of_week}s`);
+                    if (slot.start_time) debugParts.push(slot.start_time);
+                    if (slot.end_time) debugParts.push(`- ${slot.end_time}`);
+                    if (slot.location) debugParts.push(`at ${slot.location}`);
+                    
+                    if (debugParts.length > 0) {
+                        scheduleHtml = `<div class="mt-2"><strong>Schedule:</strong> ${debugParts.join(' ')}</div>`;
+                    }
+                }
+                
+                // Only use schedule_info as absolute fallback
+                if (!scheduleHtml && this.selectedCourse.schedule_info) {
+                    scheduleHtml = `<div class="mt-2"><strong>Schedule:</strong> ${this.selectedCourse.schedule_info}</div>`;
+                }
             }
             
             infoContainer.innerHTML = `
