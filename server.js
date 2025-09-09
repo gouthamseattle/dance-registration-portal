@@ -941,6 +941,42 @@ app.post('/api/admin/registrations/:id/resend-confirmation', requireAuth, asyncH
     }
 }));
 
+/**
+ * Admin debug endpoint to inspect email config detection (no secrets exposed)
+ */
+app.get('/api/admin/debug-email-config', requireAuth, asyncHandler(async (req, res) => {
+    const rawService = process.env.EMAIL_SERVICE;
+    const rawHost = process.env.EMAIL_HOST;
+    const rawUser = process.env.EMAIL_USER;
+    const rawPort = process.env.EMAIL_PORT;
+    const rawPass = process.env.EMAIL_PASSWORD || process.env.EMAIL_PASS;
+
+    const service = rawService ? String(rawService).trim().toLowerCase() : '';
+    const host = rawHost ? String(rawHost).trim() : '';
+    const user = rawUser ? String(rawUser).trim() : '';
+    const pass = rawPass ? String(rawPass).trim() : '';
+    const port = rawPort ? Number(rawPort) : undefined;
+
+    let chosenTransport = 'none';
+    if (service) {
+        chosenTransport = 'service';
+    } else if (host) {
+        chosenTransport = 'host';
+    } else if (user && pass) {
+        chosenTransport = 'gmail_fallback';
+    }
+
+    res.json({
+        hasService: !!service,
+        service,
+        hasHost: !!host,
+        hasUser: !!user,
+        hasPass: !!pass,
+        port: port || 587,
+        chosenTransport
+    });
+}));
+
 // Generate Venmo payment link
 app.post('/api/generate-venmo-link', asyncHandler(async (req, res) => {
     const { registrationId, amount, courseName } = req.body;
