@@ -28,10 +28,14 @@ dance-registration-portal/
 ```sql
 -- Core entities
 students (id, first_name, last_name, email, phone, ...)
-courses (id, name, description, course_type, capacity, price, ...)
-registrations (id, student_id, course_id, payment_status, ...)
-admin_users (id, username, password_hash, email, ...)
-system_settings (setting_key, setting_value, description, ...)
+courses (id, name, description, course_type, duration_weeks, start_date, end_date, instructor, schedule_info, prerequisites, is_active, ...)
+registrations (id, student_id, course_id, payment_status, payment_amount, paypal_transaction_id, payment_method, registration_date, ...)
+admin_users (id, username, password_hash, email, last_login, ...)
+system_settings (setting_key, setting_value, description, updated_at, ...)
+
+-- Slot-based scheduling and pricing
+course_slots (id, course_id, slot_name, difficulty_level, capacity, day_of_week, start_time, end_time, location, created_at)
+course_pricing (id, course_slot_id, pricing_type, price, created_at)
 ```
 
 #### Data Relationships
@@ -99,6 +103,29 @@ const asyncHandler = (fn) => (req, res, next) => {
 - Environment-based configuration
 - System settings stored in database
 - Runtime configuration updates via admin panel
+
+## Schedule Computation Pattern
+
+### Server-computed schedule_info
+- The GET /api/courses endpoint now computes schedule_info on the server from slot data.
+- Format example: "Fridays 7:00 PM - 8:30 PM at Studio G (9/20/2025 - 11/1/2025)"
+  - If only start_date is present: "(Starts 9/20/2025)"
+- Ensures consistent schedule rendering across all UIs (cards, form, confirmation) even if legacy free-text schedule fields are empty.
+
+### Slots-first source of truth
+- Frontend (registration.js) prefers slot data to build schedule lines:
+  - "DayOfWeek Start - End at Location" per slot, with difficulty level appended when multiple slots exist.
+  - Appends course date range separately.
+- Graceful fallback to course-level start/end time if slot times are missing.
+
+### Backward compatibility fields in /api/courses response
+- capacity: Sum of slot capacities
+- available_spots: Sum of per-slot availability
+- full_course_price / per_class_price: Derived from first slot’s pricing for compatibility with older UI
+- schedule_info: Computed string ensuring time-rich schedule text
+
+### Cache-busting for client assets
+- index.html references registration.js with a version query param (e.g., registration.js?v=45ddfb5) to avoid stale caches post-deploy.
 
 ## Component Relationships
 

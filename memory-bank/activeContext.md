@@ -2,165 +2,102 @@
 
 ## Current Work Focus
 
-### Recently Completed (Previous Sessions)
-- ✅ Start Date made optional in New Dance Series form (frontend label updated to "Start Date (optional)")
-- ✅ Verified backend accepts NULL start_date values (server and DB schema already allow NULL)
-- ✅ Schedule Information and Prerequisites removed as required fields in admin form and JS payload
-- ✅ Slot-based course architecture implemented (multi-slot support with per-slot capacity and pricing)
-- ✅ Transformed student portal to "GouMo Dance Chronicles" with modern dark theme
-- ✅ Updated branding from "Dance Classes" to "GouMo Dance Chronicles" 
-- ✅ Implemented complete dark theme with Inter/Orbitron fonts and cyan/purple accents
-- ✅ Removed capacity/spots display from course cards as requested
-- ✅ Added conditional logic to hide dance experience field for Crew Practice courses
-- ✅ Deployed GouMo Dance Chronicles transformation to Railway (commit 994a2ec)
+### Recently Completed (This Session)
+- ✅ Student portal schedule display fixed to include day, start time, end time, and location
+  - Frontend renders slot-based schedule on course cards and in the Selected Course Info panel
+  - Fallback to course-level start/end times if a slot is missing time values
+  - Dates shown separately (Start Date or Start-End range)
+- ✅ Server computes schedule_info from slots so all UIs (including confirmation) receive full schedule text with times and dates
+  - schedule_info now derived as: "Fridays 7:00 PM - 8:30 PM at Studio G (9/20/2025 - 11/1/2025)"
+  - If only start date provided: "(Starts 9/20/2025)"
+- ✅ Cache-busting added to ensure production pulls latest JS (registration.js?v=45ddfb5)
+- ✅ Student portal UI improvements (previous UI pass)
+  - Removed "saved with ID" technical detail after payment initiation
+  - Removed "Available spots" from student-visible UI
+  - Crew Practice: changed Instagram ID field to "Full Name"
+  - Removed 💰 emoji from total amount display
 
-### Current Active Work (Current Session)
-- 🔄 Implementing Dreamers Dance Crew branding for crew practice registration
-- 🔄 Adding crew-specific branding: "Dreamers Dance Crew" + "Dancing the American Dream" caption
-- 🔄 Integrating DDC logo as card accent and footer branding
-- 🔄 Converting crew picture to subtle background pattern
-- 🔄 Maintaining conditional logic for crew vs regular course branding
+### Recently Completed (Previous Sessions)
+- ✅ Start Date optional in New Dance Series form; backend supports NULL start_date
+- ✅ Slot-based course architecture implemented (multi-slot support with per-slot capacity and pricing)
+- ✅ Admin dashboard: edit/deactivate fixes and DB boolean normalization (is_active across SQLite/Postgres)
+- ✅ Dreamers Dance Crew (DDC) conditional branding mode: header, footer logo, background styling
+- ✅ Rebranded student portal to "GouMo Dance Chronicles" with modern theme
+- ✅ Removed capacity/spots display from course cards as requested
+- ✅ Hide dance experience field for Crew Practice courses
 
 ### Current Status
-- Project State: Fully functional dance registration portal
+- Project State: Fully functional; schedule now computed server-side and rendered with times on frontend
 - Deployment: Live on Railway (auto-deploy from GitHub)
-- Database: PostgreSQL in production, SQLite for local development
-- Admin Access: admin / admin123
-- Payments: PayPal integration functional
-- UI: Bootstrap-based admin dashboard with dynamic slot management
+- Databases: PostgreSQL in production, SQLite in development
+- Payments: Venmo deep link flow live; PayPal integration code still present (for potential use)
+- UI: Bootstrap-based; vanilla JS for dynamic behavior
+
+### Recent Deployment & Commits
+- 45ddfb5 — Show slot times on cards and form; add fallback to course-level times; fix duplicate variable declarations
+- 75511bb — Compute schedule_info on server from slots (include start/end times and dates) and cache-bust registration.js
 
 ## Active Decisions and Considerations
 
 ### Technical Decisions Made
-1. Database Strategy: Dual DB support via DatabaseConfig (SQLite dev, PostgreSQL prod)
-2. Session Security: secure=false for Railway proxy compatibility; httpOnly + sameSite=lax
-3. Validation: Server-side validation; client-side ID mapping explicit
-4. Migration Strategy: Automatic migration on production with bcrypt hash regeneration
-5. Course Creation:
-   - Slot-based model replaces legacy single-course fields for capacity/pricing
-   - Crew Practice limited to a single slot; Dance Series/Drop In can have multiple slots
-   - Start Date is optional for all series types
-   - Schedule Information and Prerequisites are non-required metadata (safe to omit)
-6. UI/UX Design:
-   - Modern dark theme with Inter/Orbitron fonts for contemporary look
-   - Conditional branding: GouMo Dance Chronicles (general) vs Dreamers Dance Crew (crew practice)
-   - Logo placement strategy: Card accent + footer branding for crew practice
-   - Background implementation: Subtle pattern from crew picture for crew practice
-   - Capacity display removed from course cards per user request
-   - Dance experience field hidden for crew practice courses
+1. Server-side derived schedule_info:
+   - Decouple frontend display from legacy free-text schedule field
+   - Ensure confirmation and any consumer of schedule_info show full time details
+2. Frontend uses slot data preferentially:
+   - Builds "Day Start - End at Location" lines per slot
+   - Appends course dates where available
+   - Graceful fallbacks to course-level times when slot times are missing
+3. Cache-Busting:
+   - Append version query param to registration.js in index.html to avoid stale client caches on deploy
+4. DB Boolean Normalization:
+   - is_active normalization for SQLite (1/0) vs PostgreSQL (true/false) handled in PUT /api/courses/:id
 
 ### Current Architecture Patterns
 - Slot-Based Courses:
-  - Tables: course_slots (difficulty_level, capacity, timing, location), course_pricing (full_package, drop_in)
-  - Per-slot pricing and capacity; total capacity computed as sum of slot capacities
-- Database Abstraction: DatabaseConfig with `run/get/all` and isProduction branching
-- Error Handling: asyncHandler wrapper for all async routes
+  - Aggregated capacity across slots; slot-level pricing (full_package, drop_in)
+  - schedule_info computed per course from slots and course dates
+- Database Abstraction: DatabaseConfig with unified run/get/all, isProduction branching
+- Error Handling: asyncHandler wrapper across routes
 - Auth: Session-based admin auth with bcrypt password hashing
-- Frontend: Vanilla JS admin dashboard; Bootstrap modals; dynamic slot cards
-
-## Important Patterns and Preferences
-
-### Code Organization Preferences
-- Minimal dependencies; no frontend framework
-- Single-repo, self-contained application
-- Environment-agnostic code paths for dev/prod
-- Mobile-first UI considerations
-
-### Development Workflow Patterns
-```bash
-npm run dev
-git add .
-git commit -m "..."
-git push origin main   # triggers Railway deployment
-# Optionally: railway logs (if CLI authed) to monitor deploy
-```
-
-### Database Patterns
-```javascript
-const result = await dbConfig.run(query, params);
-const data = await dbConfig.get(query, params);
-const list = await dbConfig.all(query, params);
-
-if (dbConfig.isProduction) {
-  // PostgreSQL specifics
-} else {
-  // SQLite specifics
-}
-```
+- Frontend: Vanilla JS; no frameworks; Bootstrap components
 
 ## Learnings and Project Insights
 
 ### Key Technical Insights
-1. Railway proxies require session cookies with secure=false
-2. Form field IDs must exactly match JS selectors
-3. Bcrypt hashes must be regenerated during migration
-4. PayPal Client ID via system settings improves operational flexibility
-5. Legacy course fields should not be treated as required under slot model
+1. Computing schedule_info on the server ensures consistent schedule rendering across all UIs
+2. Cache-busting avoids persistent stale script caches in production
+3. Cross-DB boolean handling is essential for consistent admin toggles
+4. Slot-based architecture should be the single source of truth for schedule and pricing
 
 ### User Experience Insights
-1. Mobile optimization and WhatsApp sharing are primary channels
-2. Admin course creation must be streamlined; dynamic slots improve UX
-3. Guest checkout preferred; keep PayPal UX minimal
-4. Capacity and availability should reflect slot-level reality
-
-### Performance Insights
-1. Aggregations for registration counts are acceptable for current scale
-2. Session timeout 24h strikes reasonable balance
-3. Static asset serving from Express is fine for current footprint
-4. Vanilla JS remains performant and lightweight
+1. Students should not see technical details (e.g., registration IDs) during payment
+2. Clear schedule with explicit times/dates reduces confusion and follow-ups
+3. Conditional fields (Crew Practice) keeps forms relevant and shorter
 
 ## Next Steps and Priorities
 
-### Immediate Tasks (Current Session)
-- Convert HEIC crew picture to web-compatible format
-- Move crew assets to public/images directory
-- Implement conditional crew practice branding logic
-- Add "Dreamers Dance Crew" header and "Dancing the American Dream" caption
-- Integrate DDC logo as card accent and footer branding
-- Apply crew picture as subtle background pattern
-- Test responsive design with new crew imagery
-- Deploy crew practice customizations to Railway
+### Immediate
+- Validate production display shows the full schedule on:
+  - Course cards
+  - Selected Course Info in the form
+  - Confirmation (via server-computed schedule_info)
+- If any gaps remain, inspect slot time data formats and adjust serialization/formatting
 
-### Project Assets Added
-- IMG_6228.HEIC (crew picture for background pattern)
-- DDC_Logo_inverted_transparent.png (Dreamers Dance Crew logo)
+### Near-Term Enhancements
+- Consider switching confirmation rendering to slot-based details directly if needed (now covered by server-computed schedule_info)
+- Capture Venmo transaction notes and tie them to admin confirmation flows as metadata
 
-### Short-term Enhancements
-- QR code generation exposed in UI
-- CSV export connected to admin actions
-- WhatsApp message templates for sharing
-
-### Medium-term Features
-- Email notifications and templates in registration flow
-- Recurring classes scheduling UX
-- Student dashboard and receipt generation
-
-### Long-term Considerations
-- Multi-instructor support
-- Advanced reporting and analytics
-- Calendar integrations
-- Mobile app exploration
+### Medium-Term
+- Email notifications in the registration flow (send confirmation with computed schedule)
+- CSV export in admin dashboard
+- Expose QR code/WhatsApp sharing from admin with course schedule snippet
 
 ## Development Environment Notes
-
 - Local DB: ./database/registrations.db (SQLite)
 - Production DB: PostgreSQL via DATABASE_URL
 - Admin: admin/admin123 (set during migration)
-- PayPal: Sandbox/production controlled via settings
-- Port: 3000 (configurable)
+- Port: 3000
 
 ## Testing Patterns
-```bash
-# Local
-npm start
-open http://localhost:3000
-open http://localhost:3000/admin
-
-# Production
-open https://dance-registration-portal-production.up.railway.app
-```
-
-## Memory Bank Integration
-- Status: Active and updated (this session)
-- This update documents: Slot-based architecture, form field simplifications, and Start Date now optional
-- Keep activeContext.md and progress.md synchronized with deployment changes
+- Deployment-first validation on Railway; hard-refresh to bypass caches
+- Verify /api/courses returns schedule_info including times/dates for active courses

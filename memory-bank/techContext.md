@@ -133,26 +133,26 @@ railway logs
 ### Core Dependencies
 ```json
 {
-  "bcryptjs": "^2.4.3",        // Password hashing
-  "body-parser": "^1.20.2",    // Request parsing
-  "cors": "^2.8.5",            // Cross-origin requests
-  "csv-writer": "^1.6.0",      // Data export
-  "dotenv": "^16.3.1",         // Environment variables
-  "express": "^4.18.2",        // Web framework
-  "express-session": "^1.17.3", // Session management
-  "moment": "^2.29.4",         // Date handling
-  "multer": "^1.4.5-lts.1",    // File uploads
-  "nodemailer": "^6.9.7",      // Email sending
-  "pg": "^8.16.3",             // PostgreSQL client
-  "qrcode": "^1.5.3",          // QR code generation
-  "sqlite3": "^5.1.6"          // SQLite client
+  "bcryptjs": "^2.4.3",
+  "body-parser": "^1.20.2",
+  "cors": "^2.8.5",
+  "csv-writer": "^1.6.0",
+  "dotenv": "^16.3.1",
+  "express": "^4.18.2",
+  "express-session": "^1.17.3",
+  "moment": "^2.29.4",
+  "multer": "^1.4.5-lts.1",
+  "nodemailer": "^6.9.7",
+  "pg": "^8.16.3",
+  "qrcode": "^1.5.3",
+  "sqlite3": "^5.1.6"
 }
 ```
 
 ### Development Dependencies
 ```json
 {
-  "nodemon": "^3.0.1"          // Development auto-restart
+  "nodemon": "^3.0.1"
 }
 ```
 
@@ -251,3 +251,32 @@ PUT /api/registrations/:id/payment
 const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
 // QR code generation for easy sharing
 // Mobile-optimized registration links
+```
+
+## Recent Implementation Updates (Sept 2025)
+
+### Server
+- schedule_info is now computed on GET /api/courses from slot data:
+  - Example: "Fridays 7:00 PM - 8:30 PM at Studio G (9/20/2025 - 11/1/2025)"
+  - If only start_date present: "(Starts 9/20/2025)"
+- Ensures consistent schedule rendering across all UIs including confirmation.
+- Boolean normalization for `is_active` across SQLite (1/0) and PostgreSQL (true/false) during updates.
+
+### Frontend
+- Course cards and Selected Course Info are built from `course.slots`:
+  - Per-slot line: "Day Start - End at Location" (+ difficulty when multiple slots).
+  - Dates rendered separately (Start Date or Start–End).
+  - Graceful fallback to course-level `start_time`/`end_time` if slot times are missing.
+- Confirmation view continues to use `schedule_info` which is now time-aware due to server computation.
+
+### Deployment
+- Cache-busting added to `public/index.html` for `registration.js` (e.g., `registration.js?v=45ddfb5`) to avoid stale caches in production.
+- Railway auto-deploy on git push remains the primary deployment workflow.
+
+### Payment Flow Note
+- Venmo deep link + QR flow is active in student portal (with mobile detection and desktop QR generation).
+- PayPal SDK logic remains present for potential future use or fallback but Venmo flow is primary for now.
+
+### Commits
+- `45ddfb5` — Show slot times on cards and form; add fallback to course-level times; fix duplicate variable declarations
+- `75511bb` — Compute schedule_info on server from slots (include start/end times and dates) and cache-bust registration.js
