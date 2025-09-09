@@ -528,7 +528,10 @@ class AdminDashboard {
                                         <i class="fas fa-eye"></i>
                                     </button>
                                     ${reg.payment_status === 'pending' ? `
-                                        <button class="btn btn-outline-success" onclick="admin.markPaid(${reg.id})" title="Mark as Paid">
+                                        <button class="btn btn-outline-success" onclick="admin.markPaid(${reg.id})" title="Mark as Paid (with note)">
+                                            <i class="fas fa-pen"></i>
+                                        </button>
+                                        <button class="btn btn-success" onclick="admin.quickConfirmPayment(${reg.id})" title="Quick Confirm Payment">
                                             <i class="fas fa-check"></i>
                                         </button>
                                     ` : ''}
@@ -1571,6 +1574,48 @@ Questions? Reply to this message`;
                     this.showSuccess('Venmo payment confirmed successfully!');
                 }
                 
+                if (this.currentSection === 'registrations') {
+                    this.loadRegistrations();
+                }
+            } else {
+                const error = await response.json();
+                this.showError(error.error || 'Failed to confirm payment');
+            }
+        } catch (error) {
+            console.error('Error confirming payment:', error);
+            this.showError('Failed to confirm payment');
+        }
+    }
+
+    // Quick path: approve immediately without opening the modal (no Venmo note)
+    async quickConfirmPayment(registrationId) {
+        try {
+            const response = await fetch(`/api/admin/registrations/${registrationId}/confirm-payment`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    venmo_transaction_note: 'Venmo payment confirmed by admin'
+                })
+            });
+
+            if (response.ok) {
+                const result = await response.json();
+
+                // Reload data
+                await this.loadInitialData();
+
+                if (result.email_sent) {
+                    this.showSuccess('Payment confirmed. Confirmation email sent.');
+                } else if (result.email_skipped) {
+                    this.showSuccess('Payment confirmed. Email notifications are disabled.');
+                } else if (result.email_error) {
+                    this.showError(`Payment confirmed but email could not be sent: ${result.email_error}`);
+                } else {
+                    this.showSuccess('Venmo payment confirmed successfully!');
+                }
+
                 if (this.currentSection === 'registrations') {
                     this.loadRegistrations();
                 }
