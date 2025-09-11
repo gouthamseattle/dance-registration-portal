@@ -121,11 +121,11 @@ class DanceRegistrationApp {
             let dateInfo = '';
             if (course.course_type !== 'crew_practice') {
                 if (course.start_date && course.end_date) {
-                    const startDate = new Date(course.start_date).toLocaleDateString();
-                    const endDate = new Date(course.end_date).toLocaleDateString();
+                    const startDate = formatLocalDate(course.start_date);
+                    const endDate = formatLocalDate(course.end_date);
                     dateInfo = `<br><small>${startDate} - ${endDate}</small>`;
                 } else if (course.start_date) {
-                    const startDate = new Date(course.start_date).toLocaleDateString();
+                    const startDate = formatLocalDate(course.start_date);
                     dateInfo = `<br><small>Starts ${startDate}</small>`;
                 }
             }
@@ -140,17 +140,7 @@ class DanceRegistrationApp {
             }
         }
 
-        // Add Practice Date for Crew Practice courses
-        let practiceDateHtml = '';
-        if (course.course_type === 'crew_practice' && course.start_date) {
-            const startDate = new Date(course.start_date).toLocaleDateString();
-            practiceDateHtml = `
-                            <div class="course-info-item">
-                                <i class="fas fa-star text-warning"></i>
-                                <span><strong>Practice Date:</strong> ${startDate}</span>
-                            </div>
-            `;
-        }
+        
         if (!scheduleHtml && course.schedule_info) {
             scheduleHtml = `
                             <div class="course-info-item">
@@ -382,16 +372,16 @@ class DanceRegistrationApp {
                 
                 // Add course dates if available
                 let dateInfo = '';
-                if (this.selectedCourse.course_type !== 'crew_practice') {
-                    if (this.selectedCourse.start_date && this.selectedCourse.end_date) {
-                        const startDate = new Date(this.selectedCourse.start_date).toLocaleDateString();
-                        const endDate = new Date(this.selectedCourse.end_date).toLocaleDateString();
-                        dateInfo = `<div class="mt-1"><strong>Dates:</strong> ${startDate} - ${endDate}</div>`;
-                    } else if (this.selectedCourse.start_date) {
-                        const startDate = new Date(this.selectedCourse.start_date).toLocaleDateString();
-                        dateInfo = `<div class="mt-1"><strong>Start Date:</strong> ${startDate}</div>`;
+                    if (this.selectedCourse.course_type !== 'crew_practice') {
+                        if (this.selectedCourse.start_date && this.selectedCourse.end_date) {
+                            const startDate = formatLocalDate(this.selectedCourse.start_date);
+                            const endDate = formatLocalDate(this.selectedCourse.end_date);
+                            dateInfo = `<div class="mt-1"><strong>Dates:</strong> ${startDate} - ${endDate}</div>`;
+                        } else if (this.selectedCourse.start_date) {
+                            const startDate = formatLocalDate(this.selectedCourse.start_date);
+                            dateInfo = `<div class="mt-1"><strong>Start Date:</strong> ${startDate}</div>`;
+                        }
                     }
-                }
                 
                 if (scheduleItems.length > 0) {
                     scheduleHtml = `<div class="mt-2"><strong>Schedule:</strong> ${scheduleItems.join('<br>')}</div>${dateInfo}`;

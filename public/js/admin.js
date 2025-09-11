@@ -30,7 +30,7 @@ class AdminDashboard {
 
     async checkAuthStatus() {
         try {
-            const response = await fetch('/api/admin/status');
+            const response = await this.apiFetch('/api/admin/status');
             const result = await response.json();
             
             if (result.authenticated) {
@@ -52,9 +52,9 @@ class AdminDashboard {
     async loadInitialData() {
         try {
             const [settingsResponse, coursesResponse, registrationsResponse] = await Promise.all([
-                fetch('/api/settings'),
-                fetch('/api/courses'),
-                fetch('/api/registrations')
+                this.apiFetch('/api/settings'),
+                this.apiFetch('/api/courses'),
+                this.apiFetch('/api/registrations')
             ]);
 
             this.settings = await settingsResponse.json();
@@ -118,6 +118,32 @@ class AdminDashboard {
         });
     }
 
+    // Wrapper for API calls with credentials and 401 handling
+    async apiFetch(url, options = {}) {
+        const config = {
+            credentials: 'same-origin',
+            ...options
+        };
+
+        // If body is a plain object and no explicit string provided, set JSON headers and stringify
+        if (config.body && typeof config.body !== 'string') {
+            config.headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
+            config.body = JSON.stringify(config.body);
+        } else {
+            config.headers = { ...(options.headers || {}) };
+        }
+
+        const response = await fetch(url, config);
+
+        if (response.status === 401) {
+            this.isAuthenticated = false;
+            this.showLoginModal();
+            throw new Error('Authentication required');
+        }
+
+        return response;
+    }
+
     async handleLogin() {
         const form = document.getElementById('loginForm');
         const formData = new FormData(form);
@@ -160,7 +186,7 @@ class AdminDashboard {
 
     async handleLogout() {
         try {
-            await fetch('/api/admin/logout', { method: 'POST' });
+            await this.apiFetch('/api/admin/logout', { method: 'POST' });
             this.isAuthenticated = false;
             this.adminData = null;
             window.location.reload();
@@ -265,7 +291,7 @@ class AdminDashboard {
 
     async toggleRegistration(isOpen) {
         try {
-            await fetch('/api/settings', {
+            await this.apiFetch('/api/settings', {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json'
@@ -630,7 +656,7 @@ class AdminDashboard {
             const url = courseId ? `/api/courses/${courseId}` : '/api/courses';
             const method = courseId ? 'PUT' : 'POST';
             
-            const response = await fetch(url, {
+            const response = await this.apiFetch(url, {
                 method: method,
                 headers: {
                     'Content-Type': 'application/json'
@@ -957,7 +983,7 @@ class AdminDashboard {
         };
 
         try {
-            const response = await fetch('/api/settings', {
+            const response = await this.apiFetch('/api/settings', {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json'
@@ -981,7 +1007,7 @@ class AdminDashboard {
     // Utility Functions
     async exportRegistrations() {
         try {
-            const response = await fetch('/api/registrations');
+            const response = await this.apiFetch('/api/registrations');
             const registrations = await response.json();
             
             // Convert to CSV
@@ -1390,7 +1416,7 @@ Questions? Reply to this message`;
 
     async toggleCourseStatus(courseId, newStatus) {
         try {
-            const response = await fetch(`/api/courses/${courseId}`, {
+            const response = await this.apiFetch(`/api/courses/${courseId}`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json'
@@ -1587,7 +1613,7 @@ Questions? Reply to this message`;
         }
         
         try {
-            const response = await fetch(`/api/admin/registrations/${registrationId}/confirm-payment`, {
+            const response = await this.apiFetch(`/api/admin/registrations/${registrationId}/confirm-payment`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json'
@@ -1642,7 +1668,7 @@ Questions? Reply to this message`;
     // Quick path: approve immediately without opening the modal (no Venmo note)
     async quickConfirmPayment(registrationId) {
         try {
-            const response = await fetch(`/api/admin/registrations/${registrationId}/confirm-payment`, {
+            const response = await this.apiFetch(`/api/admin/registrations/${registrationId}/confirm-payment`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json'

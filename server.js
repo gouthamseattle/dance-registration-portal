@@ -55,7 +55,8 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static('public'));
 
-// Session configuration
+ // Session configuration
+app.set('trust proxy', 1);
 app.use(session({
     secret: process.env.SESSION_SECRET || 'dance-registration-secret',
     resave: false,
