@@ -276,11 +276,25 @@ class DanceRegistrationApp {
     async selectCourse(courseId) {
         try {
             const response = await fetch(`/api/courses?active_only=true`);
-            const courses = await response.json();
-            this.selectedCourse = courses.find(c => c.id === courseId);
+            const status = response.status;
+            let courses = [];
+            try {
+                courses = await response.json();
+            } catch (jsonErr) {
+                console.error('Error parsing courses JSON:', jsonErr);
+                courses = [];
+            }
+
+            if (!response.ok) {
+                throw new Error(`Courses API error: ${status}`);
+            }
+
+            const idNum = Number(courseId);
+            this.selectedCourse = (courses || []).find(c => Number(c.id) === idNum);
             this.selectedDropIn = null;
 
             if (!this.selectedCourse) {
+                console.warn('Course not found after fetch. Available courses:', (courses || []).map(c => c.id));
                 this.showError('Course not found.');
                 return;
             }
@@ -295,11 +309,25 @@ class DanceRegistrationApp {
     async selectDropIn(dropInId) {
         try {
             const response = await fetch(`/api/drop-in-classes?active_only=true`);
-            const dropIns = await response.json();
-            this.selectedDropIn = dropIns.find(d => d.id === dropInId);
+            const status = response.status;
+            let dropIns = [];
+            try {
+                dropIns = await response.json();
+            } catch (jsonErr) {
+                console.error('Error parsing drop-in JSON:', jsonErr);
+                dropIns = [];
+            }
+
+            if (!response.ok) {
+                throw new Error(`Drop-in API error: ${status}`);
+            }
+
+            const idNum = Number(dropInId);
+            this.selectedDropIn = (dropIns || []).find(d => Number(d.id) === idNum);
             this.selectedCourse = null;
 
             if (!this.selectedDropIn) {
+                console.warn('Drop-in class not found after fetch. Available:', (dropIns || []).map(d => d.id));
                 this.showError('Drop-in class not found.');
                 return;
             }
@@ -1035,6 +1063,11 @@ class DanceRegistrationApp {
         
         // Reset to regular branding when going back to course selection
         this.resetBranding();
+
+        // Refresh courses to ensure latest data and avoid stale state
+        // Do not await; allow UI to show immediately while data refreshes
+        this.loadCourses();
+
         this.scrollToTop();
     }
 
