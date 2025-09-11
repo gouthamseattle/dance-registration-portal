@@ -719,9 +719,13 @@ class DanceRegistrationApp {
         // Prepare registration data
         this.registrationData = {
             email: formData.get('email'),
-            instagram_id: formData.get('instagram_id'),
+            instagram_id: formData.get('instagram_id') || null,
             dance_experience: formData.get('dance_experience') || null // Allow null for crew practice
         };
+        // Include student_name when Crew Practice toggles the Instagram field into a name field
+        if (this.selectedCourse && this.selectedCourse.course_type === 'crew_practice') {
+            this.registrationData.student_name = formData.get('student_name') || '';
+        }
 
         if (this.selectedCourse) {
             this.registrationData.course_id = this.selectedCourse.id;

@@ -689,6 +689,15 @@ app.post('/api/register', asyncHandler(async (req, res) => {
     
     // Handle both instagram_handle and instagram_id field names
     const instagram = instagram_handle || instagram_id;
+
+    // Derive names from student_name if provided (e.g., Crew Practice)
+    let effectiveFirstName = first_name;
+    let effectiveLastName = last_name;
+    if ((!effectiveFirstName && !effectiveLastName) && req.body.student_name) {
+        const parts = String(req.body.student_name).trim().split(/\s+/);
+        effectiveFirstName = parts.shift() || 'Student';
+        effectiveLastName = parts.join(' ') || '';
+    }
     
     if (!email || !course_id || !payment_amount) {
         return res.status(400).json({ error: 'Required fields missing: email, course_id, and payment_amount are required' });
@@ -756,7 +765,7 @@ app.post('/api/register', asyncHandler(async (req, res) => {
                 how_heard_about_us = $10, updated_at = CURRENT_TIMESTAMP 
             WHERE id = $11
         `, [
-            first_name || 'Student', last_name || '', phone, date_of_birth,
+            effectiveFirstName || 'Student', effectiveLastName || '', phone, date_of_birth,
             emergency_contact_name, emergency_contact_phone, medical_conditions,
             dance_experience, instagram, how_heard_about_us, student.id
         ]);
@@ -768,11 +777,11 @@ app.post('/api/register', asyncHandler(async (req, res) => {
                 dance_experience, instagram_handle, how_heard_about_us
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
         `, [
-            first_name || 'Student', last_name || '', email, phone, date_of_birth,
+            effectiveFirstName || 'Student', effectiveLastName || '', email, phone, date_of_birth,
             emergency_contact_name, emergency_contact_phone, medical_conditions,
             dance_experience, instagram, how_heard_about_us
         ]);
-        student = { id: result.lastID || result.id, email, first_name: first_name || 'Student', last_name: last_name || '' };
+        student = { id: result.lastID || result.id, email, first_name: effectiveFirstName || 'Student', last_name: effectiveLastName || '' };
     }
     
     // Create registration
@@ -805,7 +814,7 @@ app.get('/api/registrations', requireAuth, asyncHandler(async (req, res) => {
     const { course_id, payment_status } = req.query;
     
     let query = `
-        SELECT r.*, s.first_name, s.last_name, s.email, s.phone, s.dance_experience,
+        SELECT r.*, s.first_name, s.last_name, s.email, s.phone, s.dance_experience, s.instagram_handle AS instagram_id,
                c.name as course_name, c.course_type, c.price
         FROM registrations r
         JOIN students s ON r.student_id = s.id

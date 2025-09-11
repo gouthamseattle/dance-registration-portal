@@ -109,14 +109,14 @@
                             </div>
 
                             <!-- Registration Form -->
-                            <form id="studentRegistrationForm">
+                            <form id="studentRegistrationForm" autocomplete="off" autocapitalize="off">
                                 <div class="row">
                                     <div class="col-12 mb-3">
                                         <label for="email" class="form-label">
                                             <i class="fas fa-envelope text-primary"></i>
                                             Email Address *
                                         </label>
-                                        <input type="email" class="form-control form-control-lg" id="email" name="email" required>
+                                        <input type="email" class="form-control form-control-lg" id="email" name="email" required autocomplete="off" inputmode="email" autocorrect="off" autocapitalize="off" placeholder="you@example.com">
                                         <div class="form-text">We'll send your confirmation to this email</div>
                                     </div>
 
@@ -345,6 +345,6 @@
     <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <!-- Cache-bust to ensure latest JS loads in production -->
-    <script src="js/registration.js?v=49"></script>
+    <script src="js/registration.js?v=50"></script>
 </body>
 </html>

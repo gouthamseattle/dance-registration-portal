@@ -341,8 +341,9 @@ class AdminDashboard {
                         <tr>
                             <td>
                                 <div>
-                                    <strong>${reg.email}</strong><br>
-                                    <small class="text-muted">@${reg.instagram_id}</small>
+                                    <strong>${([reg.first_name, reg.last_name].filter(Boolean).join(' ').trim()) || '(No name)'}</strong><br>
+                                    <small class="text-muted">${reg.email}</small><br>
+                                    ${reg.instagram_id ? `<small class="text-muted">@${reg.instagram_id}</small>` : ''}
                                 </div>
                             </td>
                             <td>${reg.course_name || 'Drop-in Class'}</td>
@@ -532,9 +533,10 @@ class AdminDashboard {
                         <tr>
                             <td>
                                 <div>
-                                    <strong>${reg.email}</strong><br>
-                                    <small class="text-muted">@${reg.instagram_id}</small><br>
-                                    <small class="text-muted">${reg.dance_experience}</small>
+                                    <strong>${([reg.first_name, reg.last_name].filter(Boolean).join(' ').trim()) || '(No name)'}</strong><br>
+                                    <small class="text-muted">${reg.email}</small><br>
+                                    ${reg.instagram_id ? `<small class="text-muted">@${reg.instagram_id}</small><br>` : ''}
+                                    ${reg.dance_experience ? `<small class="text-muted">${reg.dance_experience}</small>` : ''}
                                 </div>
                             </td>
                             <td>
@@ -1011,13 +1013,15 @@ class AdminDashboard {
             const registrations = await response.json();
             
             // Convert to CSV
-            const headers = ['Email', 'Instagram ID', 'Dance Experience', 'Course', 'Registration Type', 'Amount', 'Payment Status', 'Date'];
+            const headers = ['Name', 'Email', 'Phone', 'Instagram ID', 'Dance Experience', 'Course', 'Registration Type', 'Amount', 'Payment Status', 'Date'];
             const csvContent = [
                 headers.join(','),
                 ...registrations.map(reg => [
+                    [reg.first_name, reg.last_name].filter(Boolean).join(' ').trim(),
                     reg.email,
-                    reg.instagram_id,
-                    reg.dance_experience,
+                    reg.phone || '',
+                    reg.instagram_id || '',
+                    reg.dance_experience || '',
                     reg.course_name || 'Drop-in Class',
                     reg.registration_type,
                     reg.payment_amount,
@@ -1503,6 +1507,10 @@ Questions? Reply to this message`;
                         </div>
                         <div class="modal-body">
                             <div class="row">
+                                <div class="col-sm-4"><strong>Name:</strong></div>
+                                <div class="col-sm-8">${[registration.first_name, registration.last_name].filter(Boolean).join(' ').trim() || '(No name)'}</div>
+                            </div>
+                            <div class="row">
                                 <div class="col-sm-4"><strong>Email:</strong></div>
                                 <div class="col-sm-8">${registration.email}</div>
                             </div>
@@ -1594,7 +1602,10 @@ Questions? Reply to this message`;
                             <div class="payment-details">
                                 <div class="row mb-2">
                                     <div class="col-4"><strong>Student:</strong></div>
-                                    <div class="col-8">${registration.email}</div>
+                                    <div class="col-8">
+                                        ${[registration.first_name, registration.last_name].filter(Boolean).join(' ').trim() || '(No name)'}<br>
+                                        <small class="text-muted">${registration.email}</small>
+                                    </div>
                                 </div>
                                 <div class="row mb-2">
                                     <div class="col-4"><strong>Amount:</strong></div>
