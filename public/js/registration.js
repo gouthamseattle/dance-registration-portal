@@ -16,6 +16,8 @@ class DanceRegistrationApp {
         this.registrationData = {};
         this.paypalClientId = null;
         this.settings = {};
+        this.isSelecting = false;
+        this.isSelectingDropIn = false;
         
         this.init();
     }
@@ -274,6 +276,12 @@ class DanceRegistrationApp {
     }
 
     async selectCourse(courseId) {
+        if (this.isSelecting) {
+            console.info('Selection already in progress, ignoring click', { courseId });
+            return;
+        }
+        this.isSelecting = true;
+        console.info('Selecting course...', { courseId, currentStep: this.currentStep });
         try {
             const response = await fetch(`/api/courses?active_only=true`);
             const status = response.status;
@@ -299,14 +307,25 @@ class DanceRegistrationApp {
                 return;
             }
 
+            console.info('Course selected', { id: this.selectedCourse.id, name: this.selectedCourse.name });
             this.showRegistrationForm();
         } catch (error) {
-            console.error('Error selecting course:', error);
-            this.showError('Failed to select course.');
+            console.error('Error selecting course:', error, { currentStep: this.currentStep });
+            if (this.currentStep !== 'form') {
+                this.showError('Failed to select course.');
+            }
+        } finally {
+            this.isSelecting = false;
         }
     }
 
     async selectDropIn(dropInId) {
+        if (this.isSelectingDropIn) {
+            console.info('Drop-in selection already in progress, ignoring click', { dropInId });
+            return;
+        }
+        this.isSelectingDropIn = true;
+        console.info('Selecting drop-in...', { dropInId, currentStep: this.currentStep });
         try {
             const response = await fetch(`/api/drop-in-classes?active_only=true`);
             const status = response.status;
@@ -332,25 +351,38 @@ class DanceRegistrationApp {
                 return;
             }
 
+            console.info('Drop-in selected', { id: this.selectedDropIn.id, name: this.selectedDropIn.course_name });
             this.showRegistrationForm();
         } catch (error) {
-            console.error('Error selecting drop-in class:', error);
-            this.showError('Failed to select drop-in class.');
+            console.error('Error selecting drop-in class:', error, { currentStep: this.currentStep });
+            if (this.currentStep !== 'form') {
+                this.showError('Failed to select drop-in class.');
+            }
+        } finally {
+            this.isSelectingDropIn = false;
         }
     }
 
     showRegistrationForm() {
         this.currentStep = 'form';
+        // Switch views first; any errors in setup should not block navigation
         document.getElementById('courseSelection').style.display = 'none';
         document.getElementById('registrationForm').style.display = 'block';
         document.getElementById('paymentSection').style.display = 'none';
         document.getElementById('confirmationSection').style.display = 'none';
 
-        this.populateSelectedCourseInfo();
-        this.setupPaymentOptions();
-        this.setupDanceExperienceField();
-        this.setupInstagramIdField();
-        this.setupCrewPracticeBranding();
+        try {
+            this.populateSelectedCourseInfo();
+            this.setupPaymentOptions();
+            this.setupDanceExperienceField();
+            this.setupInstagramIdField();
+            this.setupCrewPracticeBranding();
+        } catch (e) {
+            // Never let setup errors surface as "Failed to select course"
+            console.error('Error preparing registration form UI:', e);
+            // Soft-fail: continue with whatever rendered; no disruptive toast
+        }
+
         this.scrollToTop();
     }
 
@@ -545,10 +577,15 @@ class DanceRegistrationApp {
     }
 
     setupInstagramIdField() {
-        const instagramLabel = document.querySelector('label[for="instagram_id"]');
-        const instagramInput = document.getElementById('instagram_id');
+        // Be resilient to prior toggles by selecting either label/field id
+        const instagramLabel = document.querySelector('label[for="instagram_id"], label[for="student_name"]');
+        let instagramInput = document.getElementById('instagram_id') || document.getElementById('student_name');
+        if (!instagramLabel || !instagramInput) {
+            console.warn('Instagram/Name field elements not found; skipping field toggle.');
+            return;
+        }
         const inputGroup = instagramInput.closest('.input-group');
-        const inputGroupText = inputGroup.querySelector('.input-group-text');
+        const inputGroupText = inputGroup ? inputGroup.querySelector('.input-group-text') : null;
         
         // Check if selected course is Crew Practice
         if (this.selectedCourse && this.selectedCourse.course_type === 'crew_practice') {
@@ -557,14 +594,13 @@ class DanceRegistrationApp {
                 <i class="fas fa-user text-primary"></i>
                 Full Name *
             `;
-            instagramInput.placeholder = 'Enter your full name';
+            instagramLabel.setAttribute('for', 'student_name');
             instagramInput.name = 'student_name';
             instagramInput.id = 'student_name';
-            instagramLabel.setAttribute('for', 'student_name');
+            instagramInput.placeholder = 'Enter your full name';
             
             // Hide the @ symbol for name field
-            inputGroupText.style.display = 'none';
-            instagramInput.classList.remove('form-control');
+            if (inputGroupText) inputGroupText.style.display = 'none';
             instagramInput.classList.add('form-control', 'form-control-lg');
             instagramInput.style.borderRadius = 'var(--radius-md)';
         } else {
@@ -573,13 +609,14 @@ class DanceRegistrationApp {
                 <i class="fab fa-instagram text-primary"></i>
                 Instagram ID *
             `;
-            instagramInput.placeholder = '';
+            instagramLabel.setAttribute('for', 'instagram_id');
             instagramInput.name = 'instagram_id';
             instagramInput.id = 'instagram_id';
-            instagramLabel.setAttribute('for', 'instagram_id');
+            instagramInput.placeholder = '';
             
             // Show the @ symbol for Instagram field
-            inputGroupText.style.display = 'block';
+            if (inputGroupText) inputGroupText.style.display = 'block';
+            instagramInput.classList.add('form-control', 'form-control-lg');
             instagramInput.style.borderRadius = '';
         }
     }
@@ -1056,6 +1093,10 @@ class DanceRegistrationApp {
 
     showCourseSelection() {
         this.currentStep = 'courses';
+        // Clear any previous selection to avoid stale state confusing the UX
+        this.selectedCourse = null;
+        this.selectedDropIn = null;
+
         document.getElementById('courseSelection').style.display = 'block';
         document.getElementById('registrationForm').style.display = 'none';
         document.getElementById('paymentSection').style.display = 'none';
