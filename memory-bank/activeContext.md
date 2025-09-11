@@ -70,3 +70,43 @@
     - “… email notifications are disabled.” when email_skipped
     - “… email could not be sent: …” on email_error
   - Verify emails received; check Railway logs for debugging output
+
+
+---
+
+## Recently Completed (Addendum) — Student Portal Selection Flow Fix (Sept 2025)
+- ✅ Fixed “Failed to select course” error appearing even when navigation succeeded
+  - Implemented type-safe ID matching in selection:
+    - Match by numeric ID: Number(c.id) === Number(courseId) for both courses and drop-ins to avoid string/number mismatches across DB drivers (SQLite/Postgres).
+  - Defensive fetch and JSON handling:
+    - Checked response.ok and captured response.status.
+    - Guarded JSON parsing with try/catch; logged parsing errors without breaking the flow.
+  - Suppressed spurious error toast after successful navigation:
+    - In selectCourse/selectDropIn, only show the error toast if currentStep !== 'form', preventing a misleading “Failed to select course” when the form has already rendered.
+  - Debounced rapid clicks/race conditions:
+    - Added isSelecting and isSelectingDropIn flags to ignore overlapping clicks during selection requests.
+  - Back-navigation stale-state guard:
+    - showCourseSelection now clears prior selection and calls loadCourses() to refresh data when returning to the courses list.
+  - Robust field toggling for crew practice:
+    - setupInstagramIdField now tolerates prior toggles, finding either #instagram_id or #student_name, updating the label and field safely without DOM errors.
+  - Error isolation in UI preparation:
+    - Wrapped registration form preparation calls in try/catch within showRegistrationForm() so failures in non-critical UI setup don’t surface as selection errors.
+  - Cache-busting:
+    - public/index.html updated to load js/registration.js?v=49 to ensure fresh code in production.
+
+### Files Touched
+- public/js/registration.js
+  - Selection flow hardening, toast suppression, debouncing flags, robust field toggle, guarded UI prep, type coercion for IDs.
+- public/index.html
+  - Cache-busted registration.js to v=49.
+
+### Commits Deployed
+- 0ab7057 — Fix re-selection bug: numeric ID matching, stale data guard, cache-bust to v=48
+- 5e8f249 — Suppress spurious selection error toast; add in-progress guards; robust field toggling; cache-bust to v=49
+
+### Production Validation Plan (Student Portal)
+1. Hard refresh or open in incognito to ensure js/registration.js?v=49 is loaded (verify in Network tab).
+2. Click “Register Now” on a course to navigate to the form. Then click “Back to Courses” and click the same course again (optionally a different course).
+   - Expected: No “Failed to select course” toast after navigation; form renders; console shows “Selecting course…” and “Course selected …”.
+3. If admin reset actions were performed, repeat step 2; the refreshed list prevents stale data mismatches.
+4. Observe console for any API or parsing logs; they should not prevent successful navigation.

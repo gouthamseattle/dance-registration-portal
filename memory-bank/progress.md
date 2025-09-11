@@ -99,11 +99,22 @@
   - Click logging added to global handlers for diagnostics
   - Overlay safety changes
   - Cache-busting for admin.js and admin-styles.css
+- Student portal selection flow hardening:
+  - Numeric ID matching for courses and drop-ins to avoid string/number mismatch across DB drivers
+  - Defensive fetch/JSON parsing with response.ok and status checks
+  - Debounce selection clicks (isSelecting / isSelectingDropIn) to prevent races
+  - Suppress error toast after successful navigation (only show if not on 'form' step)
+  - Refresh course list on back navigation to avoid stale state
+  - Robust Instagram/Name field toggle for crew practice
+  - Guard errors in showRegistrationForm UI prep (non-blocking)
+  - Cache-busted registration.js to v=49
 
 ### Commits Deployed
 - 45ddfb5 — Show slot times on cards and form; add fallback to course-level times; fix duplicate variable declarations
 - 75511bb — Compute schedule_info on server from slots (include start/end times and dates) and cache-bust registration.js
 - 43aeef1 — Admin UI: make loading overlay non-interactive; add click logging; bump cache-busters (admin.js v=5, admin-styles.css v=3). Update memory bank with email workflow and UI fixes.
+- 0ab7057 — Fix re-selection bug: numeric ID matching, stale data guard, cache-bust registration.js to v=48
+- 5e8f249 — Suppress spurious selection error toast; add in-progress guards; robust field toggling; cache-bust to v=49
 
 ## Current Status Overview
 

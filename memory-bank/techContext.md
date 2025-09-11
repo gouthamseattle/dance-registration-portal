@@ -268,9 +268,18 @@ const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
   - Dates rendered separately (Start Date or Start–End).
   - Graceful fallback to course-level `start_time`/`end_time` if slot times are missing.
 - Confirmation view continues to use `schedule_info` which is now time-aware due to server computation.
+- Selection flow hardening (Sept 2025):
+  - Numeric ID matching for courses and drop-ins to avoid string/number mismatch across DB drivers
+  - Defensive fetch/JSON parsing with response.ok and status checks
+  - Debounced selection clicks (isSelecting / isSelectingDropIn) to prevent race conditions
+  - Suppressed error toast after successful navigation (only show if not on 'form' step)
+  - Refresh course list on back navigation to avoid stale state
+  - Robust Instagram/Name field toggle for crew practice
+  - Guard errors in showRegistrationForm UI prep (non-blocking)
 
 ### Deployment
 - Cache-busting added to `public/index.html` for `registration.js` (e.g., `registration.js?v=45ddfb5`) to avoid stale caches in production.
+- Bumped registration.js to v=49 after selection flow fixes to ensure latest code in production.
 - Railway auto-deploy on git push remains the primary deployment workflow.
 
 ### Payment Flow Note
@@ -280,3 +289,5 @@ const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
 ### Commits
 - `45ddfb5` — Show slot times on cards and form; add fallback to course-level times; fix duplicate variable declarations
 - `75511bb` — Compute schedule_info on server from slots (include start/end times and dates) and cache-bust registration.js
+- `0ab7057` — Fix re-selection bug: numeric ID matching, stale data guard, cache-bust registration.js to v=48
+- `5e8f249` — Suppress spurious selection error toast; add in-progress guards; robust field toggling; cache-bust to v=49

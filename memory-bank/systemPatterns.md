@@ -126,6 +126,15 @@ const asyncHandler = (fn) => (req, res, next) => {
 
 ### Cache-busting for client assets
 - index.html references registration.js with a version query param (e.g., registration.js?v=45ddfb5) to avoid stale caches post-deploy.
+- Latest increment: registration.js?v=49 (selection flow hardening and toast suppression rollout)
+
+## Frontend UI Guard Patterns (Sept 2025)
+- Type-safe ID matching for selections (Number(...) coercion) to handle cross-DB type variance (SQLite integers vs Postgres numeric/strings).
+- Debounced selection actions with in-progress flags (isSelecting / isSelectingDropIn) to prevent race conditions from rapid taps/clicks.
+- Suppress error toasts after successful navigation (only show toast if not on 'form' step) to avoid misleading “Failed to select course” when UI already transitioned.
+- Back-navigation refresh: showCourseSelection() clears any prior selection and re-calls loadCourses() to avoid stale client state after server-side changes (e.g., admin resets).
+- Robust DOM toggling for crew practice field (Instagram ID ↔ Full Name) resilient to prior toggles; finds either #instagram_id or #student_name and updates associated label.
+- Error isolation during registration form prep (populateSelectedCourseInfo, setupPaymentOptions, etc.) wrapped in try/catch so non-critical UI prep never blocks navigation.
 
 ## Component Relationships
 
