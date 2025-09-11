@@ -149,7 +149,7 @@ app.get('/api/settings', asyncHandler(async (req, res) => {
     
     // Set default Venmo username if not configured
     if (!settingsObj.venmo_username) {
-        settingsObj.venmo_username = 'sangou';
+        settingsObj.venmo_username = 'monicaradd';
     }
     
     res.json(settingsObj);
@@ -1011,10 +1011,31 @@ app.post('/api/generate-venmo-link', asyncHandler(async (req, res) => {
     
     // Get Venmo username from settings
     const venmoSetting = await dbConfig.get('SELECT setting_value FROM system_settings WHERE setting_key = $1', ['venmo_username']);
-    const venmoUsername = venmoSetting ? venmoSetting.setting_value : 'sangou';
+    const venmoUsername = venmoSetting ? venmoSetting.setting_value : 'monicaradd';
     
-    // Create payment note
-    const paymentNote = `Dance Registration #${registrationId}${courseName ? ` - ${courseName}` : ''}`;
+    // Create payment note with date range if available
+    let courseDisplayName = courseName;
+    let dateRangeText = '';
+    try {
+        const regCourse = await dbConfig.get(`
+            SELECT r.id as registration_id, c.name as course_name, c.start_date, c.end_date
+            FROM registrations r
+            JOIN courses c ON c.id = r.course_id
+            WHERE r.id = $1
+        `, [registrationId]);
+        if (regCourse) {
+            courseDisplayName = regCourse.course_name || courseDisplayName;
+            const fmt = (d) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            if (regCourse.start_date && regCourse.end_date) {
+                dateRangeText = ` (${fmt(regCourse.start_date)} - ${fmt(regCourse.end_date)})`;
+            } else if (regCourse.start_date) {
+                dateRangeText = ` (${fmt(regCourse.start_date)})`;
+            }
+        }
+    } catch (e) {
+        console.warn('⚠️ Could not load course dates for Venmo note:', e.message || e);
+    }
+    const paymentNote = `Dance Registration #${registrationId}${courseDisplayName ? ` - ${courseDisplayName}` : ''}${dateRangeText}`;
     
     // Generate Venmo deep link
     const venmoLink = `venmo://paycharge?txn=pay&recipients=${venmoUsername}&amount=${amount}&note=${encodeURIComponent(paymentNote)}`;

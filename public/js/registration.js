@@ -122,6 +122,18 @@ class DanceRegistrationApp {
                 `;
             }
         }
+
+        // Add Practice Date for Crew Practice courses
+        let practiceDateHtml = '';
+        if (course.course_type === 'crew_practice' && course.start_date) {
+            const startDate = new Date(course.start_date).toLocaleDateString();
+            practiceDateHtml = `
+                            <div class="course-info-item">
+                                <i class="fas fa-star text-warning"></i>
+                                <span><strong>Practice Date:</strong> ${startDate}</span>
+                            </div>
+            `;
+        }
         if (!scheduleHtml && course.schedule_info) {
             scheduleHtml = `
                             <div class="course-info-item">
@@ -141,6 +153,7 @@ class DanceRegistrationApp {
                     ${course.description ? `<p class="text-muted mb-3">${course.description}</p>` : ''}
                     
                     <div class="course-info">
+                        ${practiceDateHtml}
                         ${scheduleHtml}
                         ${course.prerequisites ? `
                             <div class="course-info-item">
@@ -831,7 +844,7 @@ class DanceRegistrationApp {
                     <div class="payment-confirmation mt-4">
                         <div class="alert alert-warning">
                             <h6><i class="fas fa-clock me-2"></i>After Payment</h6>
-                            <p class="mb-0 small">We'll confirm your payment within a few minutes and send you a confirmation email.</p>
+                            <p class="mb-0 small">We're rolling out email confirmations soon. We'll verify your payment shortly and update your registration.</p>
                         </div>
                         
                         <div class="d-grid">
@@ -884,7 +897,7 @@ class DanceRegistrationApp {
                     <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
                     <h5>Payment Sent!</h5>
                     <p class="mb-2">Thank you for sending your Venmo payment.</p>
-                    <p class="mb-0 small">We'll confirm your payment and send you a confirmation email shortly.</p>
+                    <p class="mb-0 small">We're rolling out email confirmations soon. We'll confirm your payment shortly.</p>
                 </div>
                 
                 <div class="registration-summary">

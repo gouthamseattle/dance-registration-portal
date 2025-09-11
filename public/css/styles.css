@@ -545,6 +545,33 @@ main {
     color: var(--text-muted);
 }
 
+/* Ensure text is visible while typing and with browser autofill */
+.form-control, .form-select, input, textarea {
+    color: var(--text-primary) !important;
+    caret-color: var(--text-primary) !important;
+    background-color: var(--bg-secondary);
+}
+
+.form-control::placeholder, input::placeholder, textarea::placeholder {
+    color: var(--text-muted);
+    opacity: 1;
+}
+
+/* Fix WebKit autofill on dark backgrounds */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+textarea:-webkit-autofill,
+textarea:-webkit-autofill:hover,
+textarea:-webkit-autofill:focus,
+select:-webkit-autofill {
+    -webkit-text-fill-color: var(--text-primary) !important;
+    -webkit-box-shadow: 0 0 0px 1000px var(--bg-secondary) inset !important;
+    box-shadow: 0 0 0px 1000px var(--bg-secondary) inset !important;
+    transition: background-color 9999s ease-in-out 0s;
+    caret-color: var(--text-primary) !important;
+}
+
 .form-label {
     font-weight: 700;
     color: var(--text-primary);
