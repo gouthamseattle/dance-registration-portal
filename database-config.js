@@ -1,4 +1,4 @@
-const sqlite3 = require('sqlite3').verbose();
+let sqlite3; // lazy-loaded in development
 const { Client } = require('pg');
 const path = require('path');
 
@@ -20,7 +20,8 @@ class DatabaseConfig {
             console.log('✅ Connected to PostgreSQL database');
             return this.client;
         } else {
-            // SQLite for development
+            // SQLite for development (lazy-load to avoid requiring in production)
+            sqlite3 = sqlite3 || require('sqlite3').verbose();
             const dbPath = path.join(__dirname, 'database', 'registrations.db');
             this.db = new sqlite3.Database(dbPath);
             console.log('✅ Connected to SQLite database');

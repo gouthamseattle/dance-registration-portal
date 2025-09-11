@@ -1,5 +1,4 @@
 const { Client } = require('pg');
-const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 
 async function migrateToPostgres() {
@@ -178,6 +177,7 @@ async function migrateData(client) {
         return;
     }
     
+    const sqlite3 = require('sqlite3').verbose();
     const db = new sqlite3.Database(sqlitePath);
     
     try {
