@@ -38,10 +38,12 @@ async function initializeDatabase() {
             console.log('ℹ️ practice_date column check skipped:', e.message || e);
         }
         
-        // Run migration if in production
+        // Run migration if in production (non-blocking so server can start listening)
         if (process.env.NODE_ENV === 'production') {
             const { migrateToPostgres } = require('./migrate-to-postgres');
-            await migrateToPostgres();
+            migrateToPostgres()
+                .then(() => console.log('✅ Background migration completed'))
+                .catch((err) => console.error('❌ Background migration failed:', err));
         }
     } catch (error) {
         console.error('❌ Database initialization failed:', error);
