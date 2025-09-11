@@ -367,12 +367,7 @@ main {
 }
 
 .pricing-section::before {
-    content: '💃';
-    position: absolute;
-    top: 10px;
-    right: 15px;
-    font-size: 1.5rem;
-    opacity: 0.3;
+    content: none;
 }
 
 .price-option {
