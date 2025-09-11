@@ -847,6 +847,41 @@ app.get('/api/registrations', requireAuth, asyncHandler(async (req, res) => {
     res.json(registrations);
 }));
 
+// Alias endpoint for admin to fetch registrations (same behavior as /api/registrations)
+app.get('/api/admin/registrations', requireAuth, asyncHandler(async (req, res) => {
+    const { course_id, payment_status } = req.query;
+    
+    let query = `
+        SELECT r.*, s.first_name, s.last_name, s.email, s.phone, s.dance_experience, s.instagram_handle AS instagram_id,
+               c.name as course_name, c.course_type, c.price
+        FROM registrations r
+        LEFT JOIN students s ON r.student_id = s.id
+        LEFT JOIN courses c ON r.course_id = c.id
+    `;
+    
+    const params = [];
+    const conditions = [];
+    
+    if (course_id) {
+        conditions.push('r.course_id = $' + (params.length + 1));
+        params.push(course_id);
+    }
+    
+    if (payment_status) {
+        conditions.push('r.payment_status = $' + (params.length + 1));
+        params.push(payment_status);
+    }
+    
+    if (conditions.length > 0) {
+        query += ' WHERE ' + conditions.join(' AND ');
+    }
+    
+    query += ' ORDER BY r.registration_date DESC';
+    
+    const registrations = await dbConfig.all(query, params);
+    res.json(registrations);
+}));
+
 /**
  * Admin: registration counts
  * - GET /api/admin/registrations/count?course_id=5 (optional)
