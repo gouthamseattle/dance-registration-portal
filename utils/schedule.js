@@ -1,3 +1,11 @@
+/* Helper: format YYYY-MM-DD as local date without timezone shift */
+function formatLocalDate(dateStr) {
+  const m = String(dateStr).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return m
+    ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).toLocaleDateString()
+    : new Date(dateStr).toLocaleDateString();
+}
+
 /**
  * Compute schedule_info for a course given its slots, mirroring the server's GET /api/courses logic.
  * @param {Object} course - Course row with start_date, end_date, schedule_info (legacy)
@@ -11,7 +19,7 @@ function computeScheduleInfo(course = {}, slots = []) {
     if (!s) return '';
     const parts = [];
     if (course.course_type === 'crew_practice' && s.practice_date) {
-      const dateStr = new Date(s.practice_date).toLocaleDateString();
+      const dateStr = formatLocalDate(s.practice_date);
       parts.push(dateStr);
     } else if (s.day_of_week) {
       parts.push(`${s.day_of_week}s`);
@@ -32,11 +40,11 @@ function computeScheduleInfo(course = {}, slots = []) {
     const hasPracticeDates = Array.isArray(slots) && slots.some(s => !!s?.practice_date);
     if (!hasPracticeDates) {
       if (course.start_date && course.end_date) {
-        const startDate = new Date(course.start_date).toLocaleDateString();
-        const endDate = new Date(course.end_date).toLocaleDateString();
+        const startDate = formatLocalDate(course.start_date);
+        const endDate = formatLocalDate(course.end_date);
         dateInfo = ` (${startDate} - ${endDate})`;
       } else if (course.start_date) {
-        const startDate = new Date(course.start_date).toLocaleDateString();
+        const startDate = formatLocalDate(course.start_date);
         dateInfo = ` (Starts ${startDate})`;
       }
     }

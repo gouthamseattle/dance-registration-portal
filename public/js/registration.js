@@ -1,3 +1,11 @@
+/* Helper: format YYYY-MM-DD as local date without timezone shift */
+function formatLocalDate(dateStr) {
+    const m = String(dateStr).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    return m
+        ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).toLocaleDateString()
+        : new Date(dateStr).toLocaleDateString();
+}
+
 // Dance Registration Portal - Frontend JavaScript
 class DanceRegistrationApp {
     constructor() {
@@ -89,7 +97,7 @@ class DanceRegistrationApp {
                 const parts = [];
                 if (course.course_type === 'crew_practice') {
                     if (slot.practice_date) {
-                        const dateStr = new Date(slot.practice_date).toLocaleDateString();
+                        const dateStr = formatLocalDate(slot.practice_date);
                         parts.push(dateStr);
                     }
                 } else if (slot.day_of_week) {
@@ -340,7 +348,7 @@ class DanceRegistrationApp {
                     // Add day of week if available
                     if (this.selectedCourse.course_type === 'crew_practice') {
                         if (slot.practice_date) {
-                            const dateStr = new Date(slot.practice_date).toLocaleDateString();
+                            const dateStr = formatLocalDate(slot.practice_date);
                             parts.push(dateStr);
                         }
                     } else if (slot.day_of_week) {

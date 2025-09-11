@@ -81,6 +81,20 @@ const requireAuth = (req, res, next) => {
     }
 };
 
+// Local date helpers to avoid timezone shifts when formatting YYYY-MM-DD
+function formatLocalDate(dateStr) {
+    const m = String(dateStr || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    return m
+        ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).toLocaleDateString()
+        : (dateStr ? new Date(dateStr).toLocaleDateString() : '');
+}
+function formatLocalDateShort(dateStr) {
+    const m = String(dateStr || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    return m
+        ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+        : (dateStr ? new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '');
+}
+
 // Routes
 
 // Serve main registration page
@@ -259,7 +273,7 @@ app.get('/api/courses', asyncHandler(async (req, res) => {
         const scheduleItems = slotsWithPricing.map(s => {
             const parts = [];
             if (course.course_type === 'crew_practice' && s.practice_date) {
-                const dateStr = new Date(s.practice_date).toLocaleDateString();
+                const dateStr = formatLocalDate(s.practice_date);
                 parts.push(dateStr);
             } else if (s.day_of_week) {
                 parts.push(`${s.day_of_week}s`);
@@ -280,11 +294,11 @@ app.get('/api/courses', asyncHandler(async (req, res) => {
             const hasPracticeDates = slotsWithPricing.some(s => !!s.practice_date);
             if (!hasPracticeDates) {
                 if (course.start_date && course.end_date) {
-                    const startDate = new Date(course.start_date).toLocaleDateString();
-                    const endDate = new Date(course.end_date).toLocaleDateString();
+                    const startDate = formatLocalDate(course.start_date);
+                    const endDate = formatLocalDate(course.end_date);
                     dateInfo = ` (${startDate} - ${endDate})`;
                 } else if (course.start_date) {
-                    const startDate = new Date(course.start_date).toLocaleDateString();
+                    const startDate = formatLocalDate(course.start_date);
                     dateInfo = ` (Starts ${startDate})`;
                 }
             }
@@ -1045,11 +1059,11 @@ app.post('/api/generate-venmo-link', asyncHandler(async (req, res) => {
             WHERE r.id = $1
         `, [registrationId]);
 
-        if (regCourse) {
-            courseDisplayName = regCourse.course_name || courseDisplayName;
-            const fmt = (d) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            if (regCourse) {
+                courseDisplayName = regCourse.course_name || courseDisplayName;
+                const fmt = (d) => formatLocalDateShort(d);
 
-            if (regCourse.course_type === 'crew_practice') {
+                if (regCourse.course_type === 'crew_practice') {
                 // Prefer single practice_date from slot if available
                 const slot = await dbConfig.get(`
                     SELECT practice_date FROM course_slots
