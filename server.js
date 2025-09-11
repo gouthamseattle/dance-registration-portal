@@ -84,13 +84,15 @@ const requireAuth = (req, res, next) => {
 
 // Local date helpers to avoid timezone shifts when formatting YYYY-MM-DD
 function formatLocalDate(dateStr) {
-    const m = String(dateStr || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    // Accept both 'YYYY-MM-DD' and 'YYYY-MM-DDTHH:mm:ssZ' without timezone shift
+    const m = String(dateStr || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
     return m
         ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).toLocaleDateString()
         : (dateStr ? new Date(dateStr).toLocaleDateString() : '');
 }
 function formatLocalDateShort(dateStr) {
-    const m = String(dateStr || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    // Accept both 'YYYY-MM-DD' and 'YYYY-MM-DDTHH:mm:ssZ' without timezone shift
+    const m = String(dateStr || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
     return m
         ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
         : (dateStr ? new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '');
@@ -269,6 +271,22 @@ app.get('/api/courses', asyncHandler(async (req, res) => {
         const totalCapacity = slots.reduce((sum, slot) => sum + (slot.capacity || 0), 0);
         const totalAvailableSpots = slots.reduce((sum, slot) => sum + (slot.available_spots || 0), 0);
         
+        // Debug: log slots for crew_practice to verify practice_date coming from DB
+        if (course.course_type === 'crew_practice') {
+            try {
+                console.log('🧪 Course slots', {
+                    course_id: course.id,
+                    name: course.name,
+                    slots: slotsWithPricing.map(s => ({
+                        id: s.id,
+                        practice_date: s.practice_date,
+                        start_time: s.start_time,
+                        end_time: s.end_time,
+                        location: s.location
+                    }))
+                });
+            } catch (e) {}
+        }
         // Build computed schedule_info from slots so frontend always gets full schedule text with times
         let computedScheduleInfo = '';
         const scheduleItems = slotsWithPricing.map(s => {

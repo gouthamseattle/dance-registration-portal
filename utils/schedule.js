@@ -1,6 +1,7 @@
 /* Helper: format YYYY-MM-DD as local date without timezone shift */
 function formatLocalDate(dateStr) {
-  const m = String(dateStr).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  // Accept both 'YYYY-MM-DD' and 'YYYY-MM-DDTHH:mm:ssZ' without timezone shift
+  const m = String(dateStr).match(/^(\d{4})-(\d{2})-(\d{2})/);
   return m
     ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).toLocaleDateString()
     : new Date(dateStr).toLocaleDateString();
