@@ -607,7 +607,7 @@ app.put('/api/courses/:courseId/slots/:slotId', requireAuth, asyncHandler(async 
     const { courseId, slotId } = req.params;
     const {
         slot_name, difficulty_level, capacity, day_of_week,
-        start_time, end_time, location, pricing
+        practice_date, start_time, end_time, location, pricing
     } = req.body;
     
     // Update slot
@@ -1034,6 +1034,21 @@ app.post('/api/admin/test-email-transport', requireAuth, asyncHandler(async (req
             error: error.message || String(error),
             details: error
         });
+    }
+}));
+
+/**
+ * Admin debug: fetch raw course slots (practice_date, etc.)
+ */
+app.get('/api/admin/debug/course-slots/:courseId', requireAuth, asyncHandler(async (req, res) => {
+    const { courseId } = req.params;
+    try {
+        const course = await dbConfig.get('SELECT * FROM courses WHERE id = $1', [courseId]);
+        const slots = await dbConfig.all('SELECT * FROM course_slots WHERE course_id = $1 ORDER BY created_at ASC', [courseId]);
+        res.json({ course, slots });
+    } catch (err) {
+        console.error('❌ Debug course slots error:', err);
+        res.status(500).json({ error: 'Failed to load course slots' });
     }
 }));
 
