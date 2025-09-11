@@ -953,6 +953,42 @@ select:-webkit-autofill {
     50% { transform: scale(1.1); }
 }
 
+/* Footer Info Rows */
+.footer-info {
+    margin-top: 0.5rem;
+    display: grid;
+    gap: 0.6rem;
+    justify-content: center;
+}
+
+.footer-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    justify-content: center;
+    color: var(--text-secondary);
+    font-weight: 600;
+}
+
+.footer-row i {
+    color: var(--accent-primary);
+    font-size: 1.05rem;
+}
+
+.footer-row a {
+    color: var(--accent-primary);
+    text-decoration: none;
+    font-weight: 700;
+}
+
+.footer-row a:hover {
+    text-decoration: underline;
+}
+
+@media (min-width: 768px) {
+    .footer-row { font-size: 1.05rem; }
+}
+
 /* Toast Notifications */
 .toast {
     border: none;
@@ -1587,10 +1623,6 @@ select:-webkit-autofill {
     animation: bounce 2s infinite;
 }
 
-/* Hide footer text in crew practice mode */
-.crew-practice-mode .footer p {
-    display: none !important;
-}
 
 /* DDC Logo Styling */
 .ddc-logo-accent {
