@@ -804,6 +804,7 @@ app.post('/api/register', asyncHandler(async (req, res) => {
         registrationId = registrationResult.lastID;
     }
     
+    console.log('📝 Registration created', { id: registrationId, course_id, email });
     res.json({ 
         success: true, 
         registrationId: registrationId,
@@ -844,6 +845,34 @@ app.get('/api/registrations', requireAuth, asyncHandler(async (req, res) => {
     
     const registrations = await dbConfig.all(query, params);
     res.json(registrations);
+}));
+
+/**
+ * Admin: registration counts
+ * - GET /api/admin/registrations/count?course_id=5 (optional)
+ */
+app.get('/api/admin/registrations/count', requireAuth, asyncHandler(async (req, res) => {
+    const { course_id } = req.query;
+    try {
+        let total, pending, completed;
+        if (course_id) {
+            total = await dbConfig.get('SELECT COUNT(*) as count FROM registrations WHERE course_id = $1', [course_id]);
+            pending = await dbConfig.get('SELECT COUNT(*) as count FROM registrations WHERE course_id = $1 AND payment_status = \'pending\'', [course_id]);
+            completed = await dbConfig.get('SELECT COUNT(*) as count FROM registrations WHERE course_id = $1 AND payment_status = \'completed\'', [course_id]);
+        } else {
+            total = await dbConfig.get('SELECT COUNT(*) as count FROM registrations');
+            pending = await dbConfig.get('SELECT COUNT(*) as count FROM registrations WHERE payment_status = \'pending\'');
+            completed = await dbConfig.get('SELECT COUNT(*) as count FROM registrations WHERE payment_status = \'completed\'');
+        }
+        res.json({
+            total: Number(total?.count || 0),
+            pending: Number(pending?.count || 0),
+            completed: Number(completed?.count || 0)
+        });
+    } catch (err) {
+        console.error('❌ Count query error:', err);
+        res.status(500).json({ error: 'Failed to load registration counts' });
+    }
 }));
 
 // Update registration payment status
