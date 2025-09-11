@@ -820,7 +820,7 @@ app.get('/api/registrations', requireAuth, asyncHandler(async (req, res) => {
         SELECT r.*, s.first_name, s.last_name, s.email, s.phone, s.dance_experience, s.instagram_handle AS instagram_id,
                c.name as course_name, c.course_type, c.price
         FROM registrations r
-        JOIN students s ON r.student_id = s.id
+        LEFT JOIN students s ON r.student_id = s.id
         LEFT JOIN courses c ON r.course_id = c.id
     `;
     
