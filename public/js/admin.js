@@ -698,6 +698,11 @@ class AdminDashboard {
             const fullGroup = slotCard.querySelector('.full-price-group');
             const fullInput = slotCard.querySelector('.slot-full-price');
             const dropInInput = slotCard.querySelector('.slot-drop-in-price');
+            const dayGroup = slotCard.querySelector('.day-of-week-group');
+            const practiceDateGroup = slotCard.querySelector('.practice-date-group');
+            const practiceDateInput = slotCard.querySelector('.slot-practice-date');
+
+            // Pricing visibility/requirements
             if (!dropInInput) return;
             if (courseType === 'dance_series') {
                 if (fullGroup) fullGroup.style.display = '';
@@ -710,6 +715,19 @@ class AdminDashboard {
                     fullInput.value = '';
                 }
                 dropInInput.required = true;
+            }
+
+            // Crew Practice: show practice date, hide day-of-week
+            if (courseType === 'crew_practice') {
+                if (dayGroup) dayGroup.style.display = 'none';
+                if (practiceDateGroup) practiceDateGroup.style.display = '';
+                if (practiceDateInput) practiceDateInput.required = true;
+            } else {
+                if (dayGroup) dayGroup.style.display = '';
+                if (practiceDateGroup) practiceDateGroup.style.display = 'none';
+                if (practiceDateInput) {
+                    practiceDateInput.required = false;
+                }
             }
         });
     }
@@ -755,7 +773,7 @@ class AdminDashboard {
                             <label class="form-label">Capacity *</label>
                             <input type="number" class="form-control slot-capacity" min="1" max="100" required value="20">
                         </div>
-                        <div class="col-md-4 mb-3">
+                        <div class="col-md-4 mb-3 day-of-week-group">
                             <label class="form-label">Day of Week</label>
                             <select class="form-select slot-day">
                                 <option value="">Select Day</option>
@@ -767,6 +785,10 @@ class AdminDashboard {
                                 <option value="Saturday">Saturday</option>
                                 <option value="Sunday">Sunday</option>
                             </select>
+                        </div>
+                        <div class="col-md-4 mb-3 practice-date-group" style="display: none;">
+                            <label class="form-label">Practice Date *</label>
+                            <input type="date" class="form-control slot-practice-date">
                         </div>
                         <div class="col-md-4 mb-3">
                             <label class="form-label">Location</label>
@@ -872,6 +894,8 @@ class AdminDashboard {
             const difficulty = slotCard.querySelector('.slot-difficulty').value;
             const capacity = parseInt(slotCard.querySelector('.slot-capacity').value);
             const dayOfWeek = slotCard.querySelector('.slot-day').value || null;
+            const practiceDateEl = slotCard.querySelector('.slot-practice-date');
+            const practiceDate = practiceDateEl ? (practiceDateEl.value || null) : null;
             const startTime = slotCard.querySelector('.slot-start-time').value || null;
             const endTime = slotCard.querySelector('.slot-end-time').value || null;
             const location = slotCard.querySelector('.slot-location').value || null;
@@ -884,6 +908,10 @@ class AdminDashboard {
             // Validate required fields (pricing depends on course type)
             if (!difficulty || !capacity) {
                 return; // Skip invalid slots
+            }
+            // Crew practice requires a specific practice date
+            if (courseType === 'crew_practice' && !practiceDate) {
+                return; // practice_date required
             }
             
             const pricing = {};
@@ -904,7 +932,8 @@ class AdminDashboard {
                 slot_name: slotName,
                 difficulty_level: difficulty,
                 capacity: capacity,
-                day_of_week: dayOfWeek,
+                day_of_week: courseType === 'crew_practice' ? null : dayOfWeek,
+                practice_date: practiceDate,
                 start_time: startTime,
                 end_time: endTime,
                 location: location,
@@ -1331,6 +1360,7 @@ Questions? Reply to this message`;
                 const stEl = slotCard.querySelector('.slot-start-time');
                 const etEl = slotCard.querySelector('.slot-end-time');
                 const locEl = slotCard.querySelector('.slot-location');
+                const pdEl = slotCard.querySelector('.slot-practice-date');
                 const fullPriceEl = slotCard.querySelector('.slot-full-price');
                 const dropInPriceEl = slotCard.querySelector('.slot-drop-in-price');
 
@@ -1341,6 +1371,7 @@ Questions? Reply to this message`;
                 if (stEl) stEl.value = slot.start_time || '';
                 if (etEl) etEl.value = slot.end_time || '';
                 if (locEl) locEl.value = slot.location || '';
+                if (pdEl) pdEl.value = slot.practice_date ? new Date(slot.practice_date).toISOString().split('T')[0] : '';
 
                 // Pricing
                 const pricing = slot.pricing || {};

@@ -40,6 +40,7 @@ async function createSlotTables(dbConfig) {
             difficulty_level VARCHAR(100) NOT NULL DEFAULT 'All Levels',
             capacity INTEGER NOT NULL,
             day_of_week VARCHAR(20),
+            practice_date ${dbConfig.isProduction ? 'DATE' : 'TEXT'},
             start_time ${dbConfig.isProduction ? 'TIME' : 'TEXT'},
             end_time ${dbConfig.isProduction ? 'TIME' : 'TEXT'},
             location VARCHAR(255),

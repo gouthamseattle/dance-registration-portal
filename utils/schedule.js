@@ -10,7 +10,12 @@ function computeScheduleInfo(course = {}, slots = []) {
   const scheduleItems = slots.map((s) => {
     if (!s) return '';
     const parts = [];
-    if (s.day_of_week) parts.push(`${s.day_of_week}s`);
+    if (course.course_type === 'crew_practice' && s.practice_date) {
+      const dateStr = new Date(s.practice_date).toLocaleDateString();
+      parts.push(dateStr);
+    } else if (s.day_of_week) {
+      parts.push(`${s.day_of_week}s`);
+    }
     const st = s.start_time;
     const et = s.end_time;
     if (st && et) {
@@ -24,13 +29,16 @@ function computeScheduleInfo(course = {}, slots = []) {
 
   if (scheduleItems.length > 0) {
     let dateInfo = '';
-    if (course.start_date && course.end_date) {
-      const startDate = new Date(course.start_date).toLocaleDateString();
-      const endDate = new Date(course.end_date).toLocaleDateString();
-      dateInfo = ` (${startDate} - ${endDate})`;
-    } else if (course.start_date) {
-      const startDate = new Date(course.start_date).toLocaleDateString();
-      dateInfo = ` (Starts ${startDate})`;
+    const hasPracticeDates = Array.isArray(slots) && slots.some(s => !!s?.practice_date);
+    if (!hasPracticeDates) {
+      if (course.start_date && course.end_date) {
+        const startDate = new Date(course.start_date).toLocaleDateString();
+        const endDate = new Date(course.end_date).toLocaleDateString();
+        dateInfo = ` (${startDate} - ${endDate})`;
+      } else if (course.start_date) {
+        const startDate = new Date(course.start_date).toLocaleDateString();
+        dateInfo = ` (Starts ${startDate})`;
+      }
     }
     return scheduleItems.join(' | ') + dateInfo;
   }

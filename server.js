@@ -24,6 +24,19 @@ async function initializeDatabase() {
     try {
         db = await dbConfig.connect();
         console.log('✅ Database initialized successfully');
+
+        // Ensure practice_date column exists on course_slots
+        try {
+            if (dbConfig.isProduction) {
+                await dbConfig.run('ALTER TABLE course_slots ADD COLUMN IF NOT EXISTS practice_date DATE');
+            } else {
+                // SQLite: ignore if column exists
+                await dbConfig.run('ALTER TABLE course_slots ADD COLUMN practice_date TEXT').catch(() => {});
+            }
+            console.log('✅ Ensured course_slots.practice_date column exists');
+        } catch (e) {
+            console.log('ℹ️ practice_date column check skipped:', e.message || e);
+        }
         
         // Run migration if in production
         if (process.env.NODE_ENV === 'production') {
@@ -245,7 +258,12 @@ app.get('/api/courses', asyncHandler(async (req, res) => {
         let computedScheduleInfo = '';
         const scheduleItems = slotsWithPricing.map(s => {
             const parts = [];
-            if (s.day_of_week) parts.push(`${s.day_of_week}s`);
+            if (course.course_type === 'crew_practice' && s.practice_date) {
+                const dateStr = new Date(s.practice_date).toLocaleDateString();
+                parts.push(dateStr);
+            } else if (s.day_of_week) {
+                parts.push(`${s.day_of_week}s`);
+            }
             const st = s.start_time;
             const et = s.end_time;
             if (st && et) {
@@ -259,13 +277,16 @@ app.get('/api/courses', asyncHandler(async (req, res) => {
 
         if (scheduleItems.length > 0) {
             let dateInfo = '';
-            if (course.start_date && course.end_date) {
-                const startDate = new Date(course.start_date).toLocaleDateString();
-                const endDate = new Date(course.end_date).toLocaleDateString();
-                dateInfo = ` (${startDate} - ${endDate})`;
-            } else if (course.start_date) {
-                const startDate = new Date(course.start_date).toLocaleDateString();
-                dateInfo = ` (Starts ${startDate})`;
+            const hasPracticeDates = slotsWithPricing.some(s => !!s.practice_date);
+            if (!hasPracticeDates) {
+                if (course.start_date && course.end_date) {
+                    const startDate = new Date(course.start_date).toLocaleDateString();
+                    const endDate = new Date(course.end_date).toLocaleDateString();
+                    dateInfo = ` (${startDate} - ${endDate})`;
+                } else if (course.start_date) {
+                    const startDate = new Date(course.start_date).toLocaleDateString();
+                    dateInfo = ` (Starts ${startDate})`;
+                }
             }
             computedScheduleInfo = scheduleItems.join(' | ') + dateInfo;
         } else {
@@ -338,7 +359,7 @@ app.post('/api/courses', requireAuth, asyncHandler(async (req, res) => {
     for (const slot of slots) {
         const {
             slot_name, difficulty_level, capacity, day_of_week,
-            start_time, end_time, location, pricing
+            practice_date, start_time, end_time, location, pricing
         } = slot;
         
         if (!difficulty_level || !capacity || !pricing) {
@@ -349,12 +370,12 @@ app.post('/api/courses', requireAuth, asyncHandler(async (req, res) => {
         const slotResult = await dbConfig.run(`
             INSERT INTO course_slots (
                 course_id, slot_name, difficulty_level, capacity,
-                day_of_week, start_time, end_time, location
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                day_of_week, practice_date, start_time, end_time, location
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             ${dbConfig.isProduction ? 'RETURNING id' : ''}
         `, [
             courseId, slot_name || 'Main Session', difficulty_level, capacity,
-            day_of_week, start_time, end_time, location
+            day_of_week, practice_date || null, start_time, end_time, location
         ]);
         
         // Get slot ID
@@ -446,10 +467,10 @@ app.put('/api/courses/:id', requireAuth, asyncHandler(async (req, res) => {
 
         // Create new slots
         for (const slot of slots) {
-            const {
-                slot_name, difficulty_level, capacity, day_of_week,
-                start_time, end_time, location, pricing
-            } = slot;
+        const {
+            slot_name, difficulty_level, capacity, day_of_week,
+            practice_date, start_time, end_time, location, pricing
+        } = slot;
 
             if (!difficulty_level || !capacity || !pricing) {
                 return res.status(400).json({ error: 'Each slot must have difficulty_level, capacity, and pricing' });
@@ -459,12 +480,12 @@ app.put('/api/courses/:id', requireAuth, asyncHandler(async (req, res) => {
             const slotResult = await dbConfig.run(`
                 INSERT INTO course_slots (
                     course_id, slot_name, difficulty_level, capacity,
-                    day_of_week, start_time, end_time, location
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                    day_of_week, practice_date, start_time, end_time, location
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
                 ${dbConfig.isProduction ? 'RETURNING id' : ''}
             `, [
                 id, slot_name || 'Main Session', difficulty_level, capacity,
-                day_of_week, start_time, end_time, location
+                day_of_week, practice_date || null, start_time, end_time, location
             ]);
 
             // Get slot ID
@@ -502,10 +523,10 @@ app.put('/api/courses/:id', requireAuth, asyncHandler(async (req, res) => {
 // Slot Management Endpoints
 app.post('/api/courses/:id/slots', requireAuth, asyncHandler(async (req, res) => {
     const { id: courseId } = req.params;
-    const {
-        slot_name, difficulty_level, capacity, day_of_week,
-        start_time, end_time, location, pricing
-    } = req.body;
+        const {
+            slot_name, difficulty_level, capacity, day_of_week,
+            practice_date, start_time, end_time, location, pricing
+        } = req.body;
     
     if (!difficulty_level || !capacity || !pricing) {
         return res.status(400).json({ error: 'difficulty_level, capacity, and pricing are required' });
@@ -529,12 +550,12 @@ app.post('/api/courses/:id/slots', requireAuth, asyncHandler(async (req, res) =>
     const slotResult = await dbConfig.run(`
         INSERT INTO course_slots (
             course_id, slot_name, difficulty_level, capacity,
-            day_of_week, start_time, end_time, location
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            day_of_week, practice_date, start_time, end_time, location
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         ${dbConfig.isProduction ? 'RETURNING id' : ''}
     `, [
         courseId, slot_name || 'Main Session', difficulty_level, capacity,
-        day_of_week, start_time, end_time, location
+        day_of_week, practice_date || null, start_time, end_time, location
     ]);
     
     // Get slot ID
@@ -578,11 +599,11 @@ app.put('/api/courses/:courseId/slots/:slotId', requireAuth, asyncHandler(async 
     await dbConfig.run(`
         UPDATE course_slots SET
             slot_name = $1, difficulty_level = $2, capacity = $3,
-            day_of_week = $4, start_time = $5, end_time = $6, location = $7
-        WHERE id = $8 AND course_id = $9
+            day_of_week = $4, practice_date = $5, start_time = $6, end_time = $7, location = $8
+        WHERE id = $9 AND course_id = $10
     `, [
         slot_name, difficulty_level, capacity, day_of_week,
-        start_time, end_time, location, slotId, courseId
+        practice_date || null, start_time, end_time, location, slotId, courseId
     ]);
     
     // Update pricing if provided
@@ -1013,23 +1034,40 @@ app.post('/api/generate-venmo-link', asyncHandler(async (req, res) => {
     const venmoSetting = await dbConfig.get('SELECT setting_value FROM system_settings WHERE setting_key = $1', ['venmo_username']);
     const venmoUsername = venmoSetting ? venmoSetting.setting_value : 'monicaradd';
     
-    // Create payment note with date range if available
+    // Create payment note with date or date range if available
     let courseDisplayName = courseName;
     let dateRangeText = '';
     try {
         const regCourse = await dbConfig.get(`
-            SELECT r.id as registration_id, c.name as course_name, c.start_date, c.end_date
+            SELECT r.id as registration_id, c.name as course_name, c.course_type, c.start_date, c.end_date
             FROM registrations r
             JOIN courses c ON c.id = r.course_id
             WHERE r.id = $1
         `, [registrationId]);
+
         if (regCourse) {
             courseDisplayName = regCourse.course_name || courseDisplayName;
             const fmt = (d) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-            if (regCourse.start_date && regCourse.end_date) {
-                dateRangeText = ` (${fmt(regCourse.start_date)} - ${fmt(regCourse.end_date)})`;
-            } else if (regCourse.start_date) {
-                dateRangeText = ` (${fmt(regCourse.start_date)})`;
+
+            if (regCourse.course_type === 'crew_practice') {
+                // Prefer single practice_date from slot if available
+                const slot = await dbConfig.get(`
+                    SELECT practice_date FROM course_slots
+                    WHERE course_id = (SELECT course_id FROM registrations WHERE id = $1)
+                    ORDER BY created_at ASC
+                    LIMIT 1
+                `, [registrationId]);
+                if (slot && slot.practice_date) {
+                    dateRangeText = ` (${fmt(slot.practice_date)})`;
+                } else if (regCourse.start_date) {
+                    dateRangeText = ` (${fmt(regCourse.start_date)})`;
+                }
+            } else {
+                if (regCourse.start_date && regCourse.end_date) {
+                    dateRangeText = ` (${fmt(regCourse.start_date)} - ${fmt(regCourse.end_date)})`;
+                } else if (regCourse.start_date) {
+                    dateRangeText = ` (${fmt(regCourse.start_date)})`;
+                }
             }
         }
     } catch (e) {
