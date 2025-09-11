@@ -1153,6 +1153,68 @@ app.get('/api/dashboard/stats', requireAuth, asyncHandler(async (req, res) => {
     });
 }));
 
+/**
+ * Admin reset: keep only one course active and clear all registrations (revenue)
+ * Body: { keep_course_id: number, delete_other_courses?: boolean }
+ * - Deletes ALL registrations (resets revenue to 0)
+ * - Activates keep_course_id and deactivates all others (or deletes others if delete_other_courses is true)
+ */
+app.post('/api/admin/reset-keep-course', requireAuth, asyncHandler(async (req, res) => {
+    const { keep_course_id, delete_other_courses } = req.body || {};
+    if (!keep_course_id) {
+        return res.status(400).json({ error: 'keep_course_id is required' });
+    }
+
+    // Verify course exists
+    const keepCourse = await dbConfig.get('SELECT id, name FROM courses WHERE id = $1', [keep_course_id]);
+    if (!keepCourse) {
+        return res.status(404).json({ error: 'Course to keep not found' });
+    }
+
+    // 1) Delete all registrations (cleans up revenue and admin registrations list)
+    await dbConfig.run('DELETE FROM registrations');
+
+    // 2) Keep only the specified course active
+    if (delete_other_courses === true) {
+        // Delete all other courses entirely
+        await dbConfig.run('DELETE FROM courses WHERE id != $1', [keep_course_id]);
+
+        // Optionally reset sequences in production (PostgreSQL)
+        if (dbConfig.isProduction) {
+            try {
+                await dbConfig.run('ALTER SEQUENCE courses_id_seq RESTART WITH 1');
+                await dbConfig.run('ALTER SEQUENCE registrations_id_seq RESTART WITH 1');
+            } catch (e) {
+                console.warn('Sequence reset skipped:', e.message || e);
+            }
+        }
+    } else {
+        // Deactivate all other courses
+        await dbConfig.run(
+            `UPDATE courses SET is_active = ${dbConfig.isProduction ? 'false' : '0'} WHERE id != $1`,
+            [keep_course_id]
+        );
+        // Ensure the kept course is active
+        await dbConfig.run(
+            `UPDATE courses SET is_active = ${dbConfig.isProduction ? 'true' : '1'} WHERE id = $1`,
+            [keep_course_id]
+        );
+    }
+
+    console.log('🔄 Admin reset complete', {
+        keep_course_id,
+        delete_other_courses: !!delete_other_courses
+    });
+
+    res.json({
+        success: true,
+        message: `Reset complete. Kept course #${keep_course_id} active and cleared all registrations.`,
+        kept_course: keepCourse,
+        deleted_all_registrations: true,
+        deleted_other_courses: !!delete_other_courses
+    });
+}));
+
 // Clear all courses (admin only)
 app.delete('/api/admin/clear-all-courses', requireAuth, asyncHandler(async (req, res) => {
     console.log('🗑️  Admin requested to clear all courses');
