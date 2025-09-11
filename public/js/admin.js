@@ -534,7 +534,7 @@ class AdminDashboard {
                             <td>
                                 <div>
                                     <strong>${([reg.first_name, reg.last_name].filter(Boolean).join(' ').trim()) || '(No name)'}</strong><br>
-                                    <small class="text-muted">${reg.email}</small><br>
+                                    ${reg.email ? `<small class="text-muted">${reg.email}</small><br>` : `<small class="text-muted">(no email)</small><br>`}
                                     ${reg.instagram_id ? `<small class="text-muted">@${reg.instagram_id}</small><br>` : ''}
                                     ${reg.dance_experience ? `<small class="text-muted">${reg.dance_experience}</small>` : ''}
                                 </div>
@@ -544,7 +544,7 @@ class AdminDashboard {
                                 ${reg.class_date ? `<br><small class="text-muted">${new Date(reg.class_date).toLocaleDateString()}</small>` : ''}
                             </td>
                             <td>
-                                <span class="badge bg-secondary">${reg.registration_type}</span>
+                                <span class="badge bg-secondary">${reg.registration_type || '—'}</span>
                             </td>
                             <td>$${parseFloat(reg.payment_amount).toFixed(2)}</td>
                             <td>
@@ -555,6 +555,11 @@ class AdminDashboard {
                             <td>${new Date(reg.registration_date).toLocaleDateString()}</td>
                             <td>
                                 <div class="btn-group btn-group-sm">
+                                    ${!reg.email ? `
+                                    <button class="btn btn-outline-warning" onclick="admin.assignStudent(${reg.id})" title="Assign Student">
+                                        <i class="fas fa-user-plus"></i>
+                                    </button>
+                                    ` : ''}
                                     <button class="btn btn-outline-info" onclick="admin.viewRegistration(${reg.id})" title="View Details">
                                         <i class="fas fa-eye"></i>
                                     </button>
@@ -1765,6 +1770,30 @@ Questions? Reply to this message`;
         } catch (error) {
             console.error('Error confirming payment:', error);
             this.showError('Failed to confirm payment');
+        }
+    }
+
+    async assignStudent(registrationId) {
+        try {
+            const email = (prompt('Enter student email to link to this registration:') || '').trim();
+            if (!email) return;
+            const first = (prompt('Optional: first name') || '').trim();
+            const last = (prompt('Optional: last name') || '').trim();
+            const response = await this.apiFetch(`/api/admin/registrations/${registrationId}/assign-student`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, first_name: first, last_name: last })
+            });
+            const result = await response.json().catch(() => ({}));
+            if (response.ok && result.success) {
+                await this.loadInitialData();
+                this.showSuccess('Student linked to registration');
+            } else {
+                this.showError(result.error || 'Failed to assign student');
+            }
+        } catch (err) {
+            console.error('Assign student error:', err);
+            this.showError('Failed to assign student');
         }
     }
 

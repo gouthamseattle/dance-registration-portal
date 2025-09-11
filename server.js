@@ -778,12 +778,19 @@ app.post('/api/register', asyncHandler(async (req, res) => {
                 emergency_contact_name, emergency_contact_phone, medical_conditions,
                 dance_experience, instagram_handle, how_heard_about_us
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            ${dbConfig.isProduction ? 'RETURNING id' : ''}
         `, [
             effectiveFirstName || 'Student', effectiveLastName || '', email, phone, date_of_birth,
             emergency_contact_name, emergency_contact_phone, medical_conditions,
             dance_experience, instagram, how_heard_about_us
         ]);
-        student = { id: result.lastID || result.id, email, first_name: effectiveFirstName || 'Student', last_name: effectiveLastName || '' };
+        let newStudentId;
+        if (dbConfig.isProduction) {
+            newStudentId = result[0]?.id;
+        } else {
+            newStudentId = result.lastID;
+        }
+        student = { id: newStudentId, email, first_name: effectiveFirstName || 'Student', last_name: effectiveLastName || '' };
     }
     
     // Create registration
@@ -1070,6 +1077,55 @@ app.post('/api/admin/registrations/:id/resend-confirmation', requireAuth, asyncH
         console.error('❌ Error resending confirmation email:', err);
         email_error = err.message || String(err);
         res.json({ success: true, message: 'Resend attempted', email_sent, email_error });
+    }
+}));
+
+/**
+ * Admin: assign/link a student to a registration missing student_id
+ * Body: { email: string, first_name?: string, last_name?: string }
+ */
+app.put('/api/admin/registrations/:id/assign-student', requireAuth, asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const { email, first_name, last_name } = req.body || {};
+    if (!email) {
+        return res.status(400).json({ error: 'email is required' });
+    }
+
+    try {
+        // Find or create the student by email
+        let student = await dbConfig.get('SELECT * FROM students WHERE email = $1', [email]);
+
+        if (student) {
+            // Optionally update names if provided
+            if (first_name || last_name) {
+                await dbConfig.run(
+                    'UPDATE students SET first_name = $1, last_name = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3',
+                    [first_name || student.first_name || 'Student', last_name || student.last_name || '', student.id]
+                );
+            }
+        } else {
+            const insertResult = await dbConfig.run(`
+                INSERT INTO students (first_name, last_name, email)
+                VALUES ($1, $2, $3)
+                ${dbConfig.isProduction ? 'RETURNING id' : ''}
+            `, [first_name || 'Student', last_name || '', email]);
+
+            let newId;
+            if (dbConfig.isProduction) {
+                newId = insertResult[0]?.id;
+            } else {
+                newId = insertResult.lastID;
+            }
+            student = { id: newId, email, first_name: first_name || 'Student', last_name: last_name || '' };
+        }
+
+        // Update the registration to link the student
+        await dbConfig.run('UPDATE registrations SET student_id = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2', [student.id, id]);
+
+        res.json({ success: true, student_id: student.id });
+    } catch (err) {
+        console.error('❌ Assign student failed:', err);
+        res.status(500).json({ error: 'Failed to assign student to registration' });
     }
 }));
 
