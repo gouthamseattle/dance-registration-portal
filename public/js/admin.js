@@ -1342,6 +1342,54 @@ Questions? Reply to this message`;
         }
     }
 
+    // Reset data: keep only one course active and clear all registrations/revenue
+    async resetKeepCourse(deleteOthers = false) {
+        try {
+            // Determine which course to keep: prefer first active, else first available
+            const activeCourses = Array.isArray(this.courses) ? this.courses.filter(c => c.is_active) : [];
+            const keepCourse = activeCourses[0] || this.courses[0];
+
+            if (!keepCourse) {
+                this.showError('No courses available to keep.');
+                return;
+            }
+
+            const keepId = keepCourse.id;
+            const keepName = keepCourse.name || `Course #${keepId}`;
+
+            // Confirm destructive action
+            const msg = deleteOthers
+                ? `This will DELETE all other courses and CLEAR all registrations/revenue.\n\nKeep: "${keepName}" (ID: ${keepId})\n\nProceed?`
+                : `This will DEACTIVATE all other courses and CLEAR all registrations/revenue.\n\nKeep: "${keepName}" (ID: ${keepId})\n\nProceed?`;
+            if (!window.confirm(msg)) return;
+
+            const response = await this.apiFetch('/api/admin/reset-keep-course', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    keep_course_id: keepId,
+                    delete_other_courses: !!deleteOthers
+                })
+            });
+
+            const result = await response.json();
+
+            if (!response.ok || result.error) {
+                throw new Error(result.error || 'Reset failed');
+            }
+
+            // Reload all data and show success
+            await this.loadInitialData();
+            this.showSuccess(`Reset complete. Kept "${keepName}". ${deleteOthers ? 'Deleted other courses.' : 'Deactivated other courses.'}`);
+
+            // Ensure dashboard reflects cleared stats
+            this.showSection('dashboard');
+        } catch (err) {
+            console.error('Reset error:', err);
+            this.showError(err.message || 'Failed to reset data');
+        }
+    }
+
     // Additional admin functions
     async editCourse(courseId) {
         const course = this.courses.find(c => c.id === courseId);
