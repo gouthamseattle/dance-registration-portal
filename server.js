@@ -1130,6 +1130,39 @@ app.put('/api/admin/registrations/:id/assign-student', requireAuth, asyncHandler
 }));
 
 /**
+ * Admin query: registrations missing contact info (no student link or empty email/name)
+ */
+app.get('/api/admin/registrations/missing-contact', requireAuth, asyncHandler(async (req, res) => {
+    try {
+        const rows = await dbConfig.all(`
+            SELECT
+                r.id AS registration_id,
+                r.course_id,
+                r.payment_amount,
+                r.payment_status,
+                r.registration_date,
+                c.name AS course_name,
+                s.id AS student_id,
+                s.email,
+                s.first_name,
+                s.last_name
+            FROM registrations r
+            LEFT JOIN students s ON s.id = r.student_id
+            LEFT JOIN courses c ON c.id = r.course_id
+            WHERE
+                s.id IS NULL
+                OR COALESCE(TRIM(s.email), '') = ''
+                OR (COALESCE(TRIM(s.first_name), '') = '' AND COALESCE(TRIM(s.last_name), '') = '')
+            ORDER BY r.registration_date DESC
+        `, []);
+        res.json(rows);
+    } catch (err) {
+        console.error('❌ Missing-contact query error:', err);
+        res.status(500).json({ error: 'Failed to fetch registrations with missing contact info' });
+    }
+}));
+
+/**
  * Admin debug endpoint to inspect email config detection (no secrets exposed)
  */
 app.get('/api/admin/debug-email-config', requireAuth, asyncHandler(async (req, res) => {
