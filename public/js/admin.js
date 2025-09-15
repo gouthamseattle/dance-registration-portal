@@ -223,6 +223,9 @@ class AdminDashboard {
             case 'registrations':
                 this.loadRegistrations();
                 break;
+            case 'reports':
+                this.loadReports();
+                break;
             case 'settings':
                 this.loadSettings();
                 break;
@@ -363,6 +366,108 @@ class AdminDashboard {
         `;
         container.innerHTML = '';
         container.appendChild(table);
+    }
+
+    // Reports: load analytics and render
+    async loadReports() {
+        try {
+            const seriesEl = document.getElementById('reportsBySeries');
+            const statusEl = document.getElementById('reportsByStatus');
+            if (seriesEl) seriesEl.innerHTML = '<div class="text-muted">Loading...</div>';
+            if (statusEl) statusEl.innerHTML = '<div class="text-muted">Loading...</div>';
+
+            const [seriesRes, statusRes] = await Promise.all([
+                this.apiFetch('/api/admin/analytics/registrations-by-series'),
+                this.apiFetch('/api/admin/analytics/registrations-by-status')
+            ]);
+
+            const seriesData = await seriesRes.json();
+            const statusData = await statusRes.json();
+
+            this.renderReportsBySeries(seriesData);
+            this.renderReportsByStatus(statusData);
+
+            const btn = document.getElementById('refreshReportsBtn');
+            if (btn && !btn._wired) {
+                btn._wired = true;
+                btn.addEventListener('click', () => this.loadReports());
+            }
+        } catch (e) {
+            console.error('Reports load error:', e);
+            const seriesEl = document.getElementById('reportsBySeries');
+            const statusEl = document.getElementById('reportsByStatus');
+            if (seriesEl) seriesEl.innerHTML = '<div class="text-danger">Failed to load reports</div>';
+            if (statusEl) statusEl.innerHTML = '<div class="text-danger">Failed to load reports</div>';
+            this.showError('Failed to load reports');
+        }
+    }
+
+    renderReportsBySeries(series) {
+        const el = document.getElementById('reportsBySeries');
+        if (!el) return;
+        if (!Array.isArray(series) || series.length === 0) {
+            el.innerHTML = '<div class="text-muted">No data</div>';
+            return;
+        }
+        const table = document.createElement('div');
+        table.className = 'table-responsive';
+        table.innerHTML = `
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Series</th>
+                        <th class="text-end">Total</th>
+                        <th class="text-end text-success">Completed</th>
+                        <th class="text-end text-warning">Pending</th>
+                        <th class="text-end text-danger">Failed</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${series.map(r => `
+                        <tr>
+                            <td>${r.course_name}</td>
+                            <td class="text-end">${r.total}</td>
+                            <td class="text-end text-success">${r.completed}</td>
+                            <td class="text-end text-warning">${r.pending}</td>
+                            <td class="text-end text-danger">${r.failed}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        `;
+        el.innerHTML = '';
+        el.appendChild(table);
+    }
+
+    renderReportsByStatus(data) {
+        const el = document.getElementById('reportsByStatus');
+        if (!el) return;
+        const totals = data?.totals || { completed: 0, pending: 0, failed: 0, other: 0 };
+        const breakdown = data?.breakdown || [];
+        const totalCount = breakdown.reduce((sum, r) => sum + (r.count || 0), 0);
+        const pct = (n) => totalCount ? Math.round((n / totalCount) * 100) : 0;
+
+        el.innerHTML = `
+            <ul class="list-group">
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <span><span class="badge bg-success me-2">&nbsp;</span>Paid</span>
+                    <span>${totals.completed} (${pct(totals.completed)}%)</span>
+                </li>
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <span><span class="badge bg-warning me-2">&nbsp;</span>Pending</span>
+                    <span>${totals.pending} (${pct(totals.pending)}%)</span>
+                </li>
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <span><span class="badge bg-danger me-2">&nbsp;</span>Failed</span>
+                    <span>${totals.failed} (${pct(totals.failed)}%)</span>
+                </li>
+                ${totals.other ? `
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <span><span class="badge bg-secondary me-2">&nbsp;</span>Other</span>
+                    <span>${totals.other} (${pct(totals.other)}%)</span>
+                </li>` : ''}
+            </ul>
+        `;
     }
 
     loadDashboard() {

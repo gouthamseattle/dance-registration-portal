@@ -1018,6 +1018,72 @@ app.get('/api/admin/registrations/count', requireAuth, asyncHandler(async (req, 
     }
 }));
 
+/**
+ * Admin Analytics: registrations by series
+ * GET /api/admin/analytics/registrations-by-series
+ * Returns: [{ course_id, course_name, total, completed, pending, failed }]
+ */
+app.get('/api/admin/analytics/registrations-by-series', requireAuth, asyncHandler(async (req, res) => {
+    try {
+        const rows = await dbConfig.all(`
+            SELECT 
+                c.id AS course_id,
+                c.name AS course_name,
+                COUNT(r.id) AS total,
+                SUM(CASE WHEN r.payment_status = 'completed' THEN 1 ELSE 0 END) AS completed,
+                SUM(CASE WHEN r.payment_status = 'pending' THEN 1 ELSE 0 END) AS pending,
+                SUM(CASE WHEN r.payment_status = 'failed' THEN 1 ELSE 0 END) AS failed
+            FROM courses c
+            LEFT JOIN registrations r ON r.course_id = c.id
+            GROUP BY c.id, c.name
+            ORDER BY c.created_at DESC
+        `, []);
+        // Coerce counts to numbers for consistency across DBs
+        const data = rows.map(r => ({
+            course_id: Number(r.course_id),
+            course_name: r.course_name,
+            total: Number(r.total || 0),
+            completed: Number(r.completed || 0),
+            pending: Number(r.pending || 0),
+            failed: Number(r.failed || 0)
+        }));
+        res.json(data);
+    } catch (err) {
+        console.error('❌ Analytics by series failed:', err);
+        res.status(500).json({ error: 'Failed to load analytics by series' });
+    }
+}));
+
+/**
+ * Admin Analytics: registrations by status
+ * GET /api/admin/analytics/registrations-by-status
+ * Returns: { totals: { completed, pending, failed, other }, breakdown: [{ status, count }] }
+ */
+app.get('/api/admin/analytics/registrations-by-status', requireAuth, asyncHandler(async (req, res) => {
+    try {
+        const rows = await dbConfig.all(`
+            SELECT r.payment_status AS status, COUNT(*) AS count
+            FROM registrations r
+            GROUP BY r.payment_status
+        `, []);
+        const breakdown = rows.map(r => ({
+            status: r.status || 'unknown',
+            count: Number(r.count || 0)
+        }));
+        const totals = breakdown.reduce((acc, row) => {
+            if (row.status === 'completed') acc.completed += row.count;
+            else if (row.status === 'pending') acc.pending += row.count;
+            else if (row.status === 'failed') acc.failed += row.count;
+            else acc.other += row.count;
+            return acc;
+        }, { completed: 0, pending: 0, failed: 0, other: 0 });
+        res.json({ totals, breakdown });
+    } catch (err) {
+        console.error('❌ Analytics by status failed:', err);
+        res.status(500).json({ error: 'Failed to load analytics by status' });
+    }
+}));
+
 // Update registration payment status
 app.put('/api/registrations/:id/payment', asyncHandler(async (req, res) => {
     const { id } = req.params;
