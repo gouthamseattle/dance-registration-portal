@@ -329,6 +329,7 @@ class AdminDashboard {
             <table class="table table-hover">
                 <thead>
                     <tr>
+                        <th>ID</th>
                         <th>Student</th>
                         <th>Course</th>
                         <th>Amount</th>
@@ -339,6 +340,7 @@ class AdminDashboard {
                 <tbody>
                     ${recentRegs.map(reg => `
                         <tr>
+                            <td><code>#${reg.id}</code></td>
                             <td>
                                 <div>
                                     <strong>${([reg.first_name, reg.last_name].filter(Boolean).join(' ').trim()) || '(No name)'}</strong><br>
@@ -489,7 +491,7 @@ class AdminDashboard {
         let filteredRegs = [...this.registrations];
         
         if (courseFilter) {
-            filteredRegs = filteredRegs.filter(r => r.course_id == courseFilter);
+            filteredRegs = filteredRegs.filter(r => Number(r.course_id) === Number(courseFilter));
         }
         
         if (statusFilter) {
@@ -519,6 +521,7 @@ class AdminDashboard {
             <table class="table table-hover">
                 <thead>
                     <tr>
+                        <th>ID</th>
                         <th>Student</th>
                         <th>Course</th>
                         <th>Type</th>
@@ -531,6 +534,7 @@ class AdminDashboard {
                 <tbody>
                     ${registrations.map(reg => `
                         <tr>
+                            <td><code>#${reg.id}</code></td>
                             <td>
                                 <div>
                                     <strong>${([reg.first_name, reg.last_name].filter(Boolean).join(' ').trim()) || '(No name)'}</strong><br>
@@ -1012,39 +1016,15 @@ class AdminDashboard {
     }
 
     // Utility Functions
-    async exportRegistrations() {
+    exportRegistrations() {
         try {
-            const response = await this.apiFetch('/api/registrations');
-            const registrations = await response.json();
-            
-            // Convert to CSV
-            const headers = ['Name', 'Email', 'Phone', 'Instagram ID', 'Dance Experience', 'Course', 'Registration Type', 'Amount', 'Payment Status', 'Date'];
-            const csvContent = [
-                headers.join(','),
-                ...registrations.map(reg => [
-                    [reg.first_name, reg.last_name].filter(Boolean).join(' ').trim(),
-                    reg.email,
-                    reg.phone || '',
-                    reg.instagram_id || '',
-                    reg.dance_experience || '',
-                    reg.course_name || 'Drop-in Class',
-                    reg.registration_type,
-                    reg.payment_amount,
-                    reg.payment_status,
-                    new Date(reg.registration_date).toLocaleDateString()
-                ].join(','))
-            ].join('\n');
-            
-            // Download file
-            const blob = new Blob([csvContent], { type: 'text/csv' });
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `registrations-${new Date().toISOString().split('T')[0]}.csv`;
-            a.click();
-            window.URL.revokeObjectURL(url);
-            
-            this.showSuccess('Registrations exported successfully');
+            const courseId = document.getElementById('regCourseFilter')?.value || '';
+            const status = document.getElementById('regStatusFilter')?.value || '';
+            const params = new URLSearchParams();
+            if (courseId) params.set('course_id', courseId);
+            if (status) params.set('payment_status', status);
+            const url = `/api/admin/registrations/export${params.toString() ? `?${params.toString()}` : ''}`;
+            window.open(url, '_blank');
         } catch (error) {
             console.error('Export error:', error);
             this.showError('Failed to export registrations');
@@ -1511,6 +1491,10 @@ Questions? Reply to this message`;
                             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                         </div>
                         <div class="modal-body">
+                            <div class="row">
+                                <div class="col-sm-4"><strong>Registration ID:</strong></div>
+                                <div class="col-sm-8"><code>#${registration.id}</code></div>
+                            </div>
                             <div class="row">
                                 <div class="col-sm-4"><strong>Name:</strong></div>
                                 <div class="col-sm-8">${[registration.first_name, registration.last_name].filter(Boolean).join(' ').trim() || '(No name)'}</div>

@@ -223,3 +223,44 @@ Admin Dashboard (admin.html)
 - Static file caching via Express
 - Database query optimization
 - Session storage for admin state
+
+## New Architecture Additions (Sept 2025)
+
+### Attendance Tracking
+- Goal: Track both per-session attendance and overall series completion; mobile-friendly marking during class; does not affect payments.
+- Tables:
+  - class_sessions (id, course_id, session_date, start_time, end_time, location, notes, created_at)
+  - attendance_records (id, session_id, student_id, status CHECK IN ('present','absent','late'), marked_at, marked_by)
+- Derivations:
+  - Series completion % per student = present sessions / total sessions for the course (computed on-demand; optional cache column for reporting)
+- API:
+  - POST /api/admin/courses/:courseId/sessions (create session)
+  - GET /api/admin/courses/:courseId/sessions (list sessions)
+  - POST /api/admin/sessions/:sessionId/attendance (bulk mark attendance)
+  - GET /api/admin/courses/:courseId/attendance/summary (series-level stats)
+
+### Reporting and Bulk Operations
+- Analytics Endpoints:
+  - GET /api/admin/analytics/registrations-by-series (counts + lists)
+  - GET /api/admin/analytics/registrations-by-status (counts + lists)
+- Bulk Operations (checkbox selection in UI):
+  - POST /api/admin/registrations/bulk-update (status, fields)
+  - POST /api/admin/registrations/bulk-delete
+- Series Archival:
+  - POST /api/admin/series/:id/archive (moves to Completed Series view)
+  - GET /api/admin/series/completed (list archived)
+  - Archival is non-destructive; data retained for reporting.
+
+### Admin UI Enhancements
+- Registrations Page:
+  - Add Registration ID as first column; show in modals and confirmation dialogs; include in CSV export.
+  - Fix Status and Series filters (ensure filter predicate and option population match API data).
+- Reporting Dashboard:
+  - Loads analytics on navigation (no realtime push); checkbox-driven bulk actions.
+- Attendance UI:
+  - Mobile-first session list and student checklist for marking present/absent/late.
+
+### Data Integrity and Audit
+- Ensure unique primary keys for registrations; verify no insert path reuses IDs.
+- Consider UNIQUE(student_id, course_id) on completed payments if business rules require single active registration per course.
+- Optional audit trail for bulk operations (admin_user_id, action, payload, timestamp) to support reversibility.

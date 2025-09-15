@@ -112,3 +112,86 @@
    - Expected: No “Failed to select course” toast after navigation; form renders; console shows “Selecting course…” and “Course selected …”.
 3. If admin reset actions were performed, repeat step 2; the refreshed list prevents stale data mismatches.
 4. Observe console for any API or parsing logs; they should not prevent successful navigation.
+
+---
+
+## Post-First-Class Feedback (Admin Portal) — Sept 2025
+- Duplicate registrations observed for the same course with the same displayed ID
+- Status filter not working on registrations page
+- "Failed to export registrations" error when clicking Export All
+- Dance Series filter not working
+- Some registrations still show pending even after confirmation
+- Need registration ID shown prominently across Admin UI (tables, detail modals, confirmation dialogs, CSV export)
+
+## Clarified Requirements
+- Attendance tracking:
+  - Track both per-session attendance and overall series completion
+  - Attendance is for records only (does not affect payment status)
+  - Mobile-friendly interface for marking during class
+- Series cleanup:
+  - Move finished series to a "Completed Series" section (archive, do not delete)
+- Reporting dashboard:
+  - Refresh on navigation to the page (no real-time push needed)
+  - Checkbox-based selection for bulk operations
+
+## Implementation Plan (Phased)
+1) Phase 1: Critical Fixes
+   - Investigate duplicate registration issue (same ID display) and prevent duplicates
+   - Fix Status and Series filters in admin UI
+   - Repair CSV Export (server route + client trigger)
+   - Ensure payment confirmation clears stale "pending" in the UI/model
+   - Add Registration ID prominently across Admin UI and CSV
+
+2) Phase 2: Reporting & Bulk Operations
+   - APIs for analytics (counts/lists by series and status)
+   - Admin reporting dashboard with on-demand refresh
+   - Checkbox-based bulk edit/delete actions
+   - Series archival (move to Completed)
+
+3) Phase 3: Attendance Tracking
+   - Schema: class_sessions (per-date), attendance_records (per-student per-session)
+   - API endpoints for attendance CRUD
+   - Mobile-first attendance UI and summary reports (per-session and % series completion)
+
+4) Phase 4: Enhanced Admin Experience
+   - Completed Series management surface
+   - Bulk communications, additional quality-of-life improvements
+
+5) Phase 5: Testing & Validation
+   - Validate duplicate-prevention and filter/export fixes with real data
+   - Verify reporting accuracy and attendance workflow
+   - UAT in production deployment
+
+---
+
+### Phase 1 — Critical Fixes Implemented (Sept 2025)
+- Server
+  - Added CSV export endpoint: `GET /api/admin/registrations/export?course_id=&payment_status=` that:
+    - Applies filters server-side (course_id, payment_status)
+    - Generates a properly escaped CSV (quotes/commas/newlines) with headers and ISO date-based filename
+  - Added de-duplication guard in `POST /api/register`:
+    - If a completed registration already exists for (student, course) → block with error
+    - If a pending registration exists → return that registration ID instead of creating a duplicate (idempotent)
+- Admin UI
+  - Display Registration ID across UI:
+    - Recent Registrations table now shows ID
+    - Registrations table includes ID as the first column
+    - Registration Details modal shows “Registration ID”
+  - Fixed Registrations “Dance Series” filter with type-safe comparison: `Number(r.course_id) === Number(filter)`
+  - “Export Data/Export All” now opens server CSV export and preserves current filters
+  - Cache-busted admin assets: `admin.js?v=12`
+- Files Touched
+  - `public/js/admin.js` (ID columns, filter fix, export wiring, modal details)
+  - `public/admin.html` (cache-bust to v=12)
+  - `server.js` (CSV export route, registration de-duplication)
+- Deployment Plan
+  - Commit and push to `main` to trigger Railway deploy; validate CSV export, filters, and de-dup workflow in production
+
+### Validation Plan (Post-Deploy)
+1. Hard refresh admin, confirm `js/admin.js?v=12` loads.
+2. On Registrations:
+   - Set Course and Status filters; click “Export All” → CSV downloads with matching rows.
+   - Approve a pending registration → row status updates to completed on refresh.
+3. Attempt duplicate registration with same student email and same course:
+   - If one completed exists → server returns error.
+   - If one pending exists → server returns existing `registrationId` with `deduped: true`.

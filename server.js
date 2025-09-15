@@ -793,6 +793,31 @@ app.post('/api/register', asyncHandler(async (req, res) => {
         student = { id: newStudentId, email, first_name: effectiveFirstName || 'Student', last_name: effectiveLastName || '' };
     }
     
+    // De-duplication guard: prevent multiple registrations for the same student and course
+    // 1) If a completed registration exists, block a new registration
+    const existingCompleted = await dbConfig.get(
+        'SELECT id FROM registrations WHERE student_id = $1 AND course_id = $2 AND payment_status = \'completed\' LIMIT 1',
+        [student.id, course_id]
+    );
+    if (existingCompleted) {
+        console.log('⚠️ Duplicate registration attempt (already completed):', { student_id: student.id, course_id });
+        return res.status(400).json({ error: 'You are already registered and paid for this course' });
+    }
+    // 2) If a pending registration exists, return it instead of creating a duplicate
+    const existingPending = await dbConfig.get(
+        'SELECT id FROM registrations WHERE student_id = $1 AND course_id = $2 AND payment_status = \'pending\' ORDER BY registration_date DESC LIMIT 1',
+        [student.id, course_id]
+    );
+    if (existingPending) {
+        console.log('ℹ️ Returning existing pending registration', { id: existingPending.id, student_id: student.id, course_id });
+        return res.json({ 
+            success: true, 
+            registrationId: existingPending.id, 
+            studentId: student.id,
+            deduped: true
+        });
+    }
+
     // Create registration
     const registrationResult = await dbConfig.run(`
         INSERT INTO registrations (
@@ -852,6 +877,82 @@ app.get('/api/registrations', requireAuth, asyncHandler(async (req, res) => {
     
     const registrations = await dbConfig.all(query, params);
     res.json(registrations);
+}));
+
+/**
+ * Admin CSV export for registrations
+ * GET /api/admin/registrations/export?course_id=&payment_status=
+ */
+app.get('/api/admin/registrations/export', requireAuth, asyncHandler(async (req, res) => {
+    try {
+        const { course_id, payment_status } = req.query;
+
+        let query = `
+            SELECT r.*, s.first_name, s.last_name, s.email, s.phone, s.dance_experience, s.instagram_handle AS instagram_id,
+                   c.name as course_name
+            FROM registrations r
+            LEFT JOIN students s ON r.student_id = s.id
+            LEFT JOIN courses c ON r.course_id = c.id
+        `;
+        const params = [];
+        const conditions = [];
+        if (course_id) {
+            conditions.push('r.course_id = $' + (params.length + 1));
+            params.push(course_id);
+        }
+        if (payment_status) {
+            conditions.push('r.payment_status = $' + (params.length + 1));
+            params.push(payment_status);
+        }
+        if (conditions.length > 0) {
+            query += ' WHERE ' + conditions.join(' AND ');
+        }
+        query += ' ORDER BY r.registration_date DESC';
+
+        const rows = await dbConfig.all(query, params);
+
+        // CSV helpers
+        const esc = (v) => {
+            if (v === null || v === undefined) return '';
+            const s = String(v);
+            const needsQuotes = s.includes(',') || s.includes('\n') || s.includes('"');
+            return needsQuotes ? `"${s.replace(/"/g, '""')}"` : s;
+        };
+
+        const headers = ['Registration ID','Name','Email','Phone','Instagram ID','Dance Experience','Course','Registration Type','Amount','Payment Status','Date'];
+        const lines = [headers.join(',')];
+
+        for (const r of rows) {
+            const name = [r.first_name, r.last_name].filter(Boolean).join(' ').trim();
+            const amountStr = (typeof r.payment_amount === 'number')
+                ? r.payment_amount.toFixed(2)
+                : (r.payment_amount || '');
+            const line = [
+                esc(`#${r.id}`),
+                esc(name),
+                esc(r.email || ''),
+                esc(r.phone || ''),
+                esc(r.instagram_id || ''),
+                esc(r.dance_experience || ''),
+                esc(r.course_name || 'Drop-in Class'),
+                esc(r.registration_type || ''),
+                esc(amountStr),
+                esc(r.payment_status || ''),
+                esc(new Date(r.registration_date).toLocaleDateString())
+            ].join(',');
+            lines.push(line);
+        }
+
+        const csv = lines.join('\n');
+        const filename = `registrations-${new Date().toISOString().slice(0,10)}.csv`;
+
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.send(csv);
+    } catch (err) {
+        console.error('❌ CSV export failed:', err);
+        res.status(500).json({ error: 'Failed to export registrations' });
+    }
 }));
 
 // Alias endpoint for admin to fetch registrations (same behavior as /api/registrations)
