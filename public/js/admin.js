@@ -361,6 +361,7 @@ class AdminDashboard {
                 </tbody>
             </table>
         `;
+        container.innerHTML = '';
         container.appendChild(table);
     }
 
@@ -582,6 +583,7 @@ class AdminDashboard {
                 </tbody>
             </table>
         `;
+        container.innerHTML = '';
         container.appendChild(table);
     }
 
