@@ -40,7 +40,7 @@ async function initializeDatabase() {
         
         // Run migration if in production (non-blocking so server can start listening)
         if (process.env.NODE_ENV === 'production') {
-            const { migrateToPostgres } = require('./migrate-to-postgres');
+            const { migrateToPostgres } = require('./scripts/migrate-to-postgres');
             migrateToPostgres()
                 .then(() => console.log('✅ Background migration completed'))
                 .catch((err) => console.error('❌ Background migration failed:', err));

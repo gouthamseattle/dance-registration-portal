@@ -7,13 +7,20 @@
 dance-registration-portal/
 ├── server.js                 # Main Express server
 ├── database-config.js        # Database abstraction layer
-├── migrate-to-postgres.js    # Production migration script
-├── create-admin.js          # Admin user creation utility
+├── scripts/                  # Utility scripts and maintenance tasks
+│   ├── migrate-to-postgres.js    # Production migration script
+│   ├── migrate-slots-schema.js   # Slot schema migration helper
+│   ├── setup.js                  # Local setup/bootstrap
+│   ├── clear-courses.js          # Admin maintenance script
+│   └── create-admin.js           # Admin user creation utility
 ├── public/                  # Static frontend files
 │   ├── index.html          # Student registration portal
 │   ├── admin.html          # Admin dashboard
 │   ├── css/               # Stylesheets
 │   └── js/                # Client-side JavaScript
+├── assets/
+│   └── media/             # Loose media assets (not part of app)
+├── docs/                  # Project documentation
 └── database/              # SQLite database (development)
 ```
 

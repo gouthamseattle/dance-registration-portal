@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Dance Registration Portal — System Architecture and Design</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; line-height: 1.38; color: #111; }
+  h1 { font-size: 28px; margin: 24px 0 8px; }
+  h2 { font-size: 22px; margin: 22px 0 6px; }
+  h3 { font-size: 18px; margin: 18px 0 6px; }
+  p { margin: 8px 0; }
+  ul { margin: 6px 0 12px 22px; }
+  ol { margin: 6px 0 12px 22px; }
+  li { margin: 3px 0; }
+  .callout { background: #f6f8fa; border-left: 4px solid #0a84ff; padding: 10px 12px; margin: 12px 0; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  table { border-collapse: collapse; width: 100%; margin: 10px 0 16px; }
+  th, td { border: 1px solid #ddd; padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: #f1f1f1; }
+  .small { color: #555; }
+</style>
+</head>
+<body>
+<h1>Dance Registration Portal — System Architecture and Design</h1>
+<p class="small">Audience: Non‑frontend stakeholders who need a clear, end‑to‑end understanding of how the portal is built and operates.</p>
+
+<h2>1) High‑Level Overview</h2>
+<div class="callout">
+  <strong>Summary:</strong> Classic 3‑tier web app.
+  <ul>
+    <li><strong>Frontend:</strong> Static HTML/CSS/JS (no framework), served by Express.</li>
+    <li><strong>Backend:</strong> Node.js (Express) REST API with session‑based admin auth.</li>
+    <li><strong>Database:</strong> SQLite in development, PostgreSQL on Railway in production.</li>
+  </ul>
+</div>
+
+<div class="grid">
+  <div>
+    <h3>Runtime Components</h3>
+    <ul>
+      <li>Express server (single process)</li>
+      <li>DatabaseConfig abstraction (switches SQLite/Postgres)</li>
+      <li>Nodemailer email transport (SMTP/Gmail)</li>
+      <li>Venmo/PayPal integrations (client‑side)</li>
+    </ul>
+  </div>
+  <div>
+    <h3>Key Properties</h3>
+    <ul>
+      <li>Static assets and API served by the same Express app</li>
+      <li>Slot‑based course architecture (time, capacity, pricing per slot)</li>
+      <li>Server computes <em>schedule_info</em> from slots for consistent UI</li>
+      <li>Booleans normalized across SQLite (0/1) and Postgres (true/false)</li>
+    </ul>
+  </div>
+</div>
+
+<h2>2) Deployment Architecture</h2>
+<table>
+  <tr><th>Environment</th><th>Details</th></tr>
+  <tr>
+    <td><strong>Local Development</strong></td>
+    <td>
+      <ul>
+        <li>Express server + SQLite file database</li>
+        <li>Static <code>public/</code> served by Express</li>
+        <li>Run with <code>npm run dev</code> (nodemon)</li>
+      </ul>
+    </td>
+  </tr>
+  <tr>
+    <td><strong>Production (Railway)</strong></td>
+    <td>
+      <ul>
+        <li>Auto‑deploy on <code>git push</code></li>
+        <li>PostgreSQL via Railway (<code>DATABASE_URL</code>)</li>
+        <li>Health checks via <code>railway.toml</code></li>
+        <li>Email transport auto‑detected (service/host/Gmail fallback)</li>
+      </ul>
+    </td>
+  </tr>
+</table>
+
+<h2>3) Database Design</h2>
+<p>Core entities and relationships:</p>
+<ul>
+  <li><strong>Students</strong> (1) —&gt; (many) <strong>Registrations</strong></li>
+  <li><strong>Courses</strong> (1) —&gt; (many) <strong>Registrations</strong></li>
+  <li><strong>Courses</strong> (1) —&gt; (many) <strong>Course Slots</strong> (1) —&gt; (many) <strong>Course Pricing</strong></li>
+</ul>
+
+<table>
+  <tr><th>Table</th><th>Selected Columns</th><th>Description</th></tr>
+  <tr>
+    <td>students</td>
+    <td>id, email (unique), first_name, last_name, phone, dance_experience, instagram_handle, created_at</td>
+    <td>Student contact and profile data</td>
+  </tr>
+  <tr>
+    <td>courses</td>
+    <td>id, name, description, course_type, start_date, end_date, instructor, schedule_info, is_active</td>
+    <td>Top‑level course/series record</td>
+  </tr>
+  <tr>
+    <td>registrations</td>
+    <td>id, student_id, course_id, payment_status, payment_amount, payment_method, registration_date</td>
+    <td>Student’s spot with payment tracking</td>
+  </tr>
+  <tr>
+    <td>course_slots</td>
+    <td>id, course_id, slot_name, difficulty_level, capacity, day_of_week, practice_date, start_time, end_time, location</td>
+    <td>Per‑slot time/capacity/location (source of truth for schedule)</td>
+  </tr>
+  <tr>
+    <td>course_pricing</td>
+    <td>id, course_slot_id, pricing_type (full_package/drop_in), price</td>
+    <td>Per‑slot pricing</td>
+  </tr>
+</table>
+
+<div class="callout">
+  <strong>Important:</strong> The API computes <em>schedule_info</em> from <code>course_slots</code> so all UIs render a consistent, time‑rich schedule string.
+</div>
+
+<h2>4) Backend API (Express)</h2>
+<h3>Authentication</h3>
+<ul>
+  <li>POST /api/admin/login — session‑based login</li>
+  <li>POST /api/admin/logout — logout</li>
+  <li>GET  /api/admin/status — check login (for UI bootstrapping)</li>
+</ul>
+
+<h3>Courses &amp; Slots</h3>
+<ul>
+  <li>GET  /api/courses?active_only=true — public course list with computed <em>schedule_info</em>, capacity, compatibility prices</li>
+  <li>POST /api/courses — create course + slots + pricing (requireAuth)</li>
+  <li>PUT  /api/courses/:id — partial update; optionally replace slots (requireAuth)</li>
+  <li>POST /api/courses/:id/slots — add slot with pricing (requireAuth)</li>
+  <li>PUT  /api/courses/:courseId/slots/:slotId — update slot + pricing (requireAuth)</li>
+  <li>DELETE /api/courses/:courseId/slots/:slotId — delete slot (guards last slot) (requireAuth)</li>
+  <li>GET /api/admin/debug/course-slots/:courseId — inspect raw slots (requireAuth)</li>
+</ul>
+
+<h3>Students &amp; Registrations</h3>
+<ul>
+  <li>POST /api/register — self‑registration (creates/updates student; inserts pending registration)</li>
+  <li>GET  /api/registrations — list registrations (requireAuth; filters: course_id, payment_status)</li>
+  <li>GET  /api/admin/registrations — alias for admin list (requireAuth)</li>
+  <li>GET  /api/admin/registrations/count — counts (total, pending, completed) (requireAuth)</li>
+  <li>PUT  /api/registrations/:id/payment — update payment (student/PayPal path)</li>
+  <li>PUT  /api/admin/registrations/:id/confirm-payment — confirm Venmo payment; triggers email (requireAuth)</li>
+  <li>POST /api/admin/registrations/:id/resend-confirmation — resend confirmation (requireAuth)</li>
+  <li>PUT  /api/admin/registrations/:id/assign-student — link student to orphaned reg (requireAuth)</li>
+  <li>GET  /api/admin/registrations/missing-contact — missing email/name list (requireAuth)</li>
+</ul>
+
+<h3>Settings &amp; Ops</h3>
+<ul>
+  <li>GET/PUT /api/settings — registration_open, venmo_username, email toggles</li>
+  <li>POST /api/generate-venmo-link — deep link and QR context</li>
+  <li>GET  /api/admin/debug-email-config — show chosen transport (no secrets)</li>
+  <li>POST /api/admin/test-email-transport — verify SMTP connectivity</li>
+  <li>POST /api/admin/reset-keep-course — clear ALL registrations; keep one course active or delete others</li>
+  <li>DELETE /api/admin/clear-all-courses — delete courses &amp; regs (destructive)</li>
+</ul>
+
+<h2>5) Frontend Components</h2>
+<div class="grid">
+  <div>
+    <h3>Student Portal</h3>
+    <ul>
+      <li>Course Cards (from /api/courses: slots, dates, pricing, availability)</li>
+      <li>Registration Form (crew‑practice name/Instagram field toggle)</li>
+      <li>Payment Section (Venmo deep link on mobile, QR on desktop)</li>
+      <li>Confirmation (summary after registration)</li>
+    </ul>
+  </div>
+  <div>
+    <h3>Admin Dashboard</h3>
+    <ul>
+      <li>Auth modal (login/logout)</li>
+      <li>Dashboard stats + recent registrations</li>
+      <li>Courses grid (capacity, schedule, create/edit, activate/deactivate)</li>
+      <li>Registrations (filters, details, quick confirm, assign student, export CSV)</li>
+      <li>Settings (registration_open, Venmo username, email notifications)</li>
+      <li>Quick Actions (reset‑keep‑course, delete others, email debug/test)</li>
+    </ul>
+  </div>
+</div>
+
+<h2>6) Admin Feature Map (Executive)</h2>
+<ul>
+  <li><strong>Open/Close Registration</strong> globally</li>
+  <li><strong>Monitor</strong> real‑time registrations &amp; revenue</li>
+  <li><strong>Confirm Payments</strong> and send emails</li>
+  <li><strong>Export</strong> rosters (CSV)</li>
+  <li><strong>Cleanup/Reset</strong> between series (keep active / delete others)</li>
+</ul>
+
+<h2>7) Security &amp; Configuration</h2>
+<ul>
+  <li>Sessions via express‑session; sameSite=lax; httpOnly</li>
+  <li>Password hashing via bcryptjs</li>
+  <li>Parameterized queries across DBs</li>
+  <li>Nodemailer with transport verification; debug endpoints expose no secrets</li>
+  <li>Env: NODE_ENV, DATABASE_URL (prod), EMAIL_*, SESSION_SECRET</li>
+</ul>
+
+<h2>8) Key Data Flows (Readable Summaries)</h2>
+<h3>8.1 Student Registration</h3>
+<ol>
+  <li>Student selects course from /api/courses</li>
+  <li>Submits form → server creates/updates student and inserts pending registration</li>
+  <li>Venmo link generated (mobile) or QR presented (desktop)</li>
+  <li>Student pays; page shows confirmation summary; admin later confirms</li>
+</ol>
+
+<h3>8.2 Admin Confirm Payment + Email</h3>
+<ol>
+  <li>Admin clicks Quick Confirm / Confirm Venmo</li>
+  <li>Server sets payment_status=completed</li>
+  <li>Server loads course+slots, computes schedule_info</li>
+  <li>Email queued/sent via Nodemailer (non‑blocking)</li>
+</ol>
+
+<h2>9) Admin Ops Cheat‑Sheet (with SQL)</h2>
+<h3>Track Students for a Series</h3>
+<ul>
+  <li>Registrations → filter by Course; optionally by Status</li>
+  <li>Export CSV for rosters</li>
+</ul>
+<pre class="small">SELECT r.id, r.registration_date, r.payment_status, r.payment_amount,
+       s.email, s.first_name, s.last_name
+FROM registrations r
+JOIN courses c ON c.id = r.course_id
+LEFT JOIN students s ON s.id = r.student_id
+WHERE c.name ILIKE 'Dreamers Crew Practice - Sept 12'
+ORDER BY r.id;</pre>
+
+<h3>Consolidation After Closing</h3>
+<ul>
+  <li>Toggle registration_open OFF</li>
+  <li>Export CSV roster; reconcile pending vs completed</li>
+</ul>
+<pre class="small">SELECT c.name,
+       SUM(CASE WHEN r.payment_status='completed' THEN r.payment_amount ELSE 0 END) AS revenue
+FROM registrations r
+JOIN courses c ON c.id = r.course_id
+WHERE c.name ILIKE 'Dreamers Crew Practice - Sept 12'
+GROUP BY c.name;</pre>
+
+<h3>Fix Wrong/Incomplete Registrations</h3>
+<ul>
+  <li>Assign student: Admin → Registrations → Assign Student</li>
+  <li>Delete wrong entry (until UI delete exists): <code>DELETE FROM registrations WHERE id = 123;</code></li>
+</ul>
+
+<h2>10) Files &amp; Key Modules</h2>
+<ul>
+  <li><code>server.js</code> — Express app, routes, middleware, date helpers</li>
+  <li><code>database-config.js</code> — DB abstraction (SQLite dev, Postgres prod)</li>
+  <li><code>utils/schedule.js</code> — compute schedule_info; fetch course with slots</li>
+  <li><code>utils/mailer.js</code> — Nodemailer transport and utilities</li>
+  <li><code>public/index.html</code> + <code>public/js/registration.js</code> — Student portal</li>
+  <li><code>public/admin.html</code> + <code>public/js/admin.js</code> — Admin dashboard</li>
+</ul>
+
+</body>
+</html>

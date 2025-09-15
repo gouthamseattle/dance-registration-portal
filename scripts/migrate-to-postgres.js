@@ -167,7 +167,7 @@ async function createTables(client) {
 async function migrateData(client) {
     console.log('📦 Migrating data from SQLite...');
     
-    const sqlitePath = path.join(__dirname, 'database', 'registrations.db');
+    const sqlitePath = path.join(__dirname, '..', 'database', 'registrations.db');
     
     // Check if SQLite database exists
     const fs = require('fs');

@@ -93,7 +93,7 @@ EMAIL_PASS=your-app-password
 ```
 
 ### Schema Management
-- **Migration Script**: `migrate-to-postgres.js`
+- **Migration Script**: `scripts/migrate-to-postgres.js`
 - **Auto-Migration**: Runs on production deployment
 - **Schema Sync**: Maintains compatibility between SQLite and PostgreSQL
 

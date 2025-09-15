@@ -42,6 +42,7 @@
 - PostgreSQL managed by Railway
 - HTTPS domain for production
 - Cache-busting added for client assets to mitigate stale caching
+- Build pipeline stabilized: run DB migrations at app start (not during build); removed npm build script; sqlite3 is dev-only and lazy-loaded
 
 ### ✅ Security Implementation
 - Password hashing (bcryptjs)
@@ -82,7 +83,7 @@
 - Cache-busting bumped for admin assets:
   - admin.html -> js/admin.js?v=5, css/admin-styles.css?v=3
 
-## What Changed Recently (Server + Frontend)
+## What Changed Recently (Server + Frontend + Repo)
 
 ### Server
 - GET /api/courses computes schedule_info from slots + course dates
@@ -109,12 +110,18 @@
   - Guard errors in showRegistrationForm UI prep (non-blocking)
   - Cache-busted registration.js to v=49
 
+### Repository
+- Repository reorganization: moved utility scripts to scripts/, docs/ to docs/, loose media to assets/media/.
+- Updated references: server now requires ./scripts/migrate-to-postgres; npm run setup points to scripts/setup.js.
+- Fixed SQLite path in scripts/migrate-to-postgres.js; aligned scripts/setup.js to use bcryptjs to match dependencies.
+
 ### Commits Deployed
 - 45ddfb5 — Show slot times on cards and form; add fallback to course-level times; fix duplicate variable declarations
 - 75511bb — Compute schedule_info on server from slots (include start/end times and dates) and cache-bust registration.js
 - 43aeef1 — Admin UI: make loading overlay non-interactive; add click logging; bump cache-busters (admin.js v=5, admin-styles.css v=3). Update memory bank with email workflow and UI fixes.
 - 0ab7057 — Fix re-selection bug: numeric ID matching, stale data guard, cache-bust registration.js to v=48
 - 5e8f249 — Suppress spurious selection error toast; add in-progress guards; robust field toggling; cache-bust to v=49
+- 37e19a4 — Build fix: run DB migrations at app start; remove build script; lazy-load sqlite3; move sqlite3 to devDependencies
 
 ## Current Status Overview
 

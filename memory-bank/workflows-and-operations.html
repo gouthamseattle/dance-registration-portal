@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Dance Registration Portal — Workflows and Operations (User + Admin)</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; line-height: 1.45; color: #111; }
+  h1 { font-size: 28px; margin: 24px 0 8px; }
+  h2 { font-size: 22px; margin: 22px 0 8px; }
+  h3 { font-size: 18px; margin: 18px 0 6px; }
+  p { margin: 8px 0; }
+  ul { margin: 6px 0 12px 22px; }
+  ol { margin: 6px 0 12px 22px; }
+  li { margin: 4px 0; }
+  .callout { background: #f6f8fa; border-left: 4px solid #0a84ff; padding: 10px 12px; margin: 12px 0; }
+  .success { color: #057a55; }
+  .warn { color: #c05621; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .step-card { border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px 14px; }
+  .muted { color: #666; }
+  table { border-collapse: collapse; width: 100%; margin: 10px 0 16px; }
+  th, td { border: 1px solid #ddd; padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: #f1f1f1; }
+  code { background: #f6f8fa; padding: 2px 4px; border-radius: 4px; }
+  .label { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 12px; }
+  .label-green { background: #e6f6ee; color: #0a7a55; }
+  .label-orange { background: #fff4e5; color: #b44e00; }
+  .label-red { background: #ffe8e6; color: #b00020; }
+</style>
+</head>
+<body>
+<h1>Dance Registration Portal — Workflows and Operations (User + Admin)</h1>
+<p class="muted">Plain-language, diagram-like layouts optimized for Pages export (no code blocks).</p>
+
+<h2>Legend</h2>
+<ul>
+  <li><span class="label label-green">Green</span> = success</li>
+  <li><span class="label label-orange">Orange</span> = pending/action required</li>
+  <li><span class="label label-red">Red</span> = error</li>
+</ul>
+
+<hr>
+
+<h2>1) Student Workflow (End‑to‑End)</h2>
+
+<h3>1.1 Registration Journey</h3>
+<div class="grid">
+  <div class="step-card">
+    <h4>Discover &amp; Select</h4>
+    <ol>
+      <li>Open link or scan QR (shared by instructor).</li>
+      <li>Browse available dance series (cards with schedule, price, capacity).</li>
+      <li>Tap “Register Now” on the desired series.</li>
+    </ol>
+  </div>
+  <div class="step-card">
+    <h4>Fill &amp; Submit</h4>
+    <ol>
+      <li>Fill contact info (crew practice switches Instagram to Full Name field).</li>
+      <li>Choose payment option when applicable (full series / per class).</li>
+      <li>Submit. Status is now <span class="label label-orange">pending</span>.</li>
+    </ol>
+  </div>
+</div>
+
+<div class="grid">
+  <div class="step-card">
+    <h4>Payment</h4>
+    <ol>
+      <li>Mobile: Open Venmo app with amount + note prefilled.</li>
+      <li>Desktop: Scan QR or send manually to instructor Venmo with note.</li>
+      <li>Tap “I’ve Sent the Payment”.</li>
+    </ol>
+  </div>
+  <div class="step-card">
+    <h4>Confirmation</h4>
+    <ol>
+      <li>See on‑screen confirmation summary.</li>
+      <li>Admin will review and mark payment complete.</li>
+      <li>When completed, a confirmation email is sent (if enabled).</li>
+    </ol>
+  </div>
+</div>
+
+<div class="callout">
+  <strong>Payment Note Example:</strong> <code>Dance Registration #123 — Dreamers Crew Practice — Sept 12</code>
+</div>
+
+<hr>
+
+<h2>2) Admin Operations (Lifecycle)</h2>
+
+<h3>2.1 Create Dance Series &amp; Open Registration</h3>
+<div class="grid">
+  <div class="step-card">
+    <h4>Steps</h4>
+    <ol>
+      <li>Log in → go to <strong>Courses</strong>.</li>
+      <li>Click <strong>Create Dance Series</strong>.</li>
+      <li>Add <strong>Slot</strong>: capacity, time(s), location.</li>
+      <li>Pricing:
+        <ul>
+          <li>Dance Series: full package + per class</li>
+          <li>Crew Practice: drop‑in price + practice_date</li>
+        </ul>
+      </li>
+      <li>Save course; go to <strong>Settings</strong> and toggle <strong>Registration Open = ON</strong>.</li>
+    </ol>
+  </div>
+  <div class="step-card">
+    <h4>Result</h4>
+    <ul>
+      <li>Course appears on student portal.</li>
+      <li>Capacity and price derive from the defined slot(s).</li>
+      <li><em>schedule_info</em> computed from slots for consistent UI.</li>
+    </ul>
+  </div>
+</div>
+
+<h3>2.2 Track Students &amp; Confirm Payments</h3>
+<div class="grid">
+  <div class="step-card">
+    <h4>Track</h4>
+    <ol>
+      <li>Go to <strong>Registrations</strong>.</li>
+      <li>Filter by course and/or status.</li>
+      <li>Use CSV export for roster consolidation.</li>
+    </ol>
+  </div>
+  <div class="step-card">
+    <h4>Confirm</h4>
+    <ol>
+      <li>When Venmo received, click <strong>Quick Confirm</strong> or <strong>Mark Paid</strong>.</li>
+      <li>Status becomes <span class="label label-green">completed</span>.</li>
+      <li>System sends email confirmation (if enabled).</li>
+    </ol>
+  </div>
+</div>
+
+<div class="callout">
+  <strong>Missing Contact?</strong> Use <strong>Assign Student</strong> on a row to link email/name to a registration.
+</div>
+
+<h3>2.3 Consolidation After Closing Registration</h3>
+<div class="grid">
+  <div class="step-card">
+    <h4>Close &amp; Export</h4>
+    <ol>
+      <li>Settings → <strong>Registration Open = OFF</strong>.</li>
+      <li>Registrations → filter target course → <strong>Export CSV</strong>.</li>
+      <li>Reconcile pending vs completed; follow up as needed.</li>
+    </ol>
+  </div>
+  <div class="step-card">
+    <h4>Optional Analytics (SQL)</h4>
+    <pre class="muted">SELECT c.name,
+       SUM(CASE WHEN r.payment_status='completed' THEN r.payment_amount ELSE 0 END) AS revenue
+FROM registrations r
+JOIN courses c ON c.id = r.course_id
+WHERE c.name ILIKE 'Dreamers Crew Practice - Sept 12'
+GROUP BY c.name;</pre>
+  </div>
+</div>
+
+<h3>2.4 Reset Between Series</h3>
+<div class="grid">
+  <div class="step-card">
+    <h4>Quick Actions</h4>
+    <ul>
+      <li><strong>Reset Data (Keep Active Course):</strong> deletes all registrations; deactivates others.</li>
+      <li><strong>Reset &amp; Delete Other Courses:</strong> deletes registrations and other courses.</li>
+    </ul>
+  </div>
+  <div class="step-card">
+    <h4>Result</h4>
+    <ul>
+      <li>Dashboard shows $0 revenue and 0 registrations.</li>
+      <li>Kept course remains active and ready for next cycle.</li>
+    </ul>
+  </div>
+</div>
+
+<h3>2.5 Fix Wrong or Incomplete Registrations</h3>
+<div class="grid">
+  <div class="step-card">
+    <h4>Assign or Delete</h4>
+    <ul>
+      <li>Assign Student to fill missing contact.</li>
+      <li>Delete incorrect entry (via SQL until UI delete is added):<br>
+        <code>DELETE FROM registrations WHERE id = 123;</code></li>
+    </ul>
+  </div>
+  <div class="step-card">
+    <h4>Best Practices</h4>
+    <ul>
+      <li>Double‑check IDs before running DELETE.</li>
+      <li>Export CSV snapshots prior to bulk changes.</li>
+    </ul>
+  </div>
+</div>
+
+<hr>
+
+<h2>3) Admin “How Do I” (Cheat‑Sheet)</h2>
+<table>
+  <tr><th>Goal</th><th>Steps</th></tr>
+  <tr>
+    <td>Track students for a series</td>
+    <td>Registrations → filter by course → export CSV</td>
+  </tr>
+  <tr>
+    <td>Reconcile payments</td>
+    <td>Filter by <em>pending</em>, confirm received payments; run revenue SQL if needed</td>
+  </tr>
+  <tr>
+    <td>Query production DB</td>
+    <td>Railway → Database → Connect → external DATABASE_URL → use psql/TablePlus</td>
+  </tr>
+  <tr>
+    <td>Reset data</td>
+    <td>Quick Actions → choose reset option; confirm dialog; verify dashboard</td>
+  </tr>
+</table>
+
+<div class="callout">
+  <strong>Missing Contact Report:</strong>
+  <pre class="muted">SELECT r.id AS registration_id, c.name AS course_name, s.email, s.first_name, s.last_name
+FROM registrations r
+LEFT JOIN students s ON s.id = r.student_id
+LEFT JOIN courses c ON c.id = r.course_id
+WHERE s.id IS NULL
+   OR COALESCE(TRIM(s.email),'')=''
+   OR (COALESCE(TRIM(s.first_name),'')='' AND COALESCE(TRIM(s.last_name),'')='');</pre>
+</div>
+
+<hr>
+
+<h2>4) Email &amp; Payment Flow (Readable)</h2>
+<ol>
+  <li>Admin confirms payment in UI.</li>
+  <li>Server updates registration to <em>completed</em>.</li>
+  <li>Server computes schedule_info from slots and prepares email payload.</li>
+  <li>Email sent via Nodemailer. Failures are logged and do not block the update.</li>
+</ol>
+
+<hr>
+
+<h2>5) Quick Start (New Admins)</h2>
+<ol>
+  <li>Create series + slot (capacity/time/location/pricing).</li>
+  <li>Settings → Registration Open = ON.</li>
+  <li>Share link or QR; watch registrations.</li>
+  <li>Confirm payments; emails will send if enabled.</li>
+  <li>At cutoff: Registration OFF → export CSV → finalize reconciliation.</li>
+  <li>Reset using Quick Actions before next series.</li>
+</ol>
+
+</body>
+</html>

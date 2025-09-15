@@ -3,6 +3,8 @@
 ## Current Work Focus
 
 ### Recently Completed (This Session)
+- ✅ Repository reorganization: moved utility scripts to scripts/, docs to docs/, loose media to assets/media; updated server.js and package.json accordingly
+- ✅ Railway build fix: run DB migrations at app start; removed NPM build script; lazy-loaded sqlite3 for dev only; moved sqlite3 to devDependencies; pushed to Railway to trigger deploy
 - ✅ Admin payment approval flow finalized with confirmation email
   - Server PUT /api/admin/registrations/:id/confirm-payment marks payment as completed and sends confirmation email via Nodemailer when email_notifications_enabled is true
   - Email payload includes: courseName, computed schedule_info, amount, registrationId, studentName
@@ -46,7 +48,7 @@
 
 ## Next Steps and Priorities
 - Immediate
-  - Deploy to Railway and validate in production:
+  - Validate production after latest deployment (build fix applied):
     - Admin UI loads js/admin.js?v=5 and css/admin-styles.css?v=3 (Network tab)
     - Clicking “Quick Confirm Payment” logs console.info and triggers backend, returning email flags
     - Emails are sent when email_notifications_enabled is true; check server logs for ✉️ Sent or any errors
