@@ -911,7 +911,7 @@ app.get('/api/registrations', requireAuth, asyncHandler(async (req, res) => {
     const { course_id, payment_status } = req.query;
     
     let query = `
-        SELECT r.*, s.first_name, s.last_name, s.email, s.phone, s.dance_experience, s.instagram_handle AS instagram_id,
+        SELECT r.*, s.id AS student_id, s.first_name, s.last_name, s.email, s.phone, s.dance_experience, s.instagram_handle AS instagram_id,
                c.name as course_name, c.course_type, c.price
         FROM registrations r
         LEFT JOIN students s ON r.student_id = s.id
@@ -1022,7 +1022,7 @@ app.get('/api/admin/registrations', requireAuth, asyncHandler(async (req, res) =
     const { course_id, payment_status } = req.query;
     
     let query = `
-        SELECT r.*, s.first_name, s.last_name, s.email, s.phone, s.dance_experience, s.instagram_handle AS instagram_id,
+        SELECT r.*, s.id AS student_id, s.first_name, s.last_name, s.email, s.phone, s.dance_experience, s.instagram_handle AS instagram_id,
                c.name as course_name, c.course_type, c.price
         FROM registrations r
         LEFT JOIN students s ON r.student_id = s.id
@@ -1254,6 +1254,17 @@ app.post('/api/admin/sessions/:sessionId/attendance', requireAuth, asyncHandler(
     }
 
     res.json({ success: true, updated: records.length });
+}));
+
+// Fetch attendance for a session
+app.get('/api/admin/sessions/:sessionId/attendance', requireAuth, asyncHandler(async (req, res) => {
+    const { sessionId } = req.params;
+    const rows = await dbConfig.all('SELECT student_id, status FROM attendance_records WHERE session_id = $1', [sessionId]);
+    const data = rows.map(r => ({
+        student_id: Number(r.student_id),
+        status: String(r.status || '').toLowerCase()
+    }));
+    res.json(data);
 }));
 
 // Attendance summary for a course (series-level)

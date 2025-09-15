@@ -312,13 +312,19 @@
         <div id="registrationsSection" class="content-section" style="display: none;">
             <div class="row">
                 <div class="col-12">
-                    <div class="d-flex justify-content-between align-items-center mb-4">
-                        <h2><i class="fas fa-users text-primary"></i> Registrations</h2>
-                        <button class="btn btn-success" onclick="admin.exportRegistrations()">
-                            <i class="fas fa-download"></i>
-                            Export All
-                        </button>
-                    </div>
+                        <div class="d-flex justify-content-between align-items-center mb-4">
+                            <h2><i class="fas fa-users text-primary"></i> Registrations</h2>
+                            <div class="btn-group">
+                                <button class="btn btn-outline-primary" onclick="admin.openAttendance()">
+                                    <i class="fas fa-clipboard-check"></i>
+                                    Manage Attendance
+                                </button>
+                                <button class="btn btn-success" onclick="admin.exportRegistrations()">
+                                    <i class="fas fa-download"></i>
+                                    Export All
+                                </button>
+                            </div>
+                        </div>
                 </div>
             </div>
 
@@ -576,6 +582,102 @@
         </div>
     </div>
 
+    <!-- Attendance Modal -->
+    <div class="modal fade" id="attendanceModal" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-clipboard-check text-primary"></i>
+                        Manage Attendance
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <!-- Course selection/info -->
+                    <div class="alert alert-info d-flex align-items-center" role="alert">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <div>
+                            Choose a Dance Series using the filter on the Registrations page before opening Attendance.
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <!-- Sessions column -->
+                        <div class="col-lg-5 mb-3">
+                            <div class="card">
+                                <div class="card-header d-flex justify-content-between align-items-center">
+                                    <h6 class="mb-0">Class Sessions</h6>
+                                    <button class="btn btn-sm btn-outline-primary" id="createSessionBtn">
+                                        <i class="fas fa-plus"></i> New Session
+                                    </button>
+                                </div>
+                                <div class="card-body" id="attendanceSessions">
+                                    <div class="text-muted">No series selected.</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Students/marking column -->
+                        <div class="col-lg-7 mb-3">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h6 class="mb-0">Students</h6>
+                                </div>
+                                <div class="card-body" id="attendanceStudents">
+                                    <div class="text-muted">Select a session to mark attendance.</div>
+                                </div>
+                                <div class="card-footer d-flex justify-content-end">
+                                    <button class="btn btn-success" id="saveAttendanceBtn" disabled>
+                                        <i class="fas fa-save"></i> Save Attendance
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Hidden create session form -->
+                    <div class="card mt-3" id="createSessionForm" style="display: none;">
+                        <div class="card-body">
+                            <div class="row g-2">
+                                <div class="col-md-3">
+                                    <label class="form-label">Session Date *</label>
+                                    <input type="date" class="form-control" id="att_session_date">
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-label">Start Time</label>
+                                    <input type="time" class="form-control" id="att_start_time">
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-label">End Time</label>
+                                    <input type="time" class="form-control" id="att_end_time">
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">Location</label>
+                                    <input type="text" class="form-control" id="att_location" placeholder="Studio A">
+                                </div>
+                                <div class="col-md-12">
+                                    <label class="form-label">Notes</label>
+                                    <input type="text" class="form-control" id="att_notes" placeholder="Optional notes">
+                                </div>
+                            </div>
+                            <div class="mt-3 d-flex justify-content-end">
+                                <button class="btn btn-secondary me-2" id="cancelCreateSessionBtn">Cancel</button>
+                                <button class="btn btn-primary" id="submitCreateSessionBtn">
+                                    <i class="fas fa-save"></i> Create Session
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <small class="text-muted me-auto">Attendance is for records only and does not affect payment.</small>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
     <!-- Toast Notifications -->
     <div class="toast-container position-fixed bottom-0 end-0 p-3">
         <div id="errorToast" class="toast" role="alert">
@@ -599,6 +701,6 @@
 
     <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="js/admin.js?v=13"></script>
+    <script src="js/admin.js?v=15"></script>
 </body>
 </html>

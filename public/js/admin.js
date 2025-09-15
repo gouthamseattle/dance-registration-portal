@@ -2054,6 +2054,389 @@ Questions? Reply to this message`;
             startDateField.dispatchEvent(new Event('change'));
         }
     }
+
+    // =========================
+    // Attendance UI (Phase 3)
+    // =========================
+
+    async openAttendance() {
+        const modalEl = document.getElementById('attendanceModal');
+        const modal = new bootstrap.Modal(modalEl);
+        modal.show();
+
+        const courseIdStr = document.getElementById('regCourseFilter')?.value || '';
+        const courseId = courseIdStr ? Number(courseIdStr) : null;
+
+        // Initialize attendance state
+        this.attendance = {
+            courseId,
+            sessionId: null,
+            sessions: [],
+            roster: [],
+            marks: new Map()
+        };
+
+        const sessionsEl = document.getElementById('attendanceSessions');
+        const studentsEl = document.getElementById('attendanceStudents');
+        const saveBtn = document.getElementById('saveAttendanceBtn');
+        const createSessionBtn = document.getElementById('createSessionBtn');
+        const createSessionForm = document.getElementById('createSessionForm');
+        const cancelCreateSessionBtn = document.getElementById('cancelCreateSessionBtn');
+        const submitCreateSessionBtn = document.getElementById('submitCreateSessionBtn');
+
+        // Wire static handlers once per page lifetime
+        if (!modalEl._attendanceWired) {
+            modalEl._attendanceWired = true;
+
+            if (createSessionBtn) {
+                createSessionBtn.addEventListener('click', () => {
+                    if (!this.attendance?.courseId) {
+                        this.showError('Select a Dance Series in the Registrations filter before creating a session.');
+                        return;
+                    }
+                    createSessionForm.style.display = '';
+                });
+            }
+            if (cancelCreateSessionBtn) {
+                cancelCreateSessionBtn.addEventListener('click', () => {
+                    createSessionForm.style.display = 'none';
+                    this.resetCreateSessionForm();
+                });
+            }
+            if (submitCreateSessionBtn) {
+                submitCreateSessionBtn.addEventListener('click', () => this.createSession());
+            }
+            if (saveBtn) {
+                saveBtn.addEventListener('click', () => this.saveAttendance());
+            }
+        }
+
+        // Reset UI defaults
+        if (saveBtn) saveBtn.disabled = true;
+        if (studentsEl) studentsEl.innerHTML = '<div class="text-muted">Select a session to mark attendance.</div>';
+        if (createSessionForm) createSessionForm.style.display = 'none';
+
+        // Load data based on course selection
+        if (!courseId) {
+            if (sessionsEl) sessionsEl.innerHTML = '<div class="text-muted">No series selected.</div>';
+            return;
+        }
+
+        try {
+            await Promise.all([
+                this.loadAttendanceSessions(courseId),
+                this.loadAttendanceRoster(courseId)
+            ]);
+        } catch (err) {
+            console.error('Attendance load error:', err);
+            this.showError('Failed to load attendance data');
+        }
+    }
+
+    resetCreateSessionForm() {
+        const fields = ['att_session_date', 'att_start_time', 'att_end_time', 'att_location', 'att_notes'];
+        fields.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.value = '';
+        });
+    }
+
+    async createSession() {
+        try {
+            if (!this.attendance?.courseId) {
+                this.showError('No course selected');
+                return;
+            }
+            const body = {
+                session_date: document.getElementById('att_session_date').value,
+                start_time: document.getElementById('att_start_time').value || null,
+                end_time: document.getElementById('att_end_time').value || null,
+                location: document.getElementById('att_location').value || null,
+                notes: document.getElementById('att_notes').value || null
+            };
+            if (!body.session_date) {
+                this.showError('Session date is required');
+                return;
+            }
+            const res = await this.apiFetch(`/api/admin/courses/${this.attendance.courseId}/sessions`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.error || 'Failed to create session');
+            }
+            // Refresh list
+            await this.loadAttendanceSessions(this.attendance.courseId);
+            // Hide and reset form
+            document.getElementById('createSessionForm').style.display = 'none';
+            this.resetCreateSessionForm();
+            this.showSuccess('Session created');
+        } catch (e) {
+            console.error('Create session error:', e);
+            this.showError(e.message || 'Failed to create session');
+        }
+    }
+
+    async loadAttendanceSessions(courseId) {
+        const sessionsEl = document.getElementById('attendanceSessions');
+        if (!courseId) {
+            if (sessionsEl) sessionsEl.innerHTML = '<div class="text-muted">No series selected.</div>';
+            return;
+        }
+        try {
+            const res = await this.apiFetch(`/api/admin/courses/${courseId}/sessions`);
+            const sessions = await res.json();
+            this.attendance.sessions = Array.isArray(sessions) ? sessions : [];
+            this.renderAttendanceSessions();
+        } catch (e) {
+            console.error('Load sessions error:', e);
+            if (sessionsEl) sessionsEl.innerHTML = '<div class="text-danger">Failed to load sessions</div>';
+        }
+    }
+
+    renderAttendanceSessions() {
+        const sessionsEl = document.getElementById('attendanceSessions');
+        if (!sessionsEl) return;
+
+        const sessions = this.attendance?.sessions || [];
+        if (sessions.length === 0) {
+            sessionsEl.innerHTML = '<div class="text-muted">No sessions yet. Click "New Session" to create one.</div>';
+            return;
+        }
+
+        const list = document.createElement('div');
+        list.className = 'list-group';
+        list.innerHTML = sessions.map(s => {
+            const dateStr = s.session_date ? new Date(s.session_date).toLocaleDateString() : '(no date)';
+            const timeStr = [s.start_time, s.end_time].filter(Boolean).join(' - ');
+            const sub = [timeStr, s.location].filter(Boolean).join(' • ');
+            const active = Number(this.attendance.sessionId) === Number(s.id) ? ' active' : '';
+            return `
+                <a href="#" class="list-group-item list-group-item-action${active}" data-session-id="${s.id}">
+                    <div class="d-flex w-100 justify-content-between">
+                        <h6 class="mb-1">${dateStr}</h6>
+                        <small class="text-muted">#${s.id}</small>
+                    </div>
+                    ${sub ? `<small class="text-muted">${sub}</small>` : ''}
+                </a>
+            `;
+        }).join('');
+
+        sessionsEl.innerHTML = '';
+        sessionsEl.appendChild(list);
+
+        // Attach click handlers
+        list.querySelectorAll('[data-session-id]').forEach(a => {
+            a.addEventListener('click', (ev) => {
+                ev.preventDefault();
+                const id = Number(ev.currentTarget.getAttribute('data-session-id'));
+                this.selectAttendanceSession(id);
+            });
+        });
+    }
+
+    async loadAttendanceRoster(courseId) {
+        const studentsEl = document.getElementById('attendanceStudents');
+        try {
+            const res = await this.apiFetch(`/api/admin/registrations?course_id=${courseId}`);
+            const regs = await res.json();
+            // Sort roster by last_name, then first_name
+            const roster = (Array.isArray(regs) ? regs : []).map(r => ({
+                student_id: Number(r.student_id),
+                first_name: r.first_name || '',
+                last_name: r.last_name || '',
+                email: r.email || '',
+                payment_status: r.payment_status || 'pending'
+            })).sort((a, b) => {
+                const ln = (a.last_name || '').localeCompare(b.last_name || '');
+                if (ln !== 0) return ln;
+                return (a.first_name || '').localeCompare(b.first_name || '');
+            });
+            this.attendance.roster = roster;
+
+            // If a session is already selected, refresh student list with marks
+            if (this.attendance.sessionId) {
+                await this.selectAttendanceSession(this.attendance.sessionId);
+            } else if (studentsEl) {
+                studentsEl.innerHTML = '<div class="text-muted">Select a session to mark attendance.</div>';
+            }
+        } catch (e) {
+            console.error('Load roster error:', e);
+            if (studentsEl) studentsEl.innerHTML = '<div class="text-danger">Failed to load students</div>';
+        }
+    }
+
+    async selectAttendanceSession(sessionId) {
+        this.attendance.sessionId = Number(sessionId);
+        const saveBtn = document.getElementById('saveAttendanceBtn');
+        if (saveBtn) saveBtn.disabled = false;
+
+        try {
+            const res = await this.apiFetch(`/api/admin/sessions/${sessionId}/attendance`);
+            const rows = await res.json();
+            const marks = new Map();
+            (Array.isArray(rows) ? rows : []).forEach(r => {
+                const sid = Number(r.student_id);
+                const st = String(r.status || '').toLowerCase();
+                if (sid && st) marks.set(sid, st);
+            });
+            this.attendance.marks = marks;
+            this.renderAttendanceStudents();
+            // Re-render sessions to reflect active highlight
+            this.renderAttendanceSessions();
+        } catch (e) {
+            console.error('Load attendance marks error:', e);
+            this.showError('Failed to load attendance for session');
+        }
+    }
+
+    renderAttendanceStudents() {
+        const studentsEl = document.getElementById('attendanceStudents');
+        if (!studentsEl) return;
+        const roster = this.attendance?.roster || [];
+
+        if (!this.attendance?.sessionId) {
+            studentsEl.innerHTML = '<div class="text-muted">Select a session to mark attendance.</div>';
+            return;
+        }
+        if (roster.length === 0) {
+            studentsEl.innerHTML = '<div class="text-muted">No registrations found for this series.</div>';
+            return;
+        }
+
+        // Build bulk controls + table of students
+        const bulkControls = `
+            <div class="d-flex flex-wrap gap-2 mb-3">
+                <button class="btn btn-sm btn-outline-success" onclick="admin.bulkMark('present')">
+                    <i class="fas fa-user-check"></i> All Present
+                </button>
+                <button class="btn btn-sm btn-outline-warning" onclick="admin.bulkMark('late')">
+                    <i class="fas fa-user-clock"></i> All Late
+                </button>
+                <button class="btn btn-sm btn-outline-danger" onclick="admin.bulkMark('absent')">
+                    <i class="fas fa-user-times"></i> All Absent
+                </button>
+                <button class="btn btn-sm btn-outline-secondary" onclick="admin.clearMarks()">
+                    <i class="fas fa-eraser"></i> Clear
+                </button>
+            </div>
+        `;
+
+        const rows = roster.map(s => {
+            const fullName = [s.first_name, s.last_name].filter(Boolean).join(' ').trim() || '(No name)';
+            const checked = (st) => (this.attendance.marks.get(s.student_id) === st ? 'checked' : '');
+            return `
+                <tr data-student-id="${s.student_id}">
+                    <td>
+                        <div><strong>${fullName}</strong></div>
+                        ${s.email ? `<div><small class="text-muted">${s.email}</small></div>` : ''}
+                        <div><small class="badge ${s.payment_status === 'completed' ? 'bg-success' : 'bg-warning'}">${s.payment_status}</small></div>
+                    </td>
+                    <td class="text-center">
+                        <input type="radio" class="form-check-input" name="att_status_${s.student_id}" value="present" ${checked('present')}>
+                    </td>
+                    <td class="text-center">
+                        <input type="radio" class="form-check-input" name="att_status_${s.student_id}" value="late" ${checked('late')}>
+                    </td>
+                    <td class="text-center">
+                        <input type="radio" class="form-check-input" name="att_status_${s.student_id}" value="absent" ${checked('absent')}>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+
+        studentsEl.innerHTML = `
+            ${bulkControls}
+            <div class="table-responsive">
+                <table class="table table-sm align-middle">
+                    <thead>
+                        <tr>
+                            <th>Student</th>
+                            <th class="text-center">Present</th>
+                            <th class="text-center">Late</th>
+                            <th class="text-center">Absent</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${rows}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    }
+
+    bulkMark(status) {
+        if (!this.attendance?.sessionId) return;
+        const valid = new Set(['present', 'late', 'absent']);
+        if (!valid.has(status)) return;
+
+        const body = document.getElementById('attendanceStudents');
+        if (!body) return;
+        const inputs = body.querySelectorAll('tbody tr');
+        inputs.forEach(tr => {
+            const sid = Number(tr.getAttribute('data-student-id'));
+            const radio = tr.querySelector(`input[type="radio"][name="att_status_${sid}"][value="${status}"]`);
+            if (radio) {
+                radio.checked = true;
+                this.attendance.marks.set(sid, status);
+            }
+        });
+    }
+
+    clearMarks() {
+        const body = document.getElementById('attendanceStudents');
+        if (!body) return;
+        body.querySelectorAll('input[type="radio"]').forEach(r => r.checked = false);
+        // Do not delete existing records on server; just clear local pending changes
+        this.attendance.marks = new Map();
+    }
+
+    collectAttendanceRecords() {
+        const records = [];
+        const body = document.getElementById('attendanceStudents');
+        if (!body) return records;
+
+        const rows = body.querySelectorAll('tbody tr[data-student-id]');
+        rows.forEach(tr => {
+            const sid = Number(tr.getAttribute('data-student-id'));
+            const checked = tr.querySelector(`input[name="att_status_${sid}"]:checked`);
+            if (sid && checked && checked.value) {
+                records.push({ student_id: sid, status: checked.value });
+            }
+        });
+        return records;
+    }
+
+    async saveAttendance() {
+        try {
+            if (!this.attendance?.sessionId) {
+                this.showError('No session selected');
+                return;
+            }
+            const records = this.collectAttendanceRecords();
+            if (records.length === 0) {
+                this.showError('No attendance marks selected');
+                return;
+            }
+            const res = await this.apiFetch(`/api/admin/sessions/${this.attendance.sessionId}/attendance`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ records })
+            });
+            const result = await res.json().catch(() => ({}));
+            if (!res.ok || result.error) {
+                throw new Error(result.error || 'Failed to save attendance');
+            }
+            this.showSuccess('Attendance saved');
+            // Refresh current session marks from server to reflect saved state
+            await this.selectAttendanceSession(this.attendance.sessionId);
+        } catch (e) {
+            console.error('Save attendance error:', e);
+            this.showError(e.message || 'Failed to save attendance');
+        }
+    }
 }
 
 /**
