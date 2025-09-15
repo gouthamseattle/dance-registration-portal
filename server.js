@@ -37,6 +37,68 @@ async function initializeDatabase() {
         } catch (e) {
             console.log('ℹ️ practice_date column check skipped:', e.message || e);
         }
+
+        // Ensure attendance tables exist
+        try {
+            if (dbConfig.isProduction) {
+                await dbConfig.run(`
+                    CREATE TABLE IF NOT EXISTS class_sessions (
+                        id SERIAL PRIMARY KEY,
+                        course_id INTEGER NOT NULL,
+                        session_date DATE NOT NULL,
+                        start_time TEXT,
+                        end_time TEXT,
+                        location TEXT,
+                        notes TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                `);
+                await dbConfig.run(`
+                    CREATE TABLE IF NOT EXISTS attendance_records (
+                        id SERIAL PRIMARY KEY,
+                        session_id INTEGER NOT NULL,
+                        student_id INTEGER NOT NULL,
+                        status TEXT CHECK (status IN ('present','absent','late')) NOT NULL,
+                        marked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        marked_by INTEGER
+                    )
+                `);
+                await dbConfig.run(`
+                    CREATE UNIQUE INDEX IF NOT EXISTS attendance_unique_session_student
+                    ON attendance_records(session_id, student_id)
+                `);
+            } else {
+                await dbConfig.run(`
+                    CREATE TABLE IF NOT EXISTS class_sessions (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        course_id INTEGER NOT NULL,
+                        session_date TEXT NOT NULL,
+                        start_time TEXT,
+                        end_time TEXT,
+                        location TEXT,
+                        notes TEXT,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                    )
+                `);
+                await dbConfig.run(`
+                    CREATE TABLE IF NOT EXISTS attendance_records (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        session_id INTEGER NOT NULL,
+                        student_id INTEGER NOT NULL,
+                        status TEXT NOT NULL,
+                        marked_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        marked_by INTEGER
+                    )
+                `);
+                await dbConfig.run(`
+                    CREATE UNIQUE INDEX IF NOT EXISTS attendance_unique_session_student
+                    ON attendance_records(session_id, student_id)
+                `);
+            }
+            console.log('✅ Ensured attendance tables exist');
+        } catch (e) {
+            console.log('ℹ️ Attendance tables check skipped:', e.message || e);
+        }
         
         // Run migration if in production (non-blocking so server can start listening)
         if (process.env.NODE_ENV === 'production') {
@@ -1084,7 +1146,165 @@ app.get('/api/admin/analytics/registrations-by-status', requireAuth, asyncHandle
     }
 }));
 
-// Update registration payment status
+/**
+ * Attendance APIs
+ */
+
+// Create a session for a course
+app.post('/api/admin/courses/:courseId/sessions', requireAuth, asyncHandler(async (req, res) => {
+    const { courseId } = req.params;
+    const { session_date, start_time, end_time, location, notes } = req.body || {};
+    if (!session_date) {
+        return res.status(400).json({ error: 'session_date is required (YYYY-MM-DD)' });
+    }
+    // Verify course exists
+    const course = await dbConfig.get('SELECT id FROM courses WHERE id = $1', [courseId]);
+    if (!course) {
+        return res.status(404).json({ error: 'Course not found' });
+    }
+
+    const sql = `
+        INSERT INTO class_sessions (course_id, session_date, start_time, end_time, location, notes)
+        VALUES ($1, $2, $3, $4, $5, $6)
+        ${dbConfig.isProduction ? 'RETURNING id' : ''}
+    `;
+    const result = await dbConfig.run(sql, [courseId, session_date, start_time || null, end_time || null, location || null, notes || null]);
+    const newId = dbConfig.isProduction ? result[0]?.id : result.lastID;
+    res.json({ success: true, session_id: newId });
+}));
+
+/**
+ * Attendance APIs
+ */
+
+// List sessions for a course
+app.get('/api/admin/courses/:courseId/sessions', requireAuth, asyncHandler(async (req, res) => {
+    const { courseId } = req.params;
+    const rows = await dbConfig.all(
+        'SELECT * FROM class_sessions WHERE course_id = $1 ORDER BY session_date ASC, created_at ASC',
+        [courseId]
+    );
+    res.json(rows);
+}));
+
+// Create a session for a course
+app.post('/api/admin/courses/:courseId/sessions', requireAuth, asyncHandler(async (req, res) => {
+    const { courseId } = req.params;
+    const { session_date, start_time, end_time, location, notes } = req.body || {};
+    if (!session_date) {
+        return res.status(400).json({ error: 'session_date is required (YYYY-MM-DD)' });
+    }
+    // Verify course exists
+    const course = await dbConfig.get('SELECT id FROM courses WHERE id = $1', [courseId]);
+    if (!course) {
+        return res.status(404).json({ error: 'Course not found' });
+    }
+
+    const sql = `
+        INSERT INTO class_sessions (course_id, session_date, start_time, end_time, location, notes)
+        VALUES ($1, $2, $3, $4, $5, $6)
+        ${dbConfig.isProduction ? 'RETURNING id' : ''}
+    `;
+    const result = await dbConfig.run(sql, [courseId, session_date, start_time || null, end_time || null, location || null, notes || null]);
+    const newId = dbConfig.isProduction ? result[0]?.id : result.lastID;
+    res.json({ success: true, session_id: newId });
+}));
+
+// Bulk mark attendance for a session
+app.post('/api/admin/sessions/:sessionId/attendance', requireAuth, asyncHandler(async (req, res) => {
+    const { sessionId } = req.params;
+    const { records } = req.body || {};
+    const adminId = req.session.adminId || null;
+
+    if (!Array.isArray(records) || records.length === 0) {
+        return res.status(400).json({ error: 'records array is required' });
+    }
+
+    // Verify session exists
+    const sessionRow = await dbConfig.get('SELECT id FROM class_sessions WHERE id = $1', [sessionId]);
+    if (!sessionRow) {
+        return res.status(404).json({ error: 'Session not found' });
+    }
+
+    const validStatuses = new Set(['present', 'absent', 'late']);
+    for (const rec of records) {
+        const sid = Number(rec?.student_id);
+        const status = String(rec?.status || '').toLowerCase();
+
+        if (!sid || !validStatuses.has(status)) {
+            return res.status(400).json({ error: 'Each record must include valid student_id and status in [present, absent, late]' });
+        }
+
+        if (dbConfig.isProduction) {
+            await dbConfig.run(`
+                INSERT INTO attendance_records (session_id, student_id, status, marked_by)
+                VALUES ($1, $2, $3, $4)
+                ON CONFLICT (session_id, student_id)
+                DO UPDATE SET status = EXCLUDED.status, marked_at = CURRENT_TIMESTAMP, marked_by = EXCLUDED.marked_by
+            `, [sessionId, sid, status, adminId]);
+        } else {
+            // SQLite upsert
+            await dbConfig.run(`
+                INSERT INTO attendance_records (session_id, student_id, status, marked_by)
+                VALUES ($1, $2, $3, $4)
+                ON CONFLICT(session_id, student_id)
+                DO UPDATE SET status = excluded.status, marked_at = CURRENT_TIMESTAMP, marked_by = excluded.marked_by
+            `, [sessionId, sid, status, adminId]);
+        }
+    }
+
+    res.json({ success: true, updated: records.length });
+}));
+
+// Attendance summary for a course (series-level)
+app.get('/api/admin/courses/:courseId/attendance/summary', requireAuth, asyncHandler(async (req, res) => {
+    const { courseId } = req.params;
+
+    // Total sessions for the course
+    const totalRow = await dbConfig.get('SELECT COUNT(*) as count FROM class_sessions WHERE course_id = $1', [courseId]);
+    const totalSessions = Number(totalRow?.count || 0);
+
+    // If no sessions, return empty summary
+    if (totalSessions === 0) {
+        return res.json({ total_sessions: 0, students: [] });
+    }
+
+    // Per-student present counts across the course sessions
+    const rows = await dbConfig.all(`
+        SELECT 
+            s.id AS student_id,
+            s.first_name,
+            s.last_name,
+            s.email,
+            SUM(CASE WHEN ar.status = 'present' THEN 1 ELSE 0 END) AS present_count
+        FROM registrations r
+        JOIN students s ON s.id = r.student_id
+        LEFT JOIN attendance_records ar 
+            ON ar.student_id = s.id 
+           AND ar.session_id IN (SELECT id FROM class_sessions WHERE course_id = $1)
+        WHERE r.course_id = $1
+        GROUP BY s.id, s.first_name, s.last_name, s.email
+        ORDER BY s.last_name ASC, s.first_name ASC
+    `, [courseId]);
+
+    const students = rows.map(r => {
+        const present = Number(r.present_count || 0);
+        const completion_pct = totalSessions > 0 ? Math.round((present / totalSessions) * 100) : 0;
+        return {
+            student_id: Number(r.student_id),
+            first_name: r.first_name || '',
+            last_name: r.last_name || '',
+            email: r.email || '',
+            present_count: present,
+            total_sessions: totalSessions,
+            completion_pct
+        };
+    });
+
+    res.json({ total_sessions: totalSessions, students });
+}));
+
+// Update registration payment status (restored)
 app.put('/api/registrations/:id/payment', asyncHandler(async (req, res) => {
     const { id } = req.params;
     const { payment_status, venmo_transaction_id, payment_method } = req.body;
