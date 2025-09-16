@@ -1521,3 +1521,32 @@ h2 i {
         background: var(--success-color) !important;
     }
 }
+
+/* Force explicit, high-contrast text colors for Attendance table */
+#attendanceStudents .table thead th,
+#attendanceStudents .table tbody td,
+#attendanceStudents strong {
+    color: #111 !important; /* Light mode solid text */
+    text-shadow: none !important;
+}
+
+/* Ensure header row stays visible in both modes */
+#attendanceStudents .table thead th,
+#attendanceStudents .table thead tr {
+    background-color: rgba(255, 255, 255, 0.98) !important; /* Light background for headers in light mode */
+    border-bottom-color: #e9ecef !important;
+}
+
+/* Dark mode variants: dark header background with light text */
+@media (prefers-color-scheme: dark) {
+    #attendanceStudents .table thead th,
+    #attendanceStudents .table thead tr {
+        background-color: rgba(45, 55, 72, 0.98) !important;
+        border-bottom-color: #4a5568 !important;
+    }
+    #attendanceStudents .table thead th,
+    #attendanceStudents .table tbody td,
+    #attendanceStudents strong {
+        color: #f7fafc !important; /* Explicit light text in dark mode */
+    }
+}
