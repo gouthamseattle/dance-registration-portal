@@ -1609,6 +1609,16 @@ h2 i {
     height: 20px !important;
 }
 
+/* FINAL OVERRIDE: ensure student name column is always visible (both light and dark modes) */
+#attendanceStudents .table tbody td:first-child,
+#attendanceStudents .table tbody td:first-child *,
+#attendanceStudents .table tbody td:first-child strong {
+    color: #000 !important;          /* pure black */
+    text-shadow: none !important;     /* remove any glow */
+    opacity: 1 !important;            /* prevent muted/opacity issues */
+    font-weight: 700;                 /* strengthen visibility */
+}
+
 @media (prefers-color-scheme: dark) {
     #attendanceStudents .table thead th,
     #attendanceStudents .table tbody td {
@@ -1623,5 +1633,9 @@ h2 i {
     #attendanceStudents .table tbody td:first-child,
     #attendanceStudents .table tbody td:first-child strong {
         color: #f7fafc !important;
+    }
+    /* Dark mode: table background to dark to maintain contrast (avoid white-on-white) */
+    #attendanceStudents .table {
+        background-color: rgba(45, 55, 72, 0.98) !important; /* slate-700 */
     }
 }
