@@ -2608,7 +2608,6 @@ Questions? Reply to this message`;
                 <tr data-student-id="${s.student_id}">
                     <td>
                         <div><strong>${fullName}</strong></div>
-                        ${s.email ? `<div><small class="text-muted">${s.email}</small></div>` : ''}
                         <div><small class="badge ${s.payment_status === 'completed' ? 'bg-success' : 'bg-warning'}">${s.payment_status}</small></div>
                     </td>
                     <td class="text-center">
