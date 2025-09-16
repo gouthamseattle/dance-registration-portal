@@ -1550,3 +1550,70 @@ h2 i {
         color: #f7fafc !important; /* Explicit light text in dark mode */
     }
 }
+
+/* Zebra striping for better contrast on white backgrounds */
+#attendanceStudents .table tbody tr:nth-child(odd) {
+    background-color: #fafafa !important;
+}
+#attendanceStudents .table tbody tr:nth-child(even) {
+    background-color: #ffffff !important;
+}
+@media (prefers-color-scheme: dark) {
+    #attendanceStudents .table tbody tr:nth-child(odd) {
+        background-color: rgba(255, 255, 255, 0.05) !important;
+    }
+    #attendanceStudents .table tbody tr:nth-child(even) {
+        background-color: rgba(255, 255, 255, 0.02) !important;
+    }
+}
+
+/* Make radios stand out more on light backgrounds */
+#attendanceStudents input[type="radio"].form-check-input {
+    border-width: 3px !important;
+    border-color: #111 !important;
+}
+
+/* Attendance visibility hardening: gridlines and column shading */
+#attendanceStudents .table {
+    background-color: #ffffff !important;
+}
+
+#attendanceStudents .table thead th,
+#attendanceStudents .table tbody td {
+    border: 2px solid #d0d7de !important; /* darker than default bootstrap */
+}
+
+/* Student name column stronger contrast */
+#attendanceStudents .table tbody td:first-child {
+    font-weight: 600;
+    color: #0b0b0b !important;
+}
+
+/* Ensure radio columns have enough width and tint to stand out on white */
+#attendanceStudents .table tbody td.text-center {
+    min-width: 84px;
+}
+
+#attendanceStudents .table tbody td:nth-child(2),
+#attendanceStudents .table tbody td:nth-child(3),
+#attendanceStudents .table tbody td:nth-child(4) {
+    background-color: #f7f7f9 !important; /* subtle column tint to make radios pop */
+}
+
+/* Slightly larger radios for better visibility */
+#attendanceStudents input[type="radio"].form-check-input {
+    width: 20px !important;
+    height: 20px !important;
+}
+
+@media (prefers-color-scheme: dark) {
+    #attendanceStudents .table thead th,
+    #attendanceStudents .table tbody td {
+        border-color: #4a5568 !important;
+    }
+    #attendanceStudents .table tbody td:nth-child(2),
+    #attendanceStudents .table tbody td:nth-child(3),
+    #attendanceStudents .table tbody td:nth-child(4) {
+        background-color: rgba(255, 255, 255, 0.04) !important;
+    }
+}
