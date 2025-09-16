@@ -1586,7 +1586,10 @@ h2 i {
 /* Student name column stronger contrast */
 #attendanceStudents .table tbody td:first-child {
     font-weight: 600;
-    color: #0b0b0b !important;
+    color: #000 !important;
+}
+#attendanceStudents .table tbody td:first-child strong {
+    color: #000 !important;
 }
 
 /* Ensure radio columns have enough width and tint to stand out on white */
@@ -1615,5 +1618,10 @@ h2 i {
     #attendanceStudents .table tbody td:nth-child(3),
     #attendanceStudents .table tbody td:nth-child(4) {
         background-color: rgba(255, 255, 255, 0.04) !important;
+    }
+    /* Dark mode: keep student names readable (override black) */
+    #attendanceStudents .table tbody td:first-child,
+    #attendanceStudents .table tbody td:first-child strong {
+        color: #f7fafc !important;
     }
 }
