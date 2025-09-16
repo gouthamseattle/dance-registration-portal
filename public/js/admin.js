@@ -2059,6 +2059,245 @@ Questions? Reply to this message`;
     // Attendance UI (Phase 3)
     // =========================
 
+    // Helper: find course by id from preloaded courses
+    getCourseById(courseId) {
+        if (!courseId) return null;
+        return (this.courses || []).find(c => Number(c.id) === Number(courseId)) || null;
+    }
+
+    // Helper: parse 'YYYY-MM-DD' (no timezone shift) to Date
+    parseYMD(str) {
+        const m = String(str || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (!m) return null;
+        return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    }
+
+    // Helper: format Date to 'YYYY-MM-DD'
+    toISODate(d) {
+        if (!d) return '';
+        const pad2 = (n) => String(n).padStart(2, '0');
+        return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+    }
+
+    // Helper: map weekday name to JS getDay index
+    getDayIndex(name) {
+        const map = {
+            sunday: 0, monday: 1, tuesday: 2, wednesday: 3,
+            thursday: 4, friday: 5, saturday: 6
+        };
+        const key = String(name || '').trim().toLowerCase();
+        return Object.prototype.hasOwnProperty.call(map, key) ? map[key] : null;
+    }
+
+    /**
+     * Build suggested session list from course metadata (no DB writes)
+     * Returns array of { session_date, start_time, end_time, location, source }
+     */
+    generateSuggestedSessionsForCourse(course) {
+        if (!course) return [];
+        const suggestions = [];
+        const pushUnique = (obj) => {
+            const key = obj.session_date;
+            if (!key) return;
+            if (!suggestions.some(s => s.session_date === key)) {
+                suggestions.push(obj);
+            }
+        };
+
+        const slots = Array.isArray(course.slots) ? course.slots : [];
+
+        // Crew practice: prefer explicit practice_date on slot
+        if (course.course_type === 'crew_practice') {
+            slots.forEach(s => {
+                if (s.practice_date) {
+                    pushUnique({
+                        session_date: String(s.practice_date).slice(0, 10),
+                        start_time: s.start_time || null,
+                        end_time: s.end_time || null,
+                        location: s.location || null,
+                        source: 'slot'
+                    });
+                }
+            });
+            // Fallback to start_date if no explicit practice_date
+            if (suggestions.length === 0 && course.start_date) {
+                pushUnique({
+                    session_date: String(course.start_date).slice(0, 10),
+                    start_time: slots[0]?.start_time || null,
+                    end_time: slots[0]?.end_time || null,
+                    location: slots[0]?.location || null,
+                    source: 'course'
+                });
+            }
+        } else if (course.course_type === 'dance_series') {
+            // Weekly recurring between start_date and end_date OR duration_weeks
+            const start = this.parseYMD(course.start_date);
+            if (!start) return suggestions;
+
+            // Derive end date:
+            let end = null;
+            if (course.end_date) {
+                end = this.parseYMD(course.end_date);
+            } else {
+                const weeks = parseInt(course.duration_weeks, 10) || 1;
+                end = new Date(start);
+                end.setDate(end.getDate() + (weeks - 1) * 7);
+            }
+            if (!end) end = new Date(start);
+
+            // Build set of weekdays from slots
+            const slotWeekdays = [];
+            slots.forEach(s => {
+                const di = this.getDayIndex(s.day_of_week);
+                if (di !== null && !slotWeekdays.includes(di)) {
+                    slotWeekdays.push(di);
+                }
+            });
+            // If no day_of_week on slots, use start day
+            if (slotWeekdays.length === 0) {
+                slotWeekdays.push(start.getDay());
+            }
+
+            // For each weekday, generate occurrences
+            slotWeekdays.forEach(di => {
+                const refSlot = slots.find(s => this.getDayIndex(s.day_of_week) === di) || slots[0] || {};
+                // Find first occurrence on/after start
+                let d = new Date(start);
+                const delta = (di - d.getDay() + 7) % 7;
+                d.setDate(d.getDate() + delta);
+                while (d <= end) {
+                    pushUnique({
+                        session_date: this.toISODate(d),
+                        start_time: refSlot.start_time || null,
+                        end_time: refSlot.end_time || null,
+                        location: refSlot.location || null,
+                        source: 'computed'
+                    });
+                    d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 7);
+                }
+            });
+        } else {
+            // drop_in or other: try slot practice_date or course.start_date
+            slots.forEach(s => {
+                if (s.practice_date) {
+                    pushUnique({
+                        session_date: String(s.practice_date).slice(0, 10),
+                        start_time: s.start_time || null,
+                        end_time: s.end_time || null,
+                        location: s.location || null,
+                        source: 'slot'
+                    });
+                }
+            });
+            if (suggestions.length === 0 && course.start_date) {
+                pushUnique({
+                    session_date: String(course.start_date).slice(0, 10),
+                    start_time: slots[0]?.start_time || null,
+                    end_time: slots[0]?.end_time || null,
+                    location: slots[0]?.location || null,
+                    source: 'course'
+                });
+            }
+        }
+
+        // Sort ascending by date
+        suggestions.sort((a, b) => {
+            const da = this.parseYMD(a.session_date);
+            const db = this.parseYMD(b.session_date);
+            return (da?.getTime() || 0) - (db?.getTime() || 0);
+        });
+
+        return suggestions;
+    }
+
+    // Create a real DB session from a suggested course date, then select it
+    async createSessionForSuggestedDate(dateStr, meta = {}) {
+        try {
+            if (!this.attendance?.courseId) {
+                this.showError('No course selected');
+                return;
+            }
+            const payload = {
+                session_date: dateStr,
+                start_time: meta.start_time || null,
+                end_time: meta.end_time || null,
+                location: meta.location || null,
+                notes: meta.notes || null
+            };
+            const res = await this.apiFetch(`/api/admin/courses/${this.attendance.courseId}/sessions`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const result = await res.json().catch(() => ({}));
+            if (!res.ok || !result.session_id) {
+                throw new Error(result.error || 'Failed to create session');
+            }
+            // Refresh sessions and select the new one
+            await this.loadAttendanceSessions(this.attendance.courseId);
+            await this.selectAttendanceSession(Number(result.session_id));
+            this.showSuccess('Session created from course date');
+        } catch (e) {
+            console.error('Create session (suggested) error:', e);
+            this.showError(e.message || 'Failed to create session');
+        }
+    }
+
+    // Render suggested dates panel below persisted sessions
+    renderSuggestedSessions() {
+        const sessionsEl = document.getElementById('attendanceSessions');
+        if (!sessionsEl) return;
+        const courseId = this.attendance?.courseId;
+        if (!courseId) return;
+
+        // Remove any previous suggestions panel (to avoid duplicates)
+        const prev = document.getElementById('attendanceSuggestedSessions');
+        if (prev) prev.remove();
+
+        const course = this.getCourseById(courseId);
+        const suggestions = this.generateSuggestedSessionsForCourse(course);
+        if (!Array.isArray(suggestions) || suggestions.length === 0) return;
+
+        const existing = new Set((this.attendance?.sessions || []).map(s => String(s.session_date).slice(0, 10)));
+        const pending = suggestions.filter(s => !existing.has(String(s.session_date).slice(0, 10)));
+        if (pending.length === 0) return;
+
+        const wrap = document.createElement('div');
+        wrap.id = 'attendanceSuggestedSessions';
+        wrap.className = 'mt-3';
+        wrap.innerHTML = `
+            <div class="card border-secondary">
+                <div class="card-header py-2">
+                    <small class="text-muted">Suggested dates from course</small>
+                </div>
+                <div class="list-group list-group-flush">
+                    ${pending.map(p => {
+                        const dateStr = new Date(p.session_date).toLocaleDateString();
+                        const sub = [p.start_time, p.end_time].filter(Boolean).join(' - ');
+                        const meta = [sub, p.location].filter(Boolean).join(' • ');
+                        return `
+                            <a href="#" class="list-group-item list-group-item-action" data-suggest-date="${p.session_date}">
+                                <i class="fas fa-calendar-plus me-2 text-secondary"></i>
+                                ${dateStr}${meta ? ` <small class="text-muted">${meta}</small>` : ''}
+                            </a>
+                        `;
+                    }).join('')}
+                </div>
+            </div>
+        `;
+        sessionsEl.appendChild(wrap);
+
+        // Wire click handlers to create sessions on demand
+        wrap.querySelectorAll('[data-suggest-date]').forEach(a => {
+            a.addEventListener('click', (ev) => {
+                ev.preventDefault();
+                const date = String(ev.currentTarget.getAttribute('data-suggest-date'));
+                const meta = suggestions.find(s => s.session_date === date) || {};
+                this.createSessionForSuggestedDate(date, meta);
+            });
+        });
+    }
+
     async openAttendance() {
         const modalEl = document.getElementById('attendanceModal');
         const modal = new bootstrap.Modal(modalEl);
@@ -2118,7 +2357,39 @@ Questions? Reply to this message`;
 
         // Load data based on course selection
         if (!courseId) {
-            if (sessionsEl) sessionsEl.innerHTML = '<div class="text-muted">No series selected.</div>';
+            if (sessionsEl) {
+                const options = (this.courses || []).map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+                sessionsEl.innerHTML = `
+                    <div class="mb-2">
+                        <label class="form-label small">Select Dance Series</label>
+                        <select id="attendanceCoursePicker" class="form-select form-select-sm">
+                            <option value="">-- Choose a series --</option>
+                            ${options}
+                        </select>
+                    </div>
+                    <div class="text-muted">Choose a series to manage attendance.</div>
+                `;
+                // Wire change handler
+                const picker = document.getElementById('attendanceCoursePicker');
+                if (picker && !picker._wired) {
+                    picker._wired = true;
+                    picker.addEventListener('change', async () => {
+                        const val = picker.value ? Number(picker.value) : null;
+                        this.attendance.courseId = val;
+                        if (val) {
+                            try {
+                                await Promise.all([
+                                    this.loadAttendanceSessions(val),
+                                    this.loadAttendanceRoster(val)
+                                ]);
+                            } catch (e) {
+                                console.error('Attendance load (picker) error:', e);
+                                this.showError('Failed to load attendance data');
+                            }
+                        }
+                    });
+                }
+            }
             return;
         }
 
@@ -2190,6 +2461,7 @@ Questions? Reply to this message`;
             const sessions = await res.json();
             this.attendance.sessions = Array.isArray(sessions) ? sessions : [];
             this.renderAttendanceSessions();
+            this.renderSuggestedSessions();
         } catch (e) {
             console.error('Load sessions error:', e);
             if (sessionsEl) sessionsEl.innerHTML = '<div class="text-danger">Failed to load sessions</div>';
