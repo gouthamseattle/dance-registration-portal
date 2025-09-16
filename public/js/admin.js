@@ -2462,6 +2462,11 @@ Questions? Reply to this message`;
             this.attendance.sessions = Array.isArray(sessions) ? sessions : [];
             this.renderAttendanceSessions();
             this.renderSuggestedSessions();
+            // Auto-select the first session if none is selected, so individual marking controls are visible
+            if (!this.attendance.sessionId && this.attendance.sessions.length > 0) {
+                const first = this.attendance.sessions[0];
+                await this.selectAttendanceSession(Number(first.id));
+            }
         } catch (e) {
             console.error('Load sessions error:', e);
             if (sessionsEl) sessionsEl.innerHTML = '<div class="text-danger">Failed to load sessions</div>';
@@ -2512,7 +2517,7 @@ Questions? Reply to this message`;
     async loadAttendanceRoster(courseId) {
         const studentsEl = document.getElementById('attendanceStudents');
         try {
-            const res = await this.apiFetch(`/api/admin/registrations?course_id=${courseId}`);
+            const res = await this.apiFetch(`/api/admin/registrations?course_id=${courseId}&payment_status=completed`);
             const regs = await res.json();
             // Sort roster by last_name, then first_name
             const roster = (Array.isArray(regs) ? regs : []).map(r => ({
@@ -2620,6 +2625,7 @@ Questions? Reply to this message`;
         }).join('');
 
         studentsEl.innerHTML = `
+            <div class="small text-muted mb-2">Select a status for each student or use the bulk buttons below.</div>
             ${bulkControls}
             <div class="table-responsive">
                 <table class="table table-sm align-middle">
