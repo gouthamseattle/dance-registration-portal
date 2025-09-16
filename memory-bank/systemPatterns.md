@@ -264,3 +264,40 @@ Admin Dashboard (admin.html)
 - Ensure unique primary keys for registrations; verify no insert path reuses IDs.
 - Consider UNIQUE(student_id, course_id) on completed payments if business rules require single active registration per course.
 - Optional audit trail for bulk operations (admin_user_id, action, payload, timestamp) to support reversibility.
+
+---
+
+## Attendance UI Visibility Patterns (Sept 2025)
+
+### Roster Source and Filtering
+- Data source: `GET /api/admin/registrations?course_id=&payment_status=completed`
+- Pattern: load roster as paid-only at the data layer to avoid client-side filtering discrepancies.
+
+### Session Selection UX
+- After loading sessions (`GET /api/admin/courses/:courseId/sessions`), auto-select the first session if none is selected so the Students panel always renders individual radios by default.
+- Future heuristic (planned): default to nearest upcoming or most recent past session.
+
+### Student Marking Controls
+- Individual radios per student with namespacing by student_id:
+  - `name="att_status_${student_id}" value="present|late|absent"`
+- Bulk operations: All Present / All Late / All Absent / Clear
+- Save action performs bulk upsert via `POST /api/admin/sessions/:sessionId/attendance`
+
+### Visibility Hardening (Light/Dark)
+- Gridlines: 2px borders on table headers/cells to prevent blending with white backgrounds.
+- Column tint: subtle background color for radio columns to make unchecked radios stand out.
+- Zebra striping: alternating row colors for readability on light backgrounds.
+- Radio design:
+  - Larger 20px radios, thick dark borders, custom checked inner dot
+  - Scoped styles under `#attendanceStudents` to avoid unintended global overrides
+  - Focus/hover states for accessibility and clarity
+- Headers and text:
+  - Explicit header backgrounds; high-contrast text for names and column titles
+- Dark mode:
+  - Media-query overrides for borders, background tints, and checked dot color (success green) for visibility.
+
+### Cache Busting and Staleness Prevention
+- `public/admin.html` references:
+  - `css/admin-styles.css?v=7`
+  - `js/admin.js?v=17`
+- Pattern: bump version query params when making CSS/JS changes that affect production UI to ensure immediate rollout.

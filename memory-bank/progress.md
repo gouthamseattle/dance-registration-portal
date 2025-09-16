@@ -286,3 +286,55 @@
 3. Attempt duplicate registration for same email and course:
    - If completed exists → receive error.
    - If pending exists → receive existing registrationId with deduped: true.
+
+---
+
+## Phase 3 — Attendance Workflow & Visibility (Sept 2025)
+
+### Frontend (Admin UI)
+- Paid-only roster in Manage Attendance:
+  - Roster loads via `GET /api/admin/registrations?course_id={id}&payment_status=completed`
+  - Ensures only paid (completed) students appear for marking
+- Individual Present/Late/Absent controls:
+  - Auto-selects first available session post-load so the Students panel always renders radios
+  - Bulk actions retained: All Present/Late/Absent/Clear
+- Visibility hardening on light/dark themes:
+  - Stronger gridlines and explicit header backgrounds
+  - Subtle column tint for radio columns to make radios pop
+  - Larger radios (20px) with thick borders and visible inner dot on checked
+  - Zebra striping for improved readability, high-contrast text for names/headers
+  - Dark mode overrides for borders and checked dot color
+- Suggested dates panel:
+  - Derived from course metadata (duration_weeks/start_date or slot.day_of_week/practice_date)
+  - One-click create persisted `class_session`, auto-select, render roster
+- Persisted sessions prioritized:
+  - Persisted sessions listed; suggested dates shown beneath (filtered to non-persisted)
+- Cache-busting:
+  - `admin-styles.css?v=7`, `admin.js?v=17` to avoid stale production assets
+
+### Backend (APIs/Data)
+- Attendance tables:
+  - `class_sessions`, `attendance_records` with `UNIQUE(session_id, student_id)`
+- Endpoints:
+  - `GET /api/admin/courses/:courseId/sessions`
+  - `POST /api/admin/courses/:courseId/sessions`
+  - `GET /api/admin/sessions/:sessionId/attendance`
+  - `POST /api/admin/sessions/:sessionId/attendance`
+  - Roster source: `GET /api/admin/registrations?course_id=&payment_status=completed`
+
+### Deployment
+- Commit `a450d07` — Attendance UI visibility: strengthen contrast for student names and radio columns; add gridlines and column tint; increase radio size; cache-bust admin-styles.css to v=7
+
+### Acceptance Criteria (Met)
+- Opening Manage Attendance with a course filter loads only paid registrations once a session is selected
+- Individual radios visible and functional per student; bulk actions work; Save persists to DB
+- Suggested date → creates session → auto-selects → renders paid roster
+- Persisted sessions remain listed above suggested dates
+
+### Next Follow-ups
+- Attendance summary (per-session counts and series completion %)
+- Attendance export (CSV) for session/series
+- Auto-select heuristic improvement (nearest upcoming or most recent)
+- Mobile ergonomics (sticky bulk bar, larger tap targets)
+
+Last updated: 2025-09-15

@@ -267,7 +267,6 @@ const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
   - Per-slot line: "Day Start - End at Location" (+ difficulty when multiple slots).
   - Dates rendered separately (Start Date or Start–End).
   - Graceful fallback to course-level `start_time`/`end_time` if slot times are missing.
-- Confirmation view continues to use `schedule_info` which is now time-aware due to server computation.
 - Selection flow hardening (Sept 2025):
   - Numeric ID matching for courses and drop-ins to avoid string/number mismatch across DB drivers
   - Defensive fetch/JSON parsing with response.ok and status checks
@@ -286,8 +285,27 @@ const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
 - Venmo deep link + QR flow is active in student portal (with mobile detection and desktop QR generation).
 - PayPal SDK logic remains present for potential future use or fallback but Venmo flow is primary for now.
 
+### Admin (Attendance UI Visibility & Roster Filter)
+- Manage Attendance roster loads paid-only registrations:
+  - `GET /api/admin/registrations?course_id={id}&payment_status=completed`
+- Sessions auto-select after load so the Students panel renders individual radios by default.
+- Visibility hardening across light/dark themes:
+  - Stronger table gridlines (2px), explicit header backgrounds
+  - Subtle column tint for radio columns to make radios pop on white backgrounds
+  - Larger custom radios (20px) with thick borders and visible checked inner dot
+  - Zebra striping for readability; high-contrast text for names/headers
+  - Dark mode overrides for borders and checked dot color (success green)
+- Suggested dates derive from course metadata; one-click session creation auto-selects and renders roster.
+
+### Admin Assets Cache Busting (Production)
+- public/admin.html references:
+  - `css/admin-styles.css?v=7`
+  - `js/admin.js?v=17`
+- Pattern: bump version query params on CSS/JS changes to force production refresh.
+
 ### Commits
 - `45ddfb5` — Show slot times on cards and form; add fallback to course-level times; fix duplicate variable declarations
 - `75511bb` — Compute schedule_info on server from slots (include start/end times and dates) and cache-bust registration.js
 - `0ab7057` — Fix re-selection bug: numeric ID matching, stale data guard, cache-bust registration.js to v=48
 - `5e8f249` — Suppress spurious selection error toast; add in-progress guards; robust field toggling; cache-bust to v=49
+- `a450d07` — Attendance UI visibility: stronger contrast for student names and radio columns; add gridlines and column tint; increase radio size; cache-bust admin-styles.css to v=7
