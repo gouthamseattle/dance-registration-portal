@@ -970,10 +970,17 @@ class DanceRegistrationApp {
 
     showPaymentSection() {
         this.currentStep = 'payment';
-        document.getElementById('courseSelection').style.display = 'none';
-        document.getElementById('registrationForm').style.display = 'none';
-        document.getElementById('paymentSection').style.display = 'block';
-        document.getElementById('confirmationSection').style.display = 'none';
+        
+        // Defensive programming: check if elements exist before manipulating them
+        const courseSelection = document.getElementById('courseSelection');
+        const registrationForm = document.getElementById('registrationForm');
+        const paymentSection = document.getElementById('paymentSection');
+        const confirmationSection = document.getElementById('confirmationSection');
+
+        if (courseSelection) courseSelection.style.display = 'none';
+        if (registrationForm) registrationForm.style.display = 'none';
+        if (paymentSection) paymentSection.style.display = 'block';
+        if (confirmationSection) confirmationSection.style.display = 'none';
 
         this.populatePaymentSummary();
         this.initializePaymentOptions();
