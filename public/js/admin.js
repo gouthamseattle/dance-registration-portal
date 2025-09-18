@@ -3180,6 +3180,72 @@ Questions? Reply to this message`;
                         </div>
                     </div>
 
+                    <!-- All Students Section -->
+                    <div class="alert alert-primary">
+                        <strong><i class="fas fa-users me-2"></i>All Students with Registration History</strong><br>
+                        Complete list of students who have registered for courses:
+                    </div>
+
+                    <div class="table-responsive mb-4">
+                        <table class="table table-striped table-hover">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Student</th>
+                                    <th>Email</th>
+                                    <th>Total Registrations</th>
+                                    <th>Crew Practice</th>
+                                    <th>Other Classes</th>
+                                    <th>Current Status</th>
+                                    <th>Course History</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${suggestions.map((student, index) => {
+                                    const name = `${student.firstName} ${student.lastName}`.trim() || 'Unknown Name';
+                                    const statusBadge = student.currentType === 'crew_member' ? 
+                                        '<span class="badge bg-warning">Crew Member</span>' : 
+                                        '<span class="badge bg-info">General Student</span>';
+                                    const classifiedBadge = student.alreadyClassified ? 
+                                        '<span class="badge bg-success ms-1">Admin Classified</span>' : 
+                                        '<span class="badge bg-secondary ms-1">Pending</span>';
+                                    
+                                    return `
+                                        <tr ${student.action === 'suggest_crew_member' ? 'class="table-warning"' : ''}>
+                                            <td>
+                                                <strong>${name}</strong>
+                                                ${student.instagramHandle ? `<br><small class="text-muted">@${student.instagramHandle}</small>` : ''}
+                                            </td>
+                                            <td><strong>${student.email}</strong></td>
+                                            <td>
+                                                <span class="badge bg-primary">${student.totalRegistrations}</span>
+                                            </td>
+                                            <td>
+                                                ${student.crewPracticeRegistrations > 0 ? 
+                                                    `<span class="badge bg-warning">${student.crewPracticeRegistrations}</span>` : 
+                                                    '<span class="text-muted">0</span>'
+                                                }
+                                            </td>
+                                            <td>
+                                                ${student.otherRegistrations > 0 ? 
+                                                    `<span class="badge bg-info">${student.otherRegistrations}</span>` : 
+                                                    '<span class="text-muted">0</span>'
+                                                }
+                                            </td>
+                                            <td>
+                                                ${statusBadge}${classifiedBadge}
+                                            </td>
+                                            <td>
+                                                <small class="text-muted">
+                                                    ${student.courseNames || 'No courses'}
+                                                </small>
+                                            </td>
+                                        </tr>
+                                    `;
+                                }).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+
                     ${crewSuggestions.length > 0 ? `
                         <div class="alert alert-warning">
                             <strong><i class="fas fa-crown me-2"></i>Crew Member Suggestions</strong><br>
