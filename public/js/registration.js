@@ -309,7 +309,7 @@ class DanceRegistrationApp {
             }
 
             console.info('Course selected', { id: this.selectedCourse.id, name: this.selectedCourse.name });
-            this.showPaymentMethodSelection();
+            this.showRegistrationForm();
         } catch (error) {
             console.error('Error selecting course:', error, { currentStep: this.currentStep });
             if (this.currentStep !== 'form') {
@@ -353,7 +353,7 @@ class DanceRegistrationApp {
             }
 
             console.info('Drop-in selected', { id: this.selectedDropIn.id, name: this.selectedDropIn.course_name });
-            this.showPaymentMethodSelection();
+            this.showRegistrationForm();
         } catch (error) {
             console.error('Error selecting drop-in class:', error, { currentStep: this.currentStep });
             if (this.currentStep !== 'form') {
@@ -450,6 +450,7 @@ class DanceRegistrationApp {
             this.setupPaymentOptions();
             this.setupDanceExperienceField();
             this.setupInstagramIdField();
+            this.setupPaymentMethodSelection();
             this.setupCrewPracticeBranding();
         } catch (e) {
             // Never let setup errors surface as "Failed to select course"
@@ -695,6 +696,32 @@ class DanceRegistrationApp {
         }
     }
 
+    setupPaymentMethodSelection() {
+        // Set up payment method selection handlers for registration form
+        const paymentCards = document.querySelectorAll('.payment-method-selection');
+        
+        paymentCards.forEach(card => {
+            card.addEventListener('click', () => {
+                const method = card.dataset.method;
+                this.selectPaymentMethodInForm(method);
+            });
+        });
+    }
+
+    selectPaymentMethodInForm(method) {
+        this.selectedPaymentMethod = method;
+        console.info('Payment method selected in form:', method);
+        
+        // Add visual feedback to show selection
+        const cards = document.querySelectorAll('.payment-method-selection');
+        cards.forEach(card => {
+            card.classList.remove('selected');
+            if (card.dataset.method === method) {
+                card.classList.add('selected');
+            }
+        });
+    }
+
     setupCrewPracticeBranding() {
         const headerSection = document.querySelector('.header-section');
         const headerTitle = headerSection.querySelector('h1');
@@ -787,6 +814,17 @@ class DanceRegistrationApp {
         // Validate form
         if (!form.checkValidity()) {
             form.reportValidity();
+            return;
+        }
+
+        // Validate payment method selection
+        if (!this.selectedPaymentMethod) {
+            this.showError('Please select a payment method (Venmo or Zelle) to continue.');
+            // Scroll to payment method section
+            const paymentMethodSection = document.querySelector('.payment-method-selection').closest('.col-12');
+            if (paymentMethodSection) {
+                paymentMethodSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
             return;
         }
 

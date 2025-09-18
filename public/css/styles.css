@@ -1783,3 +1783,89 @@ select:-webkit-autofill {
         font-size: 3rem;
     }
 }
+
+/* Payment Method Selection in Registration Form */
+.payment-method-selection {
+    background: var(--bg-card);
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    border-radius: var(--radius-lg);
+    transition: var(--transition-bounce);
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+    color: var(--text-primary);
+}
+
+.payment-method-selection::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(0, 212, 255, 0.1), transparent);
+    transition: var(--transition-smooth);
+}
+
+.payment-method-selection:hover {
+    border-color: var(--accent-primary);
+    transform: translateY(-3px) scale(1.02);
+    box-shadow: var(--shadow-glow);
+    background: var(--bg-card-hover);
+}
+
+.payment-method-selection:hover::before {
+    left: 100%;
+}
+
+.payment-method-selection.selected {
+    border-color: var(--accent-success);
+    background: var(--bg-card-hover);
+    box-shadow: 0 0 20px rgba(16, 185, 129, 0.3);
+    transform: scale(1.02);
+}
+
+.payment-method-selection .card-body {
+    padding: 1.5rem;
+    background: transparent;
+    color: var(--text-primary);
+}
+
+.payment-method-selection .card-title {
+    font-family: var(--font-display);
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 0.75rem;
+}
+
+.payment-method-selection .card-text {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+.payment-method-selection .fa-3x {
+    transition: var(--transition-smooth);
+}
+
+.payment-method-selection:hover .fa-3x {
+    transform: scale(1.1);
+}
+
+.payment-method-selection[data-method="venmo"] .fa-3x {
+    color: var(--accent-primary);
+}
+
+.payment-method-selection[data-method="zelle"] .fa-3x {
+    color: var(--accent-success);
+}
+
+/* Responsive adjustments for registration form payment selection */
+@media (max-width: 768px) {
+    .payment-method-selection .card-body {
+        padding: 1.25rem;
+    }
+    
+    .payment-method-selection .fa-3x {
+        font-size: 2.5rem;
+    }
+}

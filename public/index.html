@@ -240,6 +240,46 @@
                                             </div>
                                         </div>
                                     </div>
+
+                                    <!-- Payment Method Selection -->
+                                    <div class="col-12 mb-4">
+                                        <label class="form-label">
+                                            <i class="fas fa-credit-card text-primary"></i>
+                                            Choose Payment Method *
+                                        </label>
+                                        <div class="row g-3">
+                                            <div class="col-md-6">
+                                                <div class="card payment-method-selection h-100" data-method="venmo">
+                                                    <div class="card-body text-center d-flex flex-column">
+                                                        <i class="fas fa-mobile-alt fa-3x text-primary mb-3"></i>
+                                                        <h6 class="card-title mb-2">Venmo</h6>
+                                                        <p class="card-text text-muted flex-grow-1 small">Quick and easy mobile payment</p>
+                                                        <div class="mt-2">
+                                                            <i class="fas fa-check-circle text-success me-2"></i>
+                                                            <span class="small text-muted">Instant payment</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="card payment-method-selection h-100" data-method="zelle">
+                                                    <div class="card-body text-center d-flex flex-column">
+                                                        <i class="fas fa-university fa-3x text-success mb-3"></i>
+                                                        <h6 class="card-title mb-2">Zelle</h6>
+                                                        <p class="card-text text-muted flex-grow-1 small">Secure bank-to-bank transfer</p>
+                                                        <div class="mt-2">
+                                                            <i class="fas fa-shield-alt text-success me-2"></i>
+                                                            <span class="small text-muted">Bank secured</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="form-text mt-2">
+                                            <i class="fas fa-info-circle me-1"></i>
+                                            Select your preferred payment method to continue
+                                        </div>
+                                    </div>
                                 </div>
 
                                 <!-- Form Actions -->
@@ -401,6 +441,6 @@
     <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <!-- Cache-bust to ensure latest JS loads in production -->
-    <script src="js/registration.js?v=51"></script>
+    <script src="js/registration.js?v=52"></script>
 </body>
 </html>
