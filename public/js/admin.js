@@ -2517,20 +2517,29 @@ Questions? Reply to this message`;
     async loadAttendanceRoster(courseId) {
         const studentsEl = document.getElementById('attendanceStudents');
         try {
+            console.log('🔍 Loading attendance roster for course:', courseId);
             const res = await this.apiFetch(`/api/admin/registrations?course_id=${courseId}&payment_status=completed`);
             const regs = await res.json();
+            console.log('📋 Raw registrations data:', regs);
+            
             // Sort roster by last_name, then first_name
-            const roster = (Array.isArray(regs) ? regs : []).map(r => ({
-                student_id: Number(r.student_id),
-                first_name: r.first_name || '',
-                last_name: r.last_name || '',
-                email: r.email || '',
-                payment_status: r.payment_status || 'pending'
-            })).sort((a, b) => {
+            const roster = (Array.isArray(regs) ? regs : []).map(r => {
+                const student = {
+                    student_id: Number(r.student_id),
+                    first_name: r.first_name || '',
+                    last_name: r.last_name || '',
+                    email: r.email || '',
+                    payment_status: r.payment_status || 'pending'
+                };
+                console.log('👤 Mapped student:', student);
+                return student;
+            }).sort((a, b) => {
                 const ln = (a.last_name || '').localeCompare(b.last_name || '');
                 if (ln !== 0) return ln;
                 return (a.first_name || '').localeCompare(b.first_name || '');
             });
+            
+            console.log('📚 Final roster:', roster);
             this.attendance.roster = roster;
 
             // If a session is already selected, refresh student list with marks
@@ -2574,6 +2583,9 @@ Questions? Reply to this message`;
         if (!studentsEl) return;
         const roster = this.attendance?.roster || [];
 
+        console.log('🎨 Rendering attendance students - roster length:', roster.length);
+        console.log('🎨 Current sessionId:', this.attendance?.sessionId);
+
         if (!this.attendance?.sessionId) {
             studentsEl.innerHTML = '<div class="text-muted">Select a session to mark attendance.</div>';
             return;
@@ -2604,6 +2616,7 @@ Questions? Reply to this message`;
         const rows = roster.map(s => {
             const fullName = [s.first_name, s.last_name].filter(Boolean).join(' ').trim() || '(No name)';
             const checked = (st) => (this.attendance.marks.get(s.student_id) === st ? 'checked' : '');
+            console.log(`🧑‍🎤 Building row for student ${s.student_id}: "${fullName}" (${s.first_name}|${s.last_name})`);
             return `
                 <tr data-student-id="${s.student_id}">
                     <td>
@@ -2623,7 +2636,7 @@ Questions? Reply to this message`;
             `;
         }).join('');
 
-        studentsEl.innerHTML = `
+        const finalHTML = `
             <div class="small text-muted mb-2">Select a status for each student or use the bulk buttons below.</div>
             ${bulkControls}
             <div class="table-responsive">
@@ -2642,6 +2655,21 @@ Questions? Reply to this message`;
                 </table>
             </div>
         `;
+
+        console.log('🏗️ Final HTML being inserted:', finalHTML.substring(0, 500) + '...');
+        studentsEl.innerHTML = finalHTML;
+        console.log('✅ DOM updated, checking actual content...');
+        
+        // Check what actually got rendered
+        setTimeout(() => {
+            const actualRows = studentsEl.querySelectorAll('tbody tr');
+            console.log('🔍 Actual rendered rows count:', actualRows.length);
+            actualRows.forEach((row, i) => {
+                const studentCell = row.querySelector('td:first-child strong');
+                const studentName = studentCell ? studentCell.textContent : 'NO NAME ELEMENT';
+                console.log(`📝 Row ${i}: ${studentName}`);
+            });
+        }, 100);
     }
 
     bulkMark(status) {
