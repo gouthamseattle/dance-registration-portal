@@ -1,0 +1,63 @@
+{
+  "timestamp": "2025-09-18T07:26:49.324Z",
+  "summary": {
+    "totalStudents": 3,
+    "crewMemberSuggestions": 0,
+    "generalStudents": 1,
+    "alreadyClassified": 2,
+    "noRegistrationHistory": 0
+  },
+  "suggestions": [
+    {
+      "id": 1,
+      "firstName": "",
+      "lastName": "",
+      "email": "abc@gmail.com",
+      "instagramHandle": "",
+      "currentType": "general",
+      "alreadyClassified": false,
+      "totalRegistrations": 1,
+      "crewPracticeRegistrations": 0,
+      "otherRegistrations": 1,
+      "courseNames": "sds",
+      "courseTypes": "drop-in",
+      "suggestedType": "general",
+      "reason": "Only registered for general classes: sds",
+      "action": "keep_general"
+    },
+    {
+      "id": 2,
+      "firstName": "test",
+      "lastName": "test",
+      "email": "gouthamseattle@gmail.com",
+      "instagramHandle": "test",
+      "currentType": "general",
+      "alreadyClassified": true,
+      "totalRegistrations": 0,
+      "crewPracticeRegistrations": 0,
+      "otherRegistrations": 0,
+      "courseNames": "",
+      "courseTypes": "",
+      "suggestedType": "general",
+      "reason": "Already admin classified",
+      "action": "already_classified"
+    },
+    {
+      "id": 3,
+      "firstName": "Tham",
+      "lastName": "Crazy",
+      "email": "thamcrazy@gmail.com",
+      "instagramHandle": "thamcrazy",
+      "currentType": "crew_member",
+      "alreadyClassified": true,
+      "totalRegistrations": 0,
+      "crewPracticeRegistrations": 0,
+      "otherRegistrations": 0,
+      "courseNames": "",
+      "courseTypes": "",
+      "suggestedType": "crew_member",
+      "reason": "Already admin classified",
+      "action": "already_classified"
+    }
+  ]
+}

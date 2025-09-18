@@ -527,9 +527,32 @@ class EmailProfileRegistrationApp {
         this.selectedCourse = course;
         console.log('Course selected:', course.name);
 
-        // For now, show a placeholder message
-        // In a full implementation, this would transition to the registration form
-        this.showSuccess(`Selected "${course.name}". Registration form integration coming next!`);
+        // Store selected course and student data for main registration system
+        const registrationData = {
+            email: this.currentEmail,
+            student_id: this.currentStudent.id,
+            course_id: courseId,
+            student_type: this.currentStudent.student_type,
+            first_name: this.currentStudent.first_name,
+            last_name: this.currentStudent.last_name,
+            instagram_handle: this.currentStudent.instagram_handle,
+            dance_experience: this.currentStudent.dance_experience,
+            profile_complete: true
+        };
+
+        // Create URL with student and course data
+        const params = new URLSearchParams(registrationData);
+        
+        // Show loading message
+        this.showLoading();
+        
+        console.log('✅ Redirecting to main registration with student data:', registrationData);
+        
+        // Redirect to main registration portal with pre-filled data
+        // Add a small delay to show the loading state
+        setTimeout(() => {
+            window.location.href = `/index-registration.html?${params.toString()}`;
+        }, 500);
     }
 
     // Utility methods

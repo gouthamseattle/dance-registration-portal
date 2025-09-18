@@ -3,19 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GouMo Dance Chronicles</title>
+    <title>Complete Registration - GouMo Dance Chronicles</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="css/styles.css?v=45ddfb9" rel="stylesheet">
-    <meta name="description" content="Register for GouMo Dance Chronicles - Modern dance experiences.">
+    <meta name="description" content="Complete your dance class registration - GouMo Dance Chronicles">
     <meta name="theme-color" content="#e91e63">
-    
-    <!-- Open Graph tags for WhatsApp sharing -->
-    <meta property="og:title" content="GouMo Dance Chronicles">
-    <meta property="og:description" content="Register for amazing dance classes! Multiple levels and styles available.">
-    <meta property="og:type" content="website">
-    <meta property="og:image" content="/images/dance-preview.jpg">
-    
 </head>
 <body>
     <!-- Loading Overlay -->
@@ -31,124 +24,20 @@
         <div class="container">
             <div class="row align-items-center">
                 <div class="col-12 text-center">
-<h1 class="display-4 mb-2">
-    <i class="fas fa-music text-primary"></i>
-    GouMo Dance Chronicles
-</h1>
-                    <p class="lead text-muted">We dance for each other</p>
+                    <h1 class="display-4 mb-2">
+                        <i class="fas fa-music text-primary"></i>
+                        GouMo Dance Chronicles
+                    </h1>
+                    <p class="lead text-muted">Complete Your Registration</p>
                 </div>
             </div>
         </div>
     </header>
 
-    <!-- Registration Status Alert -->
-    <div id="registrationStatus" class="container mt-3" style="display: none;">
-        <div class="alert alert-warning text-center">
-            <i class="fas fa-exclamation-triangle"></i>
-            <strong>Registration is currently closed.</strong>
-            <p class="mb-0 mt-2">Please check back later or contact us for more information.</p>
-        </div>
-    </div>
-
     <!-- Main Content -->
     <main class="container mt-4" id="mainContent">
-        <!-- Course Selection Section -->
-        <section id="courseSelection" class="mb-5">
-            <div class="row">
-                <div class="col-12">
-                    <h2 class="section-title">
-                        <i class="fas fa-calendar-alt text-primary"></i>
-                        Available Classes
-                    </h2>
-                </div>
-            </div>
-
-            <!-- Multi-week Courses -->
-            <div id="multiWeekCourses" class="row">
-                <!-- Courses will be loaded dynamically -->
-            </div>
-
-            <!-- Drop-in Classes -->
-            <div id="dropInSection" style="display: none;">
-                <div class="row mt-4">
-                    <div class="col-12">
-                        <h3 class="section-subtitle">
-                            <i class="fas fa-clock text-secondary"></i>
-                            Drop-in Classes
-                        </h3>
-                    </div>
-                </div>
-                <div id="dropInClasses" class="row">
-                    <!-- Drop-in classes will be loaded dynamically -->
-                </div>
-            </div>
-
-            <!-- Payment Method Selection for Course Selection -->
-            <div id="coursePaymentMethodSection" class="row mt-5" style="display: none;">
-                <div class="col-12">
-                    <div class="card shadow-lg border-0">
-                        <div class="card-header bg-success text-white text-center">
-                            <h4 class="mb-0">
-                                <i class="fas fa-credit-card"></i>
-                                Choose Your Payment Method
-                            </h4>
-                            <p class="mb-0 mt-2">Select how you'd like to pay for your selected course</p>
-                        </div>
-                        <div class="card-body p-4">
-                            <div class="row g-4">
-                                <div class="col-md-6">
-                                    <div class="card payment-selection-card h-100" data-method="venmo">
-                                        <div class="card-body text-center d-flex flex-column">
-                                            <i class="fas fa-mobile-alt fa-4x text-primary mb-3"></i>
-                                            <h5 class="card-title mb-2">Venmo</h5>
-                                            <p class="card-text text-muted flex-grow-1">Quick and easy mobile payment</p>
-                                            <div class="mt-3">
-                                                <i class="fas fa-check-circle text-success me-2"></i>
-                                                <span class="small text-muted">Instant payment</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="card payment-selection-card h-100" data-method="zelle">
-                                        <div class="card-body text-center d-flex flex-column">
-                                            <i class="fas fa-university fa-4x text-success mb-3"></i>
-                                            <h5 class="card-title mb-2">Zelle</h5>
-                                            <p class="card-text text-muted flex-grow-1">Secure bank-to-bank transfer</p>
-                                            <div class="mt-3">
-                                                <i class="fas fa-shield-alt text-success me-2"></i>
-                                                <span class="small text-muted">Bank secured</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <div class="text-center mt-4">
-                                <div class="alert alert-info">
-                                    <i class="fas fa-info-circle me-2"></i>
-                                    Both payment methods are secure and widely accepted
-                                </div>
-                                <button type="button" class="btn btn-secondary" id="backToCourseSelectionBtn">
-                                    <i class="fas fa-arrow-left me-2"></i>
-                                    Back to Courses
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- No courses available message -->
-            <div id="noCoursesMessage" class="text-center py-5" style="display: none;">
-                <i class="fas fa-calendar-times fa-3x text-muted mb-3"></i>
-                <h3 class="text-muted">No courses available</h3>
-                <p class="text-muted">Registration is not currently open. Please check back later!</p>
-            </div>
-        </section>
-
         <!-- Registration Form Section -->
-        <section id="registrationForm" class="registration-form-section" style="display: none;">
+        <section id="registrationForm" class="registration-form-section">
             <div class="row justify-content-center">
                 <div class="col-lg-8">
                     <div class="card shadow-lg border-0">
@@ -161,46 +50,31 @@
                         <div class="card-body p-4">
                             <!-- Selected Course Info -->
                             <div id="selectedCourseInfo" class="alert alert-info">
-                                <!-- Course details will be populated here -->
+                                <div class="text-center">
+                                    <div class="spinner-border text-primary" role="status">
+                                        <span class="visually-hidden">Loading course details...</span>
+                                    </div>
+                                    <p class="mt-2 mb-0">Loading course information...</p>
+                                </div>
+                            </div>
+
+                            <!-- Student Profile Info -->
+                            <div id="studentProfileInfo" class="alert alert-success" style="display: none;">
+                                <!-- Student profile will be populated here -->
                             </div>
 
                             <!-- Registration Form -->
                             <form id="studentRegistrationForm" autocomplete="off" autocapitalize="off">
+                                <!-- Hidden fields for student data -->
+                                <input type="hidden" id="studentId" name="student_id">
+                                <input type="hidden" id="courseId" name="course_id">
+                                <input type="hidden" id="studentEmail" name="email">
+                                <input type="hidden" id="studentFirstName" name="first_name">
+                                <input type="hidden" id="studentLastName" name="last_name">
+                                <input type="hidden" id="studentInstagram" name="instagram_handle">
+                                <input type="hidden" id="studentExperience" name="dance_experience">
+
                                 <div class="row">
-                                    <div class="col-12 mb-3">
-                                        <label for="email" class="form-label">
-                                            <i class="fas fa-envelope text-primary"></i>
-                                            Email Address *
-                                        </label>
-                                        <input type="email" class="form-control form-control-lg" id="email" name="email" required autocomplete="off" inputmode="email" autocorrect="off" autocapitalize="off" placeholder="you@example.com">
-                                        <div class="form-text">We'll send your confirmation to this email</div>
-                                    </div>
-
-                                    <div class="col-12 mb-3">
-                                        <label for="instagram_id" class="form-label">
-                                            <i class="fab fa-instagram text-primary"></i>
-                                            Instagram ID *
-                                        </label>
-                                        <div class="input-group">
-                                            <span class="input-group-text">@</span>
-                                            <input type="text" class="form-control form-control-lg" id="instagram_id" name="instagram_id" required>
-                                        </div>
-                                    </div>
-
-                                    <div class="col-12 mb-4">
-                                        <label for="dance_experience" class="form-label">
-                                            <i class="fas fa-star text-primary"></i>
-                                            Dance Experience *
-                                        </label>
-                                        <select class="form-select form-select-lg" id="dance_experience" name="dance_experience" required>
-                                            <option value="">Select your experience level</option>
-                                            <option value="Complete Beginner">Complete Beginner - Never danced before</option>
-                                            <option value="Some Experience">Some Experience - Taken a few classes</option>
-                                            <option value="Intermediate">Intermediate - Regular dancer</option>
-                                            <option value="Advanced">Advanced - Very experienced</option>
-                                        </select>
-                                    </div>
-
                                     <!-- Payment Options (for multi-week courses) -->
                                     <div id="paymentOptions" class="col-12 mb-4" style="display: none;">
                                         <label class="form-label">
@@ -284,9 +158,9 @@
 
                                 <!-- Form Actions -->
                                 <div class="d-grid gap-2">
-                                    <button type="button" class="btn btn-secondary btn-lg" id="backToCourses">
+                                    <button type="button" class="btn btn-secondary btn-lg" id="backToEmailProfile">
                                         <i class="fas fa-arrow-left"></i>
-                                        Back to Courses
+                                        Back to Course Selection
                                     </button>
                                     <button type="submit" class="btn btn-primary btn-lg" id="proceedToPayment">
                                         <i class="fas fa-credit-card"></i>
@@ -440,16 +314,81 @@
 
     <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="js/registration.js?v=54"></script>
     
-    <!-- Redirect to Email Profile System for Complete Workflow -->
+    <!-- Registration Completion Handler -->
     <script>
-        // Redirect users to the email profile system for complete student classification workflow
-        // This ensures all students go through the email -> profile creation -> course selection flow
-        console.log('🔄 Redirecting to email profile system for complete workflow');
-        window.location.href = '/email-profile.html';
+        // Handle registration completion with pre-filled student data
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('🔧 Registration completion page loaded');
+            
+            // Parse URL parameters for student and course data
+            const urlParams = new URLSearchParams(window.location.search);
+            const studentData = {
+                student_id: urlParams.get('student_id'),
+                course_id: urlParams.get('course_id'),
+                email: urlParams.get('email'),
+                first_name: urlParams.get('first_name'),
+                last_name: urlParams.get('last_name'),
+                instagram_handle: urlParams.get('instagram_handle'),
+                dance_experience: urlParams.get('dance_experience'),
+                student_type: urlParams.get('student_type'),
+                profile_complete: urlParams.get('profile_complete')
+            };
+
+            console.log('📝 Student data from URL:', studentData);
+
+            if (studentData.student_id && studentData.course_id && studentData.email) {
+                // Pre-fill hidden form fields
+                document.getElementById('studentId').value = studentData.student_id;
+                document.getElementById('courseId').value = studentData.course_id;
+                document.getElementById('studentEmail').value = studentData.email;
+                document.getElementById('studentFirstName').value = studentData.first_name || '';
+                document.getElementById('studentLastName').value = studentData.last_name || '';
+                document.getElementById('studentInstagram').value = studentData.instagram_handle || '';
+                document.getElementById('studentExperience').value = studentData.dance_experience || '';
+
+                // Show student profile info
+                const fullName = [studentData.first_name, studentData.last_name].filter(Boolean).join(' ');
+                const studentProfileDiv = document.getElementById('studentProfileInfo');
+                studentProfileDiv.innerHTML = `
+                    <h6 class="mb-2">
+                        <i class="fas fa-user-check text-success me-2"></i>
+                        Student Profile Confirmed
+                    </h6>
+                    <div class="row text-start">
+                        <div class="col-sm-6">
+                            <strong>Name:</strong> ${fullName}<br>
+                            <strong>Email:</strong> ${studentData.email}
+                        </div>
+                        <div class="col-sm-6">
+                            ${studentData.instagram_handle ? `<strong>Instagram:</strong> @${studentData.instagram_handle}<br>` : ''}
+                            <strong>Experience:</strong> ${studentData.dance_experience || 'Not specified'}
+                        </div>
+                    </div>
+                `;
+                studentProfileDiv.style.display = 'block';
+
+                // Override the registration app's course selection
+                if (window.app) {
+                    console.log('🔧 Setting up registration app with pre-filled data');
+                    // Wait for app to initialize, then set the course
+                    setTimeout(() => {
+                        if (window.app.selectCourse) {
+                            window.app.selectCourse(parseInt(studentData.course_id));
+                        }
+                    }, 1000);
+                }
+            } else {
+                console.warn('⚠️ Missing required student or course data, redirecting to email profile');
+                window.location.href = '/email-profile.html';
+            }
+
+            // Set up back button to return to email profile
+            document.getElementById('backToEmailProfile').addEventListener('click', function() {
+                window.location.href = '/email-profile.html';
+            });
+        });
     </script>
-    
-    <!-- Fallback registration system (kept for development/debugging) -->
-    <!-- <script src="js/registration.js?v=54"></script> -->
 </body>
 </html>
