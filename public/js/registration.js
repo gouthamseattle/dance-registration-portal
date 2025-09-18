@@ -877,7 +877,7 @@ class DanceRegistrationApp {
             email: preFilledEmail || formData.get('email'),
             first_name: preFilledFirstName || formData.get('first_name'),
             last_name: preFilledLastName || formData.get('last_name'),
-            instagram_id: preFilledInstagram || formData.get('instagram_id') || null,
+            instagram_handle: preFilledInstagram || formData.get('instagram_handle') || null,
             dance_experience: preFilledExperience || formData.get('dance_experience') || null,
             student_id: studentId || null
         };
@@ -885,8 +885,30 @@ class DanceRegistrationApp {
         console.log('📝 Using registration data:', {
             hasPreFilledData: !!studentId,
             email: this.registrationData.email,
-            student_id: this.registrationData.student_id
+            student_id: this.registrationData.student_id,
+            instagram_handle: this.registrationData.instagram_handle,
+            dance_experience: this.registrationData.dance_experience
         });
+
+        // Validate critical profile data
+        const hasInstagram = this.registrationData.instagram_handle && this.registrationData.instagram_handle !== 'null';
+        const hasExperience = this.registrationData.dance_experience && this.registrationData.dance_experience !== 'null';
+        
+        if (!hasInstagram || !hasExperience) {
+            console.warn('⚠️ Missing profile data detected:', {
+                hasInstagram,
+                hasExperience,
+                instagram_value: this.registrationData.instagram_handle,
+                experience_value: this.registrationData.dance_experience
+            });
+            
+            // For crew practice, we only need the name (not Instagram or experience)
+            const isCrewPractice = this.selectedCourse && this.selectedCourse.course_type === 'crew_practice';
+            if (!isCrewPractice) {
+                this.showError('Your profile appears to be incomplete. Please ensure you have provided your Instagram handle and dance experience.');
+                return;
+            }
+        }
 
         // Include student_name when Crew Practice toggles the Instagram field into a name field
         if (this.selectedCourse && this.selectedCourse.course_type === 'crew_practice') {
