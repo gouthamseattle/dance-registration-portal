@@ -3148,9 +3148,33 @@ Questions? Reply to this message`;
         const resultsDiv = document.getElementById('historicalAnalysisResults');
         if (!resultsDiv) return;
 
+        console.log('🔍 Historical Analysis Debug:', analysisResult);
+        console.log('📊 Summary:', analysisResult.summary);
+        console.log('📋 Suggestions count:', (analysisResult.suggestions || []).length);
+        
         const summary = analysisResult.summary || {};
         const suggestions = analysisResult.suggestions || [];
         const crewSuggestions = suggestions.filter(s => s.action === 'suggest_crew_member');
+        
+        console.log('👥 Total suggestions:', suggestions.length);
+        console.log('🏆 Crew suggestions:', crewSuggestions.length);
+        
+        if (suggestions.length === 0) {
+            resultsDiv.innerHTML = `
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <strong>No students found in database.</strong><br>
+                    This could mean either:<br>
+                    • No students have ever registered<br>
+                    • There's a database connection issue<br>
+                    • All student records were deleted<br>
+                    <br>
+                    Check the browser console (F12) for more details.
+                </div>
+            `;
+            resultsDiv.style.display = 'block';
+            return;
+        }
 
         resultsDiv.innerHTML = `
             <div class="card border-success">
