@@ -86,13 +86,13 @@
                                         <label for="first_name" class="form-label">
                                             <i class="fas fa-user text-primary"></i> First Name *
                                         </label>
-                                        <input type="text" class="form-control" id="first_name" required>
+                                        <input type="text" class="form-control" id="first_name" name="first_name" required>
                                     </div>
                                     <div class="col-md-6 mb-3">
                                         <label for="last_name" class="form-label">
                                             <i class="fas fa-user text-primary"></i> Last Name
                                         </label>
-                                        <input type="text" class="form-control" id="last_name">
+                                        <input type="text" class="form-control" id="last_name" name="last_name">
                                     </div>
                                 </div>
                                 <div class="mb-3">
@@ -101,7 +101,7 @@
                                     </label>
                                     <div class="input-group">
                                         <span class="input-group-text">@</span>
-                                        <input type="text" class="form-control" id="instagram_handle" 
+                                        <input type="text" class="form-control" id="instagram_handle" name="instagram_handle"
                                                placeholder="your_username">
                                     </div>
                                 </div>
@@ -109,7 +109,7 @@
                                     <label for="dance_experience" class="form-label">
                                         <i class="fas fa-star text-primary"></i> Dance Experience *
                                     </label>
-                                    <select class="form-select" id="dance_experience" required>
+                                    <select class="form-select" id="dance_experience" name="dance_experience" required>
                                         <option value="">Select your experience level</option>
                                         <option value="beginner">Beginner - New to dance</option>
                                         <option value="some_experience">Some Experience - 1-2 years</option>
@@ -244,6 +244,6 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="js/email-profile-registration.js?v=1"></script>
+    <script src="js/email-profile-registration.js?v=2"></script>
 </body>
 </html>

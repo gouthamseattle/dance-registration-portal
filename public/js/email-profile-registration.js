@@ -139,6 +139,8 @@ class EmailProfileRegistrationApp {
     }
 
     async handleProfileCreation() {
+        console.log('🔧 Profile creation form submitted');
+        
         const formData = new FormData(document.getElementById('profileCreationForm'));
         
         const profileData = {
@@ -149,10 +151,15 @@ class EmailProfileRegistrationApp {
             dance_experience: formData.get('dance_experience')
         };
 
+        console.log('🔧 Profile data:', profileData);
+
         if (!profileData.first_name || !profileData.dance_experience) {
-            this.showError('Please fill in all required fields');
+            console.log('🔧 Validation failed - missing required fields');
+            this.showError('Please fill in all required fields: First Name and Dance Experience');
             return;
         }
+
+        console.log('🔧 Validation passed, sending to server...');
 
         this.showLoading();
 
@@ -220,12 +227,6 @@ class EmailProfileRegistrationApp {
                         <span class="text-muted">${this.formatExperience(this.currentStudent.dance_experience)}</span>
                     </div>
                 ` : ''}
-                <div class="col-12 mt-2">
-                    <strong>Access Level:</strong><br>
-                    <span class="badge ${this.currentStudent.student_type === 'crew_member' ? 'bg-warning' : 'bg-info'}">
-                        ${this.currentStudent.student_type === 'crew_member' ? 'Crew Member' : 'General Student'}
-                    </span>
-                </div>
             </div>
         `;
         document.getElementById('studentInfo').innerHTML = studentInfoHtml;
