@@ -1334,7 +1334,11 @@ class DanceRegistrationApp {
                     <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
                     <h5>Payment Sent!</h5>
                     <p class="mb-2">Thank you for sending your Venmo payment.</p>
-                    <p class="mb-0 small">Registration received, We will confirm your payment and send an email confirmation</p>
+                    <p class="mb-2 small">Registration received, We will confirm your payment and send an email confirmation</p>
+                    <p class="mb-0 small text-muted">
+                        <i class="fas fa-envelope me-1"></i>
+                        Please check your spam/junk folder if you don't receive the email within a few minutes
+                    </p>
                 </div>
                 
                 <div class="registration-summary">
