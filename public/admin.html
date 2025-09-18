@@ -65,12 +65,18 @@
             
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav me-auto">
-                    <li class="nav-item">
-                        <a class="nav-link active" href="#" data-section="dashboard">
-                            <i class="fas fa-tachometer-alt"></i>
-                            Dashboard
-                        </a>
-                    </li>
+                        <li class="nav-item">
+                            <a class="nav-link" data-page="attendance" href="#attendance">
+                                <i class="fas fa-clipboard-check"></i>
+                                Manage Attendance
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" data-page="students" href="#students">
+                                <i class="fas fa-users"></i>
+                                Student Management
+                            </a>
+                        </li>
                     <li class="nav-item">
                         <a class="nav-link" href="#" data-section="courses">
                             <i class="fas fa-graduation-cap"></i>
@@ -399,6 +405,120 @@
                         </div>
                         <div class="card-body" id="reportsByStatus">
                             <div class="text-muted">Loading...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Student Management Section -->
+        <div id="studentsSection" class="content-section" style="display: none;">
+            <div class="row">
+                <div class="col-12">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h2><i class="fas fa-users text-primary"></i> Student Management</h2>
+                        <div class="btn-group">
+                            <button class="btn btn-outline-primary" onclick="admin.refreshStudentData()">
+                                <i class="fas fa-sync"></i> Refresh
+                            </button>
+                            <button class="btn btn-warning" onclick="admin.loadCrewMemberCandidates()">
+                                <i class="fas fa-user-check"></i> Review Crew Candidates
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pending Classifications -->
+            <div class="row mb-4" id="pendingStudentsRow" style="display: none;">
+                <div class="col-12">
+                    <div class="card border-warning">
+                        <div class="card-header bg-warning text-dark">
+                            <h5 class="mb-0">
+                                <i class="fas fa-clock me-2"></i>
+                                Pending Student Classifications
+                                <span class="badge bg-dark ms-2" id="pendingCount">0</span>
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle me-2"></i>
+                                New students are waiting for access level classification. Review each student and assign them as either <strong>General Student</strong> (drop-in classes only) or <strong>Crew Member</strong> (all classes).
+                            </div>
+                            <div id="pendingStudentsList">
+                                <!-- Pending students will be loaded here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Crew Member Candidates -->
+            <div class="row mb-4" id="crewCandidatesRow" style="display: none;">
+                <div class="col-12">
+                    <div class="card border-success">
+                        <div class="card-header bg-success text-white">
+                            <h5 class="mb-0">
+                                <i class="fas fa-user-check me-2"></i>
+                                Crew Member Candidates
+                                <span class="badge bg-light text-dark ms-2" id="candidatesCount">0</span>
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="alert alert-success">
+                                <i class="fas fa-lightbulb me-2"></i>
+                                Students who have registered for crew practice sessions. Review and classify them as crew members if appropriate.
+                            </div>
+                            <div id="crewCandidatesList">
+                                <!-- Crew candidates will be loaded here -->
+                            </div>
+                            <div class="text-center mt-3">
+                                <button class="btn btn-outline-secondary" onclick="admin.hideCrewCandidates()">
+                                    <i class="fas fa-eye-slash me-2"></i>Hide Candidates
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- All Students Overview -->
+            <div class="row">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5><i class="fas fa-list text-primary"></i> All Students</h5>
+                        </div>
+                        <div class="card-body">
+                            <!-- Student filters -->
+                            <div class="row mb-3">
+                                <div class="col-md-4">
+                                    <select class="form-select" id="studentTypeFilter">
+                                        <option value="">All Access Levels</option>
+                                        <option value="general">General Students</option>
+                                        <option value="crew_member">Crew Members</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <select class="form-select" id="classificationFilter">
+                                        <option value="">All Classifications</option>
+                                        <option value="classified">Admin Classified</option>
+                                        <option value="unclassified">Pending Classification</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <input type="text" class="form-control" id="studentSearchInput" 
+                                           placeholder="Search students by name or email...">
+                                </div>
+                            </div>
+
+                            <div id="allStudentsList">
+                                <div class="text-center py-4">
+                                    <div class="spinner-border text-primary" role="status">
+                                        <span class="visually-hidden">Loading students...</span>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>

@@ -229,6 +229,9 @@ class AdminDashboard {
             case 'reports':
                 this.loadReports();
                 break;
+            case 'students':
+                this.loadStudentManagement();
+                break;
             case 'settings':
                 this.loadSettings();
                 break;
@@ -236,10 +239,14 @@ class AdminDashboard {
     }
 
     updateDashboardStats() {
-        const totalRegs = this.registrations.length;
-        const completedRegs = this.registrations.filter(r => r.payment_status === 'completed');
-        const pendingRegs = this.registrations.filter(r => r.payment_status === 'pending');
-        const activeCourses = this.courses.filter(c => c.is_active).length;
+        // Ensure data is always an array to prevent filter errors
+        const registrations = Array.isArray(this.registrations) ? this.registrations : [];
+        const courses = Array.isArray(this.courses) ? this.courses : [];
+        
+        const totalRegs = registrations.length;
+        const completedRegs = registrations.filter(r => r.payment_status === 'completed');
+        const pendingRegs = registrations.filter(r => r.payment_status === 'pending');
+        const activeCourses = courses.filter(c => c.is_active).length;
         
         const totalRevenue = completedRegs.reduce((sum, reg) => sum + parseFloat(reg.payment_amount || 0), 0);
 
@@ -320,7 +327,10 @@ class AdminDashboard {
 
     loadRecentRegistrations() {
         const container = document.getElementById('recentRegistrations');
-        const recentRegs = this.registrations
+        
+        // Ensure registrations is always an array to prevent sort errors
+        const registrations = Array.isArray(this.registrations) ? this.registrations : [];
+        const recentRegs = registrations
             .sort((a, b) => new Date(b.registration_date) - new Date(a.registration_date))
             .slice(0, 10);
 
@@ -2776,6 +2786,604 @@ Questions? Reply to this message`;
             console.error('Save attendance error:', e);
             this.showError(e.message || 'Failed to save attendance');
         }
+    }
+
+    // =========================
+    // Student Management (Phase 1)
+    // =========================
+
+    async loadStudentManagement() {
+        await this.refreshStudentData();
+        await this.loadCrewMembersList();
+    }
+
+    async refreshStudentData() {
+        try {
+            const [pendingResponse, candidatesResponse] = await Promise.all([
+                this.apiFetch('/api/admin/students/pending'),
+                this.apiFetch('/api/admin/crew-member-candidates')
+            ]);
+
+            const pendingStudents = await pendingResponse.json();
+            const crewCandidates = await candidatesResponse.json();
+
+            this.renderPendingStudents(pendingStudents);
+            this.renderCrewCandidates(crewCandidates);
+            this.loadAllStudents();
+
+        } catch (error) {
+            console.error('Error loading student data:', error);
+            this.showError('Failed to load student data');
+        }
+    }
+
+    renderPendingStudents(students) {
+        const pendingRow = document.getElementById('pendingStudentsRow');
+        const pendingList = document.getElementById('pendingStudentsList');
+        const pendingCount = document.getElementById('pendingCount');
+
+        if (students.length === 0) {
+            pendingRow.style.display = 'none';
+            return;
+        }
+
+        pendingRow.style.display = 'block';
+        pendingCount.textContent = students.length;
+
+        const studentsHtml = students.map(student => `
+            <div class="card mb-3 border-warning">
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col-md-6">
+                            <h6 class="mb-1">${student.first_name} ${student.last_name}</h6>
+                            <small class="text-muted">${student.email}</small>
+                            ${student.instagram_handle ? `<br><small class="text-muted">@${student.instagram_handle}</small>` : ''}
+                        </div>
+                        <div class="col-md-4">
+                            <small><strong>Experience:</strong> ${this.formatExperience(student.dance_experience)}</small><br>
+                            <small><strong>Registrations:</strong> ${student.registration_count}</small><br>
+                            <small><strong>Joined:</strong> ${new Date(student.created_at).toLocaleDateString()}</small>
+                        </div>
+                        <div class="col-md-2">
+                            <div class="btn-group-vertical w-100">
+                                <button class="btn btn-warning btn-sm" onclick="admin.classifyStudent(${student.id}, 'crew_member')">
+                                    <i class="fas fa-users"></i> Crew Member
+                                </button>
+                                <button class="btn btn-outline-secondary btn-sm" onclick="admin.classifyStudent(${student.id}, 'general')">
+                                    <i class="fas fa-user"></i> General Student
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+
+        pendingList.innerHTML = studentsHtml;
+    }
+
+    renderCrewCandidates(candidates) {
+        const candidatesRow = document.getElementById('crewCandidatesRow');
+        const candidatesList = document.getElementById('crewCandidatesList');
+        const candidatesCount = document.getElementById('candidatesCount');
+
+        if (candidates.length === 0) {
+            candidatesRow.style.display = 'none';
+            return;
+        }
+
+        candidatesRow.style.display = 'block';
+        candidatesCount.textContent = candidates.length;
+
+        const candidatesHtml = candidates.map(candidate => `
+            <div class="card mb-3 border-success">
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col-md-5">
+                            <h6 class="mb-1">${candidate.first_name} ${candidate.last_name}</h6>
+                            <small class="text-muted">${candidate.email}</small>
+                            ${candidate.instagram_handle ? `<br><small class="text-muted">@${candidate.instagram_handle}</small>` : ''}
+                        </div>
+                        <div class="col-md-4">
+                            <small><strong>Crew Registrations:</strong> ${candidate.crew_registrations}</small><br>
+                            <small><strong>Classes:</strong> ${candidate.crew_courses}</small><br>
+                            <small><strong>Current Type:</strong> 
+                                <span class="badge ${candidate.current_student_type === 'crew_member' ? 'bg-warning' : 'bg-info'}">
+                                    ${candidate.current_student_type === 'crew_member' ? 'Crew Member' : 'General Student'}
+                                </span>
+                            </small>
+                        </div>
+                        <div class="col-md-3">
+                            ${candidate.current_student_type !== 'crew_member' ? `
+                                <button class="btn btn-success btn-sm w-100" onclick="admin.classifyStudent(${candidate.id}, 'crew_member')">
+                                    <i class="fas fa-user-check"></i> Promote to Crew Member
+                                </button>
+                            ` : `
+                                <span class="text-success">
+                                    <i class="fas fa-check-circle"></i> Already Crew Member
+                                </span>
+                            `}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+
+        candidatesList.innerHTML = candidatesHtml;
+    }
+
+    async loadCrewMemberCandidates() {
+        try {
+            const response = await this.apiFetch('/api/admin/crew-member-candidates');
+            const candidates = await response.json();
+            this.renderCrewCandidates(candidates);
+        } catch (error) {
+            console.error('Error loading crew candidates:', error);
+            this.showError('Failed to load crew member candidates');
+        }
+    }
+
+    hideCrewCandidates() {
+        document.getElementById('crewCandidatesRow').style.display = 'none';
+    }
+
+    async classifyStudent(studentId, studentType) {
+        try {
+            const response = await this.apiFetch(`/api/admin/students/${studentId}/classify`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ student_type: studentType })
+            });
+
+            const result = await response.json();
+
+            if (response.ok) {
+                this.showSuccess(`Student classified as ${studentType === 'crew_member' ? 'Crew Member' : 'General Student'}`);
+                await this.refreshStudentData();
+            } else {
+                this.showError(result.error || 'Failed to classify student');
+            }
+        } catch (error) {
+            console.error('Error classifying student:', error);
+            this.showError('Failed to classify student');
+        }
+    }
+
+    formatExperience(experience) {
+        const experiences = {
+            'beginner': 'Beginner - New to dance',
+            'some_experience': 'Some Experience - 1-2 years',
+            'intermediate': 'Intermediate - 2-5 years',
+            'advanced': 'Advanced - 5+ years',
+            'professional': 'Professional/Instructor'
+        };
+        return experiences[experience] || experience || 'Not specified';
+    }
+
+    async loadAllStudents() {
+        const allStudentsList = document.getElementById('allStudentsList');
+        
+        // Show loading
+        allStudentsList.innerHTML = `
+            <div class="text-center py-4">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading students...</span>
+                </div>
+            </div>
+        `;
+
+        try {
+            // Add historical classification interface
+            allStudentsList.innerHTML = `
+                <div class="card mb-4 border-primary">
+                    <div class="card-header bg-primary text-white">
+                        <h6 class="mb-0">
+                            <i class="fas fa-history me-2"></i>
+                            Historical Student Classification
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle me-2"></i>
+                            <strong>One-Time Setup:</strong> Analyze all existing students and classify them based on their registration history. 
+                            Students who registered for crew practice will be suggested as crew members.
+                        </div>
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-start">
+                            <button class="btn btn-primary" onclick="admin.runHistoricalAnalysis()" id="historicalAnalysisBtn">
+                                <i class="fas fa-search me-2"></i>Run Historical Analysis
+                            </button>
+                            <button class="btn btn-outline-secondary" onclick="admin.showHistoricalHelp()">
+                                <i class="fas fa-question-circle me-2"></i>How it Works
+                            </button>
+                        </div>
+                        <div id="historicalAnalysisResults" class="mt-3" style="display: none;"></div>
+                    </div>
+                </div>
+                
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i>
+                    Complete student management interface is coming soon. Focus on pending classifications and crew member analysis above for now.
+                </div>
+            `;
+        } catch (error) {
+            console.error('Error loading all students:', error);
+            allStudentsList.innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    Failed to load students list.
+                </div>
+            `;
+        }
+    }
+
+    async loadCrewMembersList() {
+        try {
+            const response = await this.apiFetch('/api/admin/crew-members');
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            
+            const crewMembers = await response.json();
+            this.renderCrewMembersList(crewMembers);
+        } catch (error) {
+            console.error('Error loading crew members list:', error);
+            this.showError(`Failed to load crew members: ${error.message}`);
+            // Render empty state on error
+            this.renderCrewMembersList([]);
+        }
+    }
+
+    renderCrewMembersList(crewMembers) {
+        // Add crew members section at the top of student management if we have crew members
+        // Ensure crewMembers is an array to prevent .map() errors
+        if (!crewMembers || !Array.isArray(crewMembers) || crewMembers.length === 0) return;
+
+        const studentsSection = document.getElementById('studentsSection');
+        if (!studentsSection) return;
+
+        // Check if crew members section already exists
+        let crewSection = document.getElementById('crewMembersOverview');
+        if (!crewSection) {
+            // Insert after the main header but before pending students
+            const headerRow = studentsSection.querySelector('.row');
+            crewSection = document.createElement('div');
+            crewSection.id = 'crewMembersOverview';
+            crewSection.className = 'row mb-4';
+            headerRow.insertAdjacentElement('afterend', crewSection);
+        }
+
+        crewSection.innerHTML = `
+            <div class="col-12">
+                <div class="card border-warning">
+                    <div class="card-header bg-warning text-dark">
+                        <h5 class="mb-0">
+                            <i class="fas fa-crown me-2"></i>
+                            Current Crew Members
+                            <span class="badge bg-dark ms-2">${crewMembers.length}</span>
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            ${crewMembers.map(member => {
+                                const name = `${member.first_name} ${member.last_name}`.trim() || 'Unknown Name';
+                                return `
+                                    <div class="col-md-6 col-lg-4 mb-3">
+                                        <div class="card border-warning">
+                                            <div class="card-body py-2">
+                                                <div class="d-flex align-items-center">
+                                                    <i class="fas fa-crown text-warning me-2"></i>
+                                                    <div>
+                                                        <strong>${name}</strong><br>
+                                                        <small class="text-muted">
+                                                            <i class="fas fa-envelope me-1"></i>${member.email}
+                                                        </small>
+                                                        ${member.instagram_handle ? `<br><small class="text-muted"><i class="fab fa-instagram me-1"></i>@${member.instagram_handle}</small>` : ''}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                        ${crewMembers.length === 0 ? `
+                            <div class="text-muted text-center py-3">
+                                <i class="fas fa-users me-2"></i>
+                                No crew members classified yet. Use the classification tools below to identify crew members.
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    async runHistoricalAnalysis() {
+        const analysisBtn = document.getElementById('historicalAnalysisBtn');
+        const resultsDiv = document.getElementById('historicalAnalysisResults');
+        
+        // Show loading state
+        if (analysisBtn) {
+            analysisBtn.disabled = true;
+            analysisBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Analyzing...';
+        }
+
+        try {
+            const response = await this.apiFetch('/api/admin/historical-classification/analyze', {
+                method: 'POST'
+            });
+
+            const result = await response.json();
+
+            if (response.ok) {
+                this.renderHistoricalAnalysisResults(result);
+                this.showSuccess('Historical analysis completed successfully');
+            } else {
+                this.showError(result.error || 'Failed to run historical analysis');
+            }
+        } catch (error) {
+            console.error('Error running historical analysis:', error);
+            this.showError('Failed to run historical analysis');
+        } finally {
+            // Reset button state
+            if (analysisBtn) {
+                analysisBtn.disabled = false;
+                analysisBtn.innerHTML = '<i class="fas fa-search me-2"></i>Run Historical Analysis';
+            }
+        }
+    }
+
+    renderHistoricalAnalysisResults(analysisResult) {
+        const resultsDiv = document.getElementById('historicalAnalysisResults');
+        if (!resultsDiv) return;
+
+        const summary = analysisResult.summary || {};
+        const suggestions = analysisResult.suggestions || [];
+        const crewSuggestions = suggestions.filter(s => s.action === 'suggest_crew_member');
+
+        resultsDiv.innerHTML = `
+            <div class="card border-success">
+                <div class="card-header bg-success text-white">
+                    <h6 class="mb-0">
+                        <i class="fas fa-chart-bar me-2"></i>
+                        Analysis Results
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center mb-3">
+                        <div class="col-md-3">
+                            <div class="display-6 text-primary">${summary.totalStudents || 0}</div>
+                            <small class="text-muted">Total Students</small>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="display-6 text-warning">${summary.crewMemberSuggestions || 0}</div>
+                            <small class="text-muted">Crew Suggestions</small>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="display-6 text-info">${summary.generalStudents || 0}</div>
+                            <small class="text-muted">General Students</small>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="display-6 text-success">${summary.alreadyClassified || 0}</div>
+                            <small class="text-muted">Already Classified</small>
+                        </div>
+                    </div>
+
+                    ${crewSuggestions.length > 0 ? `
+                        <div class="alert alert-warning">
+                            <strong><i class="fas fa-crown me-2"></i>Crew Member Suggestions</strong><br>
+                            The following students registered for crew practice and should be classified as crew members:
+                        </div>
+
+                        <div class="table-responsive mb-3">
+                            <table class="table table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>Student</th>
+                                        <th>Email</th>
+                                        <th>Reason</th>
+                                        <th>Current Type</th>
+                                        <th>Select</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${crewSuggestions.map((student, index) => `
+                                        <tr>
+                                            <td>
+                                                <strong>${student.firstName} ${student.lastName}</strong>
+                                                ${student.instagramHandle ? `<br><small class="text-muted">@${student.instagramHandle}</small>` : ''}
+                                            </td>
+                                            <td>${student.email}</td>
+                                            <td><small>${student.reason}</small></td>
+                                            <td>
+                                                <span class="badge bg-secondary">${student.currentType}</span>
+                                                →
+                                                <span class="badge bg-warning">${student.suggestedType}</span>
+                                            </td>
+                                            <td>
+                                                <input type="checkbox" class="form-check-input" 
+                                                       id="student_${student.id}" 
+                                                       data-student-id="${student.id}" 
+                                                       checked>
+                                            </td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div class="form-check">
+                                <input type="checkbox" class="form-check-input" id="selectAllSuggestions" checked>
+                                <label class="form-check-label" for="selectAllSuggestions">
+                                    Select all suggestions
+                                </label>
+                            </div>
+                            <div>
+                                <button class="btn btn-outline-secondary me-2" onclick="admin.cancelHistoricalClassification()">
+                                    Cancel
+                                </button>
+                                <button class="btn btn-success" onclick="admin.applyHistoricalClassifications()">
+                                    <i class="fas fa-check me-2"></i>
+                                    Apply Selected Classifications
+                                </button>
+                            </div>
+                        </div>
+                    ` : `
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle me-2"></i>
+                            <strong>No crew member suggestions found.</strong><br>
+                            All students have either been classified already or have no crew practice registration history.
+                        </div>
+                    `}
+                </div>
+            </div>
+        `;
+
+        // Wire up select all checkbox
+        const selectAllCheckbox = document.getElementById('selectAllSuggestions');
+        if (selectAllCheckbox) {
+            selectAllCheckbox.addEventListener('change', (e) => {
+                const studentCheckboxes = resultsDiv.querySelectorAll('input[data-student-id]');
+                studentCheckboxes.forEach(checkbox => {
+                    checkbox.checked = e.target.checked;
+                });
+            });
+        }
+
+        resultsDiv.style.display = 'block';
+    }
+
+    async applyHistoricalClassifications() {
+        const resultsDiv = document.getElementById('historicalAnalysisResults');
+        if (!resultsDiv) return;
+
+        // Get selected student IDs
+        const selectedCheckboxes = resultsDiv.querySelectorAll('input[data-student-id]:checked');
+        const studentIds = Array.from(selectedCheckboxes).map(cb => parseInt(cb.dataset.studentId));
+
+        if (studentIds.length === 0) {
+            this.showError('Please select at least one student to classify');
+            return;
+        }
+
+        // Confirm the action
+        if (!confirm(`Apply crew member classification to ${studentIds.length} selected students?`)) {
+            return;
+        }
+
+        try {
+            const response = await this.apiFetch('/api/admin/historical-classification/apply', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    student_ids: studentIds,
+                    action: 'approve'
+                })
+            });
+
+            const result = await response.json();
+
+            if (response.ok) {
+                this.showSuccess(`Successfully classified ${result.updated_count} students as crew members`);
+                
+                // Refresh the student management data
+                await this.refreshStudentData();
+                await this.loadCrewMembersList();
+                
+                // Hide the results and show completion message
+                resultsDiv.innerHTML = `
+                    <div class="alert alert-success">
+                        <i class="fas fa-check-circle me-2"></i>
+                        <strong>Classification Complete!</strong><br>
+                        ${result.updated_count} students have been classified as crew members. 
+                        The crew members list has been updated above.
+                    </div>
+                `;
+            } else {
+                this.showError(result.error || 'Failed to apply classifications');
+            }
+        } catch (error) {
+            console.error('Error applying historical classifications:', error);
+            this.showError('Failed to apply classifications');
+        }
+    }
+
+    cancelHistoricalClassification() {
+        const resultsDiv = document.getElementById('historicalAnalysisResults');
+        if (resultsDiv) {
+            resultsDiv.style.display = 'none';
+        }
+    }
+
+    showHistoricalHelp() {
+        const modalHtml = `
+            <div class="modal fade" id="historicalHelpModal" tabindex="-1">
+                <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">
+                                <i class="fas fa-question-circle text-info me-2"></i>
+                                Historical Student Classification
+                            </h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <h6>How it Works:</h6>
+                            <ol>
+                                <li><strong>Analysis:</strong> The system examines all existing students and their registration history</li>
+                                <li><strong>Pattern Recognition:</strong> Students who registered for crew practice courses are identified</li>
+                                <li><strong>Suggestions:</strong> These students are suggested to be classified as "crew members"</li>
+                                <li><strong>Review & Apply:</strong> You can review and selectively apply the suggestions</li>
+                            </ol>
+
+                            <h6>Classification Logic:</h6>
+                            <div class="alert alert-info">
+                                <strong>Crew Member:</strong> Students who have registered for any course with type "crew_practice"<br>
+                                <strong>General Student:</strong> Students who only registered for drop-in or multi-week classes
+                            </div>
+
+                            <h6>What Happens After Classification:</h6>
+                            <ul>
+                                <li>Crew members will see both general classes AND crew practice classes</li>
+                                <li>General students will only see classes open to everyone</li>
+                                <li>The crew members list will be prominently displayed for easy contact</li>
+                                <li>All classifications are marked as admin-reviewed</li>
+                            </ul>
+
+                            <h6>Safety Features:</h6>
+                            <ul>
+                                <li>Preview mode - see suggestions before applying</li>
+                                <li>Selective application - choose which suggestions to apply</li>
+                                <li>No data loss - existing student data is preserved</li>
+                                <li>One-time setup - designed to be run once for historical data</li>
+                            </ul>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Remove existing modal if any
+        const existingModal = document.getElementById('historicalHelpModal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+
+        // Add modal to body
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        
+        // Show modal
+        const modal = new bootstrap.Modal(document.getElementById('historicalHelpModal'));
+        modal.show();
     }
 }
 

@@ -112,6 +112,27 @@ async function initializeDatabase() {
         } catch (e) {
             console.log('ℹ️ payment_method column check skipped:', e.message || e);
         }
+
+        // Ensure student profile and access control columns exist
+        try {
+            if (dbConfig.isProduction) {
+                await dbConfig.run('ALTER TABLE students ADD COLUMN IF NOT EXISTS student_type VARCHAR(20) DEFAULT \'general\'');
+                await dbConfig.run('ALTER TABLE students ADD COLUMN IF NOT EXISTS profile_complete BOOLEAN DEFAULT FALSE');
+                await dbConfig.run('ALTER TABLE students ADD COLUMN IF NOT EXISTS admin_classified BOOLEAN DEFAULT FALSE');
+                await dbConfig.run('ALTER TABLE students ADD COLUMN IF NOT EXISTS instagram_handle VARCHAR(255)');
+                await dbConfig.run('ALTER TABLE courses ADD COLUMN IF NOT EXISTS required_student_type VARCHAR(20) DEFAULT \'any\'');
+            } else {
+                // SQLite: ignore if column exists
+                await dbConfig.run('ALTER TABLE students ADD COLUMN student_type TEXT DEFAULT \'general\'').catch(() => {});
+                await dbConfig.run('ALTER TABLE students ADD COLUMN profile_complete INTEGER DEFAULT 0').catch(() => {});
+                await dbConfig.run('ALTER TABLE students ADD COLUMN admin_classified INTEGER DEFAULT 0').catch(() => {});
+                await dbConfig.run('ALTER TABLE students ADD COLUMN instagram_handle TEXT').catch(() => {});
+                await dbConfig.run('ALTER TABLE courses ADD COLUMN required_student_type TEXT DEFAULT \'any\'').catch(() => {});
+            }
+            console.log('✅ Ensured student profile and access control columns exist');
+        } catch (e) {
+            console.log('ℹ️ Student profile columns check skipped:', e.message || e);
+        }
         
         // Run migration if in production (non-blocking so server can start listening)
         if (process.env.NODE_ENV === 'production') {
@@ -761,6 +782,451 @@ app.delete('/api/courses/:courseId/slots/:slotId', requireAuth, asyncHandler(asy
     await dbConfig.run('DELETE FROM course_slots WHERE id = $1 AND course_id = $2', [slotId, courseId]);
     
     res.json({ success: true });
+}));
+
+// Student Profile and Access Control APIs
+
+/**
+ * Check student profile by email
+ * POST /api/check-student-profile
+ * Body: { email: string }
+ * Returns: { exists: boolean, student?: object, eligible_courses?: array }
+ */
+app.post('/api/check-student-profile', asyncHandler(async (req, res) => {
+    const { email } = req.body;
+    
+    if (!email) {
+        return res.status(400).json({ error: 'Email is required' });
+    }
+    
+    // Check if student exists
+    const student = await dbConfig.get('SELECT * FROM students WHERE email = $1', [email]);
+    
+    if (!student) {
+        return res.json({ 
+            exists: false,
+            new_student: true 
+        });
+    }
+    
+    // Get eligible courses based on student type
+    let courseQuery = `
+        SELECT c.*, COUNT(DISTINCT r.id) as registration_count
+        FROM courses c
+        LEFT JOIN registrations r ON c.id = r.course_id AND r.payment_status = 'completed'
+        WHERE c.is_active = ${dbConfig.isProduction ? 'true' : '1'}
+    `;
+    
+    const params = [];
+    
+    // Filter courses based on student access level
+    if (student.student_type === 'crew_member') {
+        // Crew members can access all courses
+        courseQuery += ' AND (c.required_student_type = \'any\' OR c.required_student_type = \'crew_member\')';
+    } else {
+        // General students can only access courses open to all
+        courseQuery += ' AND c.required_student_type = \'any\'';
+    }
+    
+    courseQuery += ' GROUP BY c.id ORDER BY c.created_at DESC';
+    
+    const eligibleCourses = await dbConfig.all(courseQuery, params);
+    
+    // Get courses with slots for each eligible course
+    const coursesWithSlots = await Promise.all(eligibleCourses.map(async (course) => {
+        const slots = await dbConfig.all(`
+            SELECT cs.*, 
+                   COUNT(DISTINCT r.id) as slot_registration_count,
+                   (cs.capacity - COUNT(DISTINCT r.id)) as available_spots
+            FROM course_slots cs
+            LEFT JOIN registrations r ON cs.course_id = r.course_id AND r.payment_status = 'completed'
+            WHERE cs.course_id = $1
+            GROUP BY cs.id
+            ORDER BY cs.created_at ASC
+        `, [course.id]);
+        
+        // Get pricing for each slot
+        const slotsWithPricing = await Promise.all(slots.map(async (slot) => {
+            const pricing = await dbConfig.all(`
+                SELECT pricing_type, price 
+                FROM course_pricing 
+                WHERE course_slot_id = $1
+            `, [slot.id]);
+            
+            const pricingObj = {};
+            pricing.forEach(p => {
+                pricingObj[p.pricing_type] = parseFloat(p.price);
+            });
+            
+            return {
+                ...slot,
+                pricing: pricingObj
+            };
+        }));
+        
+        // Calculate totals and build schedule info (same logic as /api/courses)
+        const totalCapacity = slots.reduce((sum, slot) => sum + (slot.capacity || 0), 0);
+        const totalAvailableSpots = slots.reduce((sum, slot) => sum + (slot.available_spots || 0), 0);
+        
+        // Build computed schedule_info
+        let computedScheduleInfo = '';
+        const scheduleItems = slotsWithPricing.map(s => {
+            const parts = [];
+            if (course.course_type === 'crew_practice' && s.practice_date) {
+                const dateStr = formatLocalDate(s.practice_date);
+                parts.push(dateStr);
+            } else if (course.course_type === 'drop_in' && s.practice_date) {
+                const dateStr = formatLocalDate(s.practice_date);
+                parts.push(dateStr);
+            } else if (s.day_of_week) {
+                parts.push(`${s.day_of_week}s`);
+            }
+            const st = s.start_time;
+            const et = s.end_time;
+            if (st && et) {
+                parts.push(`${st} - ${et}`);
+            } else if (st) {
+                parts.push(st);
+            }
+            if (s.location) parts.push(`at ${s.location}`);
+            return parts.join(' ');
+        }).filter(Boolean);
+
+        if (scheduleItems.length > 0) {
+            let dateInfo = '';
+            const hasPracticeDates = slotsWithPricing.some(s => !!s.practice_date);
+            if (!hasPracticeDates) {
+                if (course.start_date && course.end_date) {
+                    const startDate = formatLocalDate(course.start_date);
+                    const endDate = formatLocalDate(course.end_date);
+                    dateInfo = ` (${startDate} - ${endDate})`;
+                } else if (course.start_date) {
+                    const startDate = formatLocalDate(course.start_date);
+                    dateInfo = ` (Starts ${startDate})`;
+                }
+            }
+            computedScheduleInfo = scheduleItems.join(' | ') + dateInfo;
+        } else {
+            computedScheduleInfo = course.schedule_info || '';
+        }
+
+        return {
+            ...course,
+            slots: slotsWithPricing,
+            capacity: totalCapacity,
+            available_spots: totalAvailableSpots,
+            schedule_info: computedScheduleInfo,
+            full_course_price: slotsWithPricing[0]?.pricing?.full_package || 0,
+            per_class_price: slotsWithPricing[0]?.pricing?.drop_in || 0
+        };
+    }));
+    
+    res.json({
+        exists: true,
+        student: {
+            id: student.id,
+            first_name: student.first_name,
+            last_name: student.last_name,
+            email: student.email,
+            instagram_handle: student.instagram_handle,
+            dance_experience: student.dance_experience,
+            student_type: student.student_type,
+            profile_complete: dbConfig.isProduction ? student.profile_complete : Boolean(student.profile_complete)
+        },
+        eligible_courses: coursesWithSlots
+    });
+}));
+
+/**
+ * Create student profile
+ * POST /api/create-student-profile
+ * Body: { email, first_name, last_name, instagram_handle, dance_experience }
+ */
+app.post('/api/create-student-profile', asyncHandler(async (req, res) => {
+    const { email, first_name, last_name, instagram_handle, dance_experience } = req.body;
+    
+    if (!email || !first_name) {
+        return res.status(400).json({ error: 'Email and first name are required' });
+    }
+    
+    // Check if student already exists
+    const existingStudent = await dbConfig.get('SELECT id FROM students WHERE email = $1', [email]);
+    if (existingStudent) {
+        return res.status(400).json({ error: 'Student with this email already exists' });
+    }
+    
+    // Create new student with profile_complete = true, admin_classified = false
+    const result = await dbConfig.run(`
+        INSERT INTO students (
+            first_name, last_name, email, instagram_handle, dance_experience,
+            student_type, profile_complete, admin_classified
+        ) VALUES ($1, $2, $3, $4, $5, 'general', ${dbConfig.isProduction ? 'true' : '1'}, ${dbConfig.isProduction ? 'false' : '0'})
+        ${dbConfig.isProduction ? 'RETURNING id' : ''}
+    `, [first_name, last_name || '', email, instagram_handle || '', dance_experience || '']);
+    
+    let studentId;
+    if (dbConfig.isProduction) {
+        studentId = result[0]?.id;
+    } else {
+        studentId = result.lastID;
+    }
+    
+    if (!studentId) {
+        return res.status(500).json({ error: 'Failed to create student profile' });
+    }
+    
+    // Get eligible courses (only open to all since new students default to 'general')
+    let courseQuery = `
+        SELECT c.*, COUNT(DISTINCT r.id) as registration_count
+        FROM courses c
+        LEFT JOIN registrations r ON c.id = r.course_id AND r.payment_status = 'completed'
+        WHERE c.is_active = ${dbConfig.isProduction ? 'true' : '1'} 
+        AND c.required_student_type = 'any'
+        GROUP BY c.id ORDER BY c.created_at DESC
+    `;
+    
+    const eligibleCourses = await dbConfig.all(courseQuery);
+    
+    console.log('👤 New student profile created:', { id: studentId, email, first_name });
+    
+    res.json({ 
+        success: true,
+        student: {
+            id: studentId,
+            first_name,
+            last_name: last_name || '',
+            email,
+            instagram_handle: instagram_handle || '',
+            dance_experience: dance_experience || '',
+            student_type: 'general',
+            profile_complete: true
+        },
+        eligible_courses: eligibleCourses
+    });
+}));
+
+/**
+ * Admin: Get pending student classifications
+ * GET /api/admin/students/pending
+ */
+app.get('/api/admin/students/pending', requireAuth, asyncHandler(async (req, res) => {
+    const students = await dbConfig.all(`
+        SELECT s.*, 
+               COUNT(r.id) as registration_count,
+               MAX(r.registration_date) as last_registration
+        FROM students s
+        LEFT JOIN registrations r ON r.student_id = s.id
+        WHERE s.admin_classified = ${dbConfig.isProduction ? 'false' : '0'}
+        AND s.profile_complete = ${dbConfig.isProduction ? 'true' : '1'}
+        GROUP BY s.id
+        ORDER BY s.created_at DESC
+    `);
+
+    const pendingStudents = students.map(s => ({
+        id: s.id,
+        first_name: s.first_name,
+        last_name: s.last_name,
+        email: s.email,
+        instagram_handle: s.instagram_handle,
+        dance_experience: s.dance_experience,
+        student_type: s.student_type,
+        registration_count: Number(s.registration_count || 0),
+        last_registration: s.last_registration,
+        created_at: s.created_at
+    }));
+
+    res.json(pendingStudents);
+}));
+
+/**
+ * Admin: Classify student type
+ * PUT /api/admin/students/:id/classify
+ * Body: { student_type: 'general' | 'crew_member' }
+ */
+app.put('/api/admin/students/:id/classify', requireAuth, asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const { student_type } = req.body;
+
+    if (!student_type || !['general', 'crew_member'].includes(student_type)) {
+        return res.status(400).json({ error: 'student_type must be either "general" or "crew_member"' });
+    }
+
+    // Update student classification
+    await dbConfig.run(`
+        UPDATE students SET 
+            student_type = $1, 
+            admin_classified = ${dbConfig.isProduction ? 'true' : '1'},
+            updated_at = CURRENT_TIMESTAMP 
+        WHERE id = $2
+    `, [student_type, id]);
+
+    console.log('👤 Student classified:', { id, student_type, admin: req.session.adminUsername });
+
+    res.json({ success: true, student_type });
+}));
+
+/**
+ * Admin: Get crew member candidates from existing registrations
+ * GET /api/admin/crew-member-candidates
+ */
+app.get('/api/admin/crew-member-candidates', requireAuth, asyncHandler(async (req, res) => {
+    const candidates = await dbConfig.all(`
+        SELECT DISTINCT s.*, 
+               COUNT(r.id) as crew_registrations,
+               GROUP_CONCAT(c.name) as crew_courses
+        FROM students s
+        JOIN registrations r ON r.student_id = s.id
+        JOIN courses c ON c.id = r.course_id
+        WHERE c.course_type = 'crew_practice'
+        AND r.payment_status = 'completed'
+        GROUP BY s.id
+        ORDER BY s.created_at DESC
+    `);
+
+    const crewCandidates = candidates.map(s => ({
+        id: s.id,
+        first_name: s.first_name,
+        last_name: s.last_name,
+        email: s.email,
+        instagram_handle: s.instagram_handle,
+        dance_experience: s.dance_experience,
+        current_student_type: s.student_type,
+        crew_registrations: Number(s.crew_registrations || 0),
+        crew_courses: s.crew_courses || '',
+        admin_classified: dbConfig.isProduction ? s.admin_classified : Boolean(s.admin_classified),
+        created_at: s.created_at
+    }));
+
+    res.json(crewCandidates);
+}));
+
+/**
+ * Admin: Get all crew members for enhanced visibility
+ * GET /api/admin/crew-members
+ */
+app.get('/api/admin/crew-members', requireAuth, asyncHandler(async (req, res) => {
+    const crewMembers = await dbConfig.all(`
+        SELECT s.id, s.first_name, s.last_name, s.email, s.instagram_handle, s.created_at,
+               COUNT(r.id) as total_registrations
+        FROM students s
+        LEFT JOIN registrations r ON s.id = r.student_id
+        WHERE s.student_type = 'crew_member'
+        GROUP BY s.id, s.first_name, s.last_name, s.email, s.instagram_handle, s.created_at
+        ORDER BY s.first_name ASC, s.last_name ASC
+    `);
+
+    const formatted = crewMembers.map(s => ({
+        id: s.id,
+        first_name: s.first_name || '',
+        last_name: s.last_name || '',
+        email: s.email,
+        instagram_handle: s.instagram_handle || '',
+        total_registrations: Number(s.total_registrations || 0),
+        created_at: s.created_at
+    }));
+
+    res.json(formatted);
+}));
+
+/**
+ * Admin: Run historical student classification analysis
+ * POST /api/admin/historical-classification/analyze
+ */
+app.post('/api/admin/historical-classification/analyze', requireAuth, asyncHandler(async (req, res) => {
+    try {
+        const { classifyHistoricalStudents } = require('./scripts/classify-historical-students');
+        const analysisResult = await classifyHistoricalStudents();
+        
+        console.log('✅ Historical classification analysis completed for admin request');
+        res.json(analysisResult);
+    } catch (error) {
+        console.error('❌ Historical classification analysis failed:', error);
+        res.status(500).json({ 
+            error: 'Failed to analyze historical students',
+            details: error.message 
+        });
+    }
+}));
+
+/**
+ * Admin: Apply historical classification suggestions
+ * POST /api/admin/historical-classification/apply
+ * Body: { student_ids: [1, 2, 3], action: 'approve' | 'reject' }
+ */
+app.post('/api/admin/historical-classification/apply', requireAuth, asyncHandler(async (req, res) => {
+    const { student_ids, action } = req.body;
+    
+    if (!Array.isArray(student_ids) || student_ids.length === 0) {
+        return res.status(400).json({ error: 'student_ids array is required' });
+    }
+    
+    if (!['approve', 'reject'].includes(action)) {
+        return res.status(400).json({ error: 'action must be "approve" or "reject"' });
+    }
+
+    try {
+        let updatedCount = 0;
+        
+        if (action === 'approve') {
+            // Read the analysis file to get the suggestions
+            const fs = require('fs');
+            const analysisPath = 'scripts/classification-analysis.json';
+            
+            if (!fs.existsSync(analysisPath)) {
+                return res.status(400).json({ 
+                    error: 'Classification analysis not found. Please run analysis first.' 
+                });
+            }
+            
+            const analysisData = JSON.parse(fs.readFileSync(analysisPath, 'utf8'));
+            const suggestions = analysisData.suggestions.filter(s => 
+                student_ids.includes(s.id) && s.action === 'suggest_crew_member'
+            );
+            
+            // Apply classifications for approved students
+            for (const suggestion of suggestions) {
+                await dbConfig.run(`
+                    UPDATE students SET 
+                        student_type = $1, 
+                        admin_classified = ${dbConfig.isProduction ? 'true' : '1'},
+                        updated_at = CURRENT_TIMESTAMP 
+                    WHERE id = $2
+                `, [suggestion.suggestedType, suggestion.id]);
+                
+                updatedCount++;
+                console.log(`👤 Applied classification: Student ${suggestion.id} → ${suggestion.suggestedType}`);
+            }
+        } else if (action === 'reject') {
+            // Mark as classified but keep current type
+            for (const studentId of student_ids) {
+                await dbConfig.run(`
+                    UPDATE students SET 
+                        admin_classified = ${dbConfig.isProduction ? 'true' : '1'},
+                        updated_at = CURRENT_TIMESTAMP 
+                    WHERE id = $1
+                `, [studentId]);
+                
+                updatedCount++;
+                console.log(`👤 Marked as classified (rejected): Student ${studentId}`);
+            }
+        }
+
+        console.log(`✅ Historical classification ${action}: ${updatedCount} students updated`);
+        
+        res.json({ 
+            success: true,
+            action,
+            updated_count: updatedCount,
+            message: `Successfully ${action === 'approve' ? 'applied classifications to' : 'marked as reviewed'} ${updatedCount} students`
+        });
+        
+    } catch (error) {
+        console.error('❌ Historical classification application failed:', error);
+        res.status(500).json({ 
+            error: 'Failed to apply classifications',
+            details: error.message 
+        });
+    }
 }));
 
 // Students and Registrations

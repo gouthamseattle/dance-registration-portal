@@ -382,4 +382,74 @@
 - Auto-select heuristic improvement (nearest upcoming or most recent)
 - Mobile ergonomics (sticky bulk bar, larger tap targets)
 
-Last updated: 2025-09-15
+---
+
+## NEW: Drop-in Class & Student Access Control Planning (2025-09-17 Evening)
+
+### Planning Session Completed
+- ✅ **Comprehensive System Design for Drop-in Classes & Student Access Control**
+  - **Problem**: Need to schedule drop-in classes open to all students while maintaining crew practice access control
+  - **Solution**: Email-based recognition system with admin-controlled student classification
+  - **Planning Status**: Complete - ready for implementation across 4 phases
+
+### Key Planned Features
+
+#### Student Access Control System
+- **Email-based Recognition**: Students enter email first → system recognizes and filters available courses
+- **Student Classification**: `'general'` (drop-in only) vs `'crew_member'` (all access)  
+- **Admin Control**: Built-in interface to classify students, review existing crew members
+- **Automatic Migration**: Existing crew practice registrants auto-identified for admin approval
+
+#### Enhanced Student Profile System
+- **First-time Students**: Email → Profile Creation (Name, Instagram, Dance Experience) → Admin Classification
+- **Returning Students**: Email → Auto-recognition → Pre-filled Registration Forms
+- **Admin Notifications**: New students automatically appear in "Pending Classification" panel
+
+#### Drop-in Class Specifications  
+- **Course Type**: New `'drop_in'` type alongside existing `'crew_practice'` and series
+- **Scheduling**: Single `class_date` (reusing existing `practice_date` field)
+- **Slots**: Single slot only (like crew practice)
+- **Pricing**: Per-class only (no full course option)
+- **Branding**: Custom drop-in branding (distinct from DDC and regular GouMo)
+- **Access**: Open to all students (`required_student_type = 'any'`)
+
+#### Course Type Feature Matrix
+| Feature | Multi-Week Series | Crew Practice | Drop-In Class (NEW) |
+|---------|------------------|---------------|---------------------|
+| **Access** | Open to All | Crew Members Only | Open to All |
+| **Scheduling** | Weekly recurring | Single `practice_date` | Single `class_date` |
+| **Slots** | Multiple allowed | Single slot only | Single slot only |
+| **Pricing** | Full + Per-class | Full + Per-class | Per-class only |
+| **Branding** | GouMo | DDC logos | Custom drop-in |
+
+### Implementation Roadmap (4 Phases)
+
+**Phase 1: Student Profile System**
+- Database schema updates (`student_type`, `profile_complete`, `admin_classified`)
+- Email-based profile lookup API
+- Profile creation flow for new students
+- Admin student management interface
+
+**Phase 2: Access Control System**  
+- Student classification system
+- Course access filtering by `student_type`
+- Admin interface for student classification and review
+- Migration tools for existing crew members
+
+**Phase 3: Drop-In Class Support**
+- New `'drop_in'` course type
+- Single date scheduling system
+- Per-class pricing constraints
+- Custom branding system
+- Admin course creation updates
+
+**Phase 4: Enhanced Registration Flow**
+- Auto-populated forms for returning students
+- Course filtering by student eligibility  
+- Streamlined UX for all scenarios
+- Testing and refinement
+
+### Next Priority
+Ready to begin Phase 1 implementation: Student Profile System and Database Schema Updates.
+
+Last updated: 2025-09-17

@@ -2,6 +2,145 @@
 
 ## Current Work Focus
 
+### Planning Session Completed (2025-09-17 Evening)
+- ✅ **Drop-in Class & Student Access Control System Planning**
+  - **Problem Identified**: Need to schedule drop-in classes open to all students while maintaining crew practice access control
+  - **Solution Designed**: Comprehensive email-based recognition system with admin-controlled student classification
+  - **Key Planning Outcomes**:
+    - Student Access Control System with email-based recognition
+    - Enhanced Student Profile System (first-time vs returning student flows)
+    - Drop-in Class specifications and course type expansion
+    - Complete implementation roadmap across 4 phases
+    - Admin interface designs for student management and classification
+
+## Detailed Planning Results (2025-09-17 Evening Session)
+
+### Student Access Control System Design
+**Problem**: Need to create drop-in classes open to all students while maintaining crew practice restricted to crew members only.
+
+**Solution**: Email-based recognition system with admin-controlled student classification:
+- Students enter email first → system recognizes them and filters available courses
+- New students: email → profile creation → admin classification → future seamless access
+- Returning students: email → auto-recognition → pre-filled registration
+
+### Course Type Matrix (Planned)
+| Feature | Multi-Week Series | Crew Practice | Drop-In Class (NEW) |
+|---------|------------------|---------------|---------------------|
+| **Access** | Open to All | Crew Members Only | Open to All |
+| **Scheduling** | Weekly recurring | Single `practice_date` | Single `class_date` |
+| **Slots** | Multiple allowed | Single slot only | Single slot only |
+| **Pricing** | Full + Per-class | Full + Per-class | Per-class only |
+| **Branding** | GouMo | DDC logos | Custom drop-in branding |
+| **Form Fields** | Full profile | Name only | Profile-based (pre-filled) |
+| **DB Field** | `course_type = 'series'` | `course_type = 'crew_practice'` | `course_type = 'drop_in'` |
+
+### Database Schema Additions (Planned)
+```sql
+-- Student profile & access management
+ALTER TABLE students ADD COLUMN student_type VARCHAR(20) DEFAULT 'general';
+ALTER TABLE students ADD COLUMN profile_complete BOOLEAN DEFAULT FALSE;
+ALTER TABLE students ADD COLUMN admin_classified BOOLEAN DEFAULT FALSE;
+
+-- Course access control
+ALTER TABLE courses ADD COLUMN required_student_type VARCHAR(20) DEFAULT 'any';
+
+-- Drop-in class support (reuse existing practice_date column as class_date)
+```
+
+### Student Experience Flows (Designed)
+
+#### First-Time Student Flow:
+1. **Email Entry**: `newstudent@email.com` → "Continue"
+2. **Profile Creation**: System prompts for:
+   - Full Name: `[____________]`
+   - Instagram ID: `[@__________]` 
+   - Dance Experience: `[Dropdown]`
+3. **Admin Notification**: Student appears in "Pending Classification" panel
+4. **Course Selection**: Shows courses based on default access (general student = drop-in only)
+5. **Registration**: Form auto-filled from profile
+
+#### Returning Student Flow:
+1. **Email Entry**: `john@email.com` → System recognizes them
+2. **Welcome Message**: "Welcome back, John Smith! (@johnsmith_dance)"
+3. **Filtered Course Selection**: Shows courses based on their `student_type`
+   - Crew members: See crew practice + drop-in classes
+   - General students: See only drop-in classes
+4. **Pre-filled Registration**: All personal info auto-populated
+
+### Admin Interface Designs (Planned)
+
+#### Student Management Dashboard:
+```
+📊 Student Overview:
+- Total Students: 45
+- Crew Members: 12  
+- General Students: 30
+- Pending Classification: 3
+
+🆕 Pending Classification:
+┌─────────────────────────────────────────────────────────┐
+│ Jane Doe (jane@email.com) @janedance - Beginner        │
+│ Registered: Oct 15, 2024 for "Hip Hop Drop-in"        │
+│ [Mark as Crew Member] [Keep as General Student]        │
+└─────────────────────────────────────────────────────────┘
+
+👥 All Students: [Search] [Filter by Type]
+┌─────────────────────────────────────────────────────────┐
+│ John Smith    john@email.com    @johnsmith    Crew      │
+│ Sarah Wilson  sarah@email.com   @sarahw       General   │
+└─────────────────────────────────────────────────────────┘
+```
+
+#### Course Creation Updates:
+```
+Course Type: [Dropdown]
+├── Multi-Week Series (Open to All)
+├── Crew Practice (Members Only) 
+└── Drop-In Class (Open to All) ← NEW
+
+[If Drop-In Class selected:]
+✓ Single slot only
+✓ Class Date: [Date Picker] 
+✓ Per-class pricing only
+✓ Custom drop-in branding
+✓ Access: Open to All (auto-set)
+```
+
+### Implementation Roadmap (4 Phases)
+**Phase 1: Student Profile System**
+- Database schema updates
+- Email-based profile lookup API
+- Profile creation flow
+- Admin student management interface
+
+**Phase 2: Access Control System**
+- Student type classification
+- Course access filtering based on student_type
+- Admin classification tools with built-in review interface
+- Migration script to classify existing crew members from previous registrations
+
+**Phase 3: Drop-In Class Support**
+- New course type: `drop_in`
+- Single date scheduling using `class_date` (reuse `practice_date` field)
+- Per-class pricing only (no full course option)
+- Custom drop-in branding system
+- Admin course creation interface updates
+
+**Phase 4: Enhanced Registration Flow**
+- Auto-populated forms for returning students
+- Course filtering by student eligibility
+- Streamlined UX for all user scenarios
+- Testing and refinement
+
+### Key Technical Decisions
+- **Email-based recognition**: More reliable than self-identification or codes
+- **Admin-controlled classification**: You decide who gets crew access after seeing their profile
+- **Reuse existing infrastructure**: Drop-in classes leverage crew practice patterns (single slot, single date)
+- **Built-in admin interface**: No CSV upload/download needed - all managed through web interface
+- **Automatic crew member detection**: Existing crew practice registrants auto-identified for your approval
+
+**Status**: Planning complete, ready for implementation. Awaiting user direction to begin Phase 1.
+
 ### Recently Completed (This Session - 2025-09-17)
 - ✅ Payment Confirmation Messaging Update
   - Fixed outdated payment confirmation text in frontend:
