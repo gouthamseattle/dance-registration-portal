@@ -78,6 +78,10 @@ class DanceRegistrationApp {
 
     renderCourses(courses) {
         const container = document.getElementById('multiWeekCourses');
+        if (!container) {
+            console.warn('multiWeekCourses container not found, skipping course rendering');
+            return;
+        }
         container.innerHTML = '';
 
         courses.forEach(course => {
@@ -206,6 +210,11 @@ class DanceRegistrationApp {
     renderDropInClasses(dropIns) {
         const container = document.getElementById('dropInClasses');
         const section = document.getElementById('dropInSection');
+        
+        if (!container || !section) {
+            console.warn('Drop-in classes containers not found, skipping rendering');
+            return;
+        }
         
         if (dropIns.length === 0) {
             section.style.display = 'none';
@@ -799,30 +808,45 @@ class DanceRegistrationApp {
 
     setupEventListeners() {
         // Back to courses button
-        document.getElementById('backToCourses').addEventListener('click', () => {
-            this.showCourseSelection();
-        });
+        const backToCourses = document.getElementById('backToCourses');
+        if (backToCourses) {
+            backToCourses.addEventListener('click', () => {
+                this.showCourseSelection();
+            });
+        }
 
         // Registration form submission
-        document.getElementById('studentRegistrationForm').addEventListener('submit', (e) => {
-            e.preventDefault();
-            this.handleFormSubmission();
-        });
+        const studentRegistrationForm = document.getElementById('studentRegistrationForm');
+        if (studentRegistrationForm) {
+            studentRegistrationForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                this.handleFormSubmission();
+            });
+        }
 
         // Back to form button
-        document.getElementById('backToForm').addEventListener('click', () => {
-            this.showRegistrationForm();
-        });
+        const backToForm = document.getElementById('backToForm');
+        if (backToForm) {
+            backToForm.addEventListener('click', () => {
+                this.showRegistrationForm();
+            });
+        }
 
         // Register another class button
-        document.getElementById('registerAnother').addEventListener('click', () => {
-            this.resetRegistration();
-        });
+        const registerAnother = document.getElementById('registerAnother');
+        if (registerAnother) {
+            registerAnother.addEventListener('click', () => {
+                this.resetRegistration();
+            });
+        }
 
         // Share registration button
-        document.getElementById('shareRegistration').addEventListener('click', () => {
-            this.shareRegistration();
-        });
+        const shareRegistration = document.getElementById('shareRegistration');
+        if (shareRegistration) {
+            shareRegistration.addEventListener('click', () => {
+                this.shareRegistration();
+            });
+        }
     }
 
     async handleFormSubmission() {
