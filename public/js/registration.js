@@ -641,19 +641,31 @@ class DanceRegistrationApp {
     }
 
     setupDanceExperienceField() {
-        const danceExperienceField = document.getElementById('dance_experience').closest('.col-12');
+        const danceExperienceElement = document.getElementById('dance_experience');
+        
+        if (!danceExperienceElement) {
+            console.warn('Dance experience field not found, skipping setup');
+            return;
+        }
+        
+        const danceExperienceField = danceExperienceElement.closest('.col-12');
+        
+        if (!danceExperienceField) {
+            console.warn('Dance experience field container not found, skipping setup');
+            return;
+        }
         
         // Check if selected course is Crew Practice
         if (this.selectedCourse && this.selectedCourse.course_type === 'crew_practice') {
             // Hide dance experience field for Crew Practice
             danceExperienceField.style.display = 'none';
             // Remove required attribute
-            document.getElementById('dance_experience').removeAttribute('required');
+            danceExperienceElement.removeAttribute('required');
         } else {
             // Show dance experience field for other course types
             danceExperienceField.style.display = 'block';
             // Add required attribute
-            document.getElementById('dance_experience').setAttribute('required', 'required');
+            danceExperienceElement.setAttribute('required', 'required');
         }
     }
 
