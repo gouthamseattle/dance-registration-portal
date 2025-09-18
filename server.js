@@ -2123,6 +2123,55 @@ app.get('/api/admin/debug/course-slots/:courseId', requireAuth, asyncHandler(asy
 }));
 
 /**
+ * Admin debug: check course access configuration
+ */
+app.get('/api/admin/debug/course-access/:courseId', requireAuth, asyncHandler(async (req, res) => {
+    const { courseId } = req.params;
+    try {
+        // Get course with access settings
+        const course = await dbConfig.get('SELECT * FROM courses WHERE id = $1', [courseId]);
+        if (!course) {
+            return res.status(404).json({ error: 'Course not found' });
+        }
+
+        // Test access for different student types
+        const testAccess = {
+            crew_member: false,
+            general: false
+        };
+
+        // Test crew member access
+        if (course.required_student_type === 'any' || course.required_student_type === 'crew_member') {
+            testAccess.crew_member = true;
+        }
+
+        // Test general student access  
+        if (course.required_student_type === 'any') {
+            testAccess.general = true;
+        }
+
+        res.json({
+            course: {
+                id: course.id,
+                name: course.name,
+                course_type: course.course_type,
+                required_student_type: course.required_student_type,
+                is_active: course.is_active
+            },
+            access_test: testAccess,
+            issue_analysis: {
+                is_crew_only: course.required_student_type === 'crew_member',
+                should_be_open_to_all: course.course_type === 'crew_practice' && course.required_student_type !== 'any',
+                recommended_fix: course.required_student_type === 'crew_member' ? 'Change required_student_type to "any" to allow all students' : 'Configuration looks correct'
+            }
+        });
+    } catch (err) {
+        console.error('❌ Debug course access error:', err);
+        res.status(500).json({ error: 'Failed to analyze course access' });
+    }
+}));
+
+/**
  * Admin debug: detailed capacity analysis for a course
  */
 app.get('/api/admin/debug/course-capacity/:courseId', requireAuth, asyncHandler(async (req, res) => {
