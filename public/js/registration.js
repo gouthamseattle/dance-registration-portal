@@ -804,7 +804,7 @@ class DanceRegistrationApp {
         document.getElementById('confirmationSection').style.display = 'none';
 
         this.populatePaymentSummary();
-        this.initializeVenmoPayment();
+        this.initializePaymentOptions();
         this.scrollToTop();
     }
 
@@ -828,9 +828,79 @@ class DanceRegistrationApp {
         `;
     }
 
-    async initializeVenmoPayment() {
+    async initializePaymentOptions() {
         const container = document.getElementById('paypal-button-container');
         container.innerHTML = '';
+
+        // Show payment method selection
+        container.innerHTML = `
+            <div class="payment-methods-container">
+                <h6 class="mb-4"><i class="fas fa-credit-card me-2"></i>Choose Your Payment Method</h6>
+                
+                <div class="row g-3 mb-4">
+                    <div class="col-md-6">
+                        <div class="card payment-method-card" onclick="app.selectPaymentMethod('venmo')">
+                            <div class="card-body text-center">
+                                <i class="fas fa-mobile-alt fa-3x text-primary mb-3"></i>
+                                <h6>Venmo</h6>
+                                <small class="text-muted">Quick mobile payment</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card payment-method-card" onclick="app.selectPaymentMethod('zelle')">
+                            <div class="card-body text-center">
+                                <i class="fas fa-university fa-3x text-success mb-3"></i>
+                                <h6>Zelle</h6>
+                                <small class="text-muted">Bank-to-bank transfer</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="text-center">
+                    <small class="text-muted">
+                        <i class="fas fa-shield-alt me-1"></i>
+                        Both methods are secure and widely accepted
+                    </small>
+                </div>
+            </div>
+        `;
+
+        // Add CSS for payment method cards
+        if (!document.getElementById('payment-method-styles')) {
+            const style = document.createElement('style');
+            style.id = 'payment-method-styles';
+            style.textContent = `
+                .payment-method-card {
+                    cursor: pointer;
+                    transition: transform 0.2s, box-shadow 0.2s;
+                    border: 2px solid transparent;
+                }
+                .payment-method-card:hover {
+                    transform: translateY(-2px);
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                    border-color: var(--bs-primary);
+                }
+                .payment-method-card .card-body {
+                    padding: 1.5rem;
+                }
+            `;
+            document.head.appendChild(style);
+        }
+    }
+
+    async selectPaymentMethod(method) {
+        if (method === 'venmo') {
+            await this.initializeVenmoPayment();
+        } else if (method === 'zelle') {
+            await this.initializeZellePayment();
+        }
+    }
+
+    async initializeVenmoPayment() {
+        const container = document.getElementById('paypal-button-container');
+        container.innerHTML = '<div class="text-center"><div class="spinner-border text-primary" role="status"></div></div>';
 
         try {
             // Generate Venmo payment link
@@ -860,12 +930,19 @@ class DanceRegistrationApp {
 
             container.innerHTML = `
                 <div class="venmo-payment-container">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h6><i class="fas fa-mobile-alt text-primary me-2"></i>Pay with Venmo</h6>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="app.initializePaymentOptions()">
+                            <i class="fas fa-arrow-left me-1"></i>Back
+                        </button>
+                    </div>
+                    
                     <div class="alert alert-info mb-4">
                         <div class="d-flex align-items-center">
                             <i class="fas fa-mobile-alt fa-2x text-primary me-3"></i>
                             <div>
-                                <h6 class="mb-1">Pay with Venmo</h6>
-                                <small>Send payment to <strong>@${venmoData.venmoUsername}</strong></small>
+                                <h6 class="mb-1">Send payment to</h6>
+                                <strong>@${venmoData.venmoUsername}</strong>
                             </div>
                         </div>
                     </div>
@@ -927,7 +1004,7 @@ class DanceRegistrationApp {
                     <div class="payment-confirmation mt-4">
                         <div class="alert alert-warning">
                             <h6><i class="fas fa-clock me-2"></i>After Payment</h6>
-                            <p class="mb-0 small">We're rolling out email confirmations soon. We'll verify your payment shortly and update your registration.</p>
+                            <p class="mb-0 small">We'll verify your payment shortly and send you a confirmation email.</p>
                         </div>
                         
                         <div class="d-grid">
@@ -949,9 +1026,152 @@ class DanceRegistrationApp {
             console.error('Error initializing Venmo payment:', error);
             container.innerHTML = `
                 <div class="alert alert-danger">
-                    <h6><i class="fas fa-exclamation-triangle me-2"></i>Payment System Error</h6>
+                    <h6><i class="fas fa-exclamation-triangle me-2"></i>Venmo Payment Error</h6>
                     <p class="mb-2">${error.message}</p>
                     <p class="mb-0 small">Your registration has been saved with ID: #${this.registrationData.registrationId}</p>
+                    <div class="mt-3">
+                        <button class="btn btn-outline-primary" onclick="app.initializePaymentOptions()">Try Another Payment Method</button>
+                    </div>
+                </div>
+            `;
+        }
+    }
+
+    async initializeZellePayment() {
+        const container = document.getElementById('paypal-button-container');
+        container.innerHTML = '<div class="text-center"><div class="spinner-border text-primary" role="status"></div></div>';
+
+        try {
+            // Generate Zelle payment details
+            const courseName = this.selectedCourse ? this.selectedCourse.name : 
+                              this.selectedDropIn ? this.selectedDropIn.course_name : '';
+
+            const response = await fetch('/api/generate-zelle-payment', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    registrationId: this.registrationData.registrationId,
+                    amount: this.registrationData.payment_amount,
+                    courseName: courseName
+                })
+            });
+
+            const zelleData = await response.json();
+
+            if (!response.ok) {
+                throw new Error(zelleData.error || 'Failed to generate Zelle payment details');
+            }
+
+            container.innerHTML = `
+                <div class="zelle-payment-container">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h6><i class="fas fa-university text-success me-2"></i>Pay with Zelle</h6>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="app.initializePaymentOptions()">
+                            <i class="fas fa-arrow-left me-1"></i>Back
+                        </button>
+                    </div>
+                    
+                    <div class="alert alert-success mb-4">
+                        <div class="d-flex align-items-center">
+                            <i class="fas fa-university fa-2x text-success me-3"></i>
+                            <div>
+                                <h6 class="mb-1">Send Zelle payment to:</h6>
+                                <strong>${zelleData.zelleEmail}</strong><br>
+                                <small>or ${zelleData.zellePhone}</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="payment-details mb-4">
+                        <div class="row">
+                            <div class="col-6">
+                                <strong>Amount:</strong><br>
+                                <span class="h4 text-success">$${zelleData.amount}</span>
+                            </div>
+                            <div class="col-6">
+                                <strong>Payment Note:</strong><br>
+                                <small class="text-muted">${zelleData.paymentNote}</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="zelle-instructions">
+                        <div class="alert alert-light">
+                            <h6><i class="fas fa-list-ol me-2"></i>Payment Instructions:</h6>
+                            <ol class="mb-2 small">
+                                <li>Open your banking app or online banking</li>
+                                <li>Find "Zelle" or "Send Money" option</li>
+                                <li>Enter recipient: <strong>${zelleData.zelleEmail}</strong></li>
+                                <li>Enter amount: <strong>$${zelleData.amount}</strong></li>
+                                <li>Add memo/note: <strong>${zelleData.paymentNote}</strong></li>
+                                <li>Review and send payment</li>
+                            </ol>
+                            <div class="text-center">
+                                <small class="text-muted">
+                                    <i class="fas fa-info-circle me-1"></i>
+                                    Zelle transfers are typically instant between enrolled accounts
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="recipient-details mb-4">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-body text-center">
+                                        <i class="fas fa-envelope fa-2x text-success mb-2"></i>
+                                        <h6>Email</h6>
+                                        <code>${zelleData.zelleEmail}</code>
+                                        <button type="button" class="btn btn-sm btn-outline-success mt-2" onclick="navigator.clipboard.writeText('${zelleData.zelleEmail}')">
+                                            <i class="fas fa-copy me-1"></i>Copy
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-body text-center">
+                                        <i class="fas fa-phone fa-2x text-success mb-2"></i>
+                                        <h6>Phone</h6>
+                                        <code>${zelleData.zellePhone}</code>
+                                        <button type="button" class="btn btn-sm btn-outline-success mt-2" onclick="navigator.clipboard.writeText('${zelleData.zellePhone}')">
+                                            <i class="fas fa-copy me-1"></i>Copy
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="payment-confirmation">
+                        <div class="alert alert-warning">
+                            <h6><i class="fas fa-clock me-2"></i>After Payment</h6>
+                            <p class="mb-0 small">We'll verify your payment shortly and send you a confirmation email.</p>
+                        </div>
+                        
+                        <div class="d-grid">
+                            <button class="btn btn-success" onclick="app.showPaymentSentConfirmation()">
+                                <i class="fas fa-check me-2"></i>
+                                I've Sent the Payment
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+        } catch (error) {
+            console.error('Error initializing Zelle payment:', error);
+            container.innerHTML = `
+                <div class="alert alert-danger">
+                    <h6><i class="fas fa-exclamation-triangle me-2"></i>Zelle Payment Error</h6>
+                    <p class="mb-2">${error.message}</p>
+                    <p class="mb-0 small">Your registration has been saved with ID: #${this.registrationData.registrationId}</p>
+                    <div class="mt-3">
+                        <button class="btn btn-outline-primary" onclick="app.initializePaymentOptions()">Try Another Payment Method</button>
+                    </div>
                 </div>
             `;
         }

@@ -246,6 +246,14 @@ app.get('/api/settings', asyncHandler(async (req, res) => {
         settingsObj.venmo_username = 'monicaradd';
     }
     
+    // Set default Zelle info if not configured
+    if (!settingsObj.zelle_email) {
+        settingsObj.zelle_email = 'monicaradd@gmail.com';
+    }
+    if (!settingsObj.zelle_phone) {
+        settingsObj.zelle_phone = '206-555-0123';
+    }
+    
     res.json(settingsObj);
 }));
 
@@ -1398,8 +1406,8 @@ app.put('/api/admin/registrations/:id/confirm-payment', requireAuth, asyncHandle
         // Compute schedule_info consistently with courses endpoint
         const { schedule_info } = await fetchCourseWithSlots(dbConfig, reg.course_id);
 
-        // Send email in background with fallback (don't await)
-        sendEmailWithFallback(reg.email, {
+        // Send email using SendGrid
+        sendRegistrationConfirmationEmail(reg.email, {
             courseName: reg.course_name,
             scheduleInfo: schedule_info,
             amount: reg.payment_amount,
@@ -1457,8 +1465,8 @@ app.post('/api/admin/registrations/:id/resend-confirmation', requireAuth, asyncH
 
         const { schedule_info } = await fetchCourseWithSlots(dbConfig, reg.course_id);
 
-        // Send email in background with fallback (don't await)
-        sendEmailWithFallback(reg.email, {
+        // Send email using SendGrid
+        sendRegistrationConfirmationEmail(reg.email, {
             courseName: reg.course_name,
             scheduleInfo: schedule_info,
             amount: reg.payment_amount,
@@ -1697,6 +1705,71 @@ app.post('/api/generate-venmo-link', asyncHandler(async (req, res) => {
         webLink,
         paymentNote,
         venmoUsername
+    });
+}));
+
+// Generate Zelle payment details
+app.post('/api/generate-zelle-payment', asyncHandler(async (req, res) => {
+    const { registrationId, amount, courseName } = req.body;
+    
+    if (!registrationId || !amount) {
+        return res.status(400).json({ error: 'Registration ID and amount are required' });
+    }
+    
+    // Get Zelle contact info from settings
+    const zelleEmailSetting = await dbConfig.get('SELECT setting_value FROM system_settings WHERE setting_key = $1', ['zelle_email']);
+    const zellePhoneSetting = await dbConfig.get('SELECT setting_value FROM system_settings WHERE setting_key = $1', ['zelle_phone']);
+    
+    const zelleEmail = zelleEmailSetting ? zelleEmailSetting.setting_value : 'monicaradd@gmail.com';
+    const zellePhone = zellePhoneSetting ? zellePhoneSetting.setting_value : '206-555-0123';
+    
+    // Create payment note with date or date range if available
+    let courseDisplayName = courseName;
+    let dateRangeText = '';
+    try {
+        const regCourse = await dbConfig.get(`
+            SELECT r.id as registration_id, c.name as course_name, c.course_type, c.start_date, c.end_date
+            FROM registrations r
+            JOIN courses c ON c.id = r.course_id
+            WHERE r.id = $1
+        `, [registrationId]);
+
+        if (regCourse) {
+            courseDisplayName = regCourse.course_name || courseDisplayName;
+            const fmt = (d) => formatLocalDateShort(d);
+
+            if (regCourse.course_type === 'crew_practice') {
+                // Prefer single practice_date from slot if available
+                const slot = await dbConfig.get(`
+                    SELECT practice_date FROM course_slots
+                    WHERE course_id = (SELECT course_id FROM registrations WHERE id = $1)
+                    ORDER BY created_at ASC
+                    LIMIT 1
+                `, [registrationId]);
+                if (slot && slot.practice_date) {
+                    dateRangeText = ` (${fmt(slot.practice_date)})`;
+                } else if (regCourse.start_date) {
+                    dateRangeText = ` (${fmt(regCourse.start_date)})`;
+                }
+            } else {
+                if (regCourse.start_date && regCourse.end_date) {
+                    dateRangeText = ` (${fmt(regCourse.start_date)} - ${fmt(regCourse.end_date)})`;
+                } else if (regCourse.start_date) {
+                    dateRangeText = ` (${fmt(regCourse.start_date)})`;
+                }
+            }
+        }
+    } catch (e) {
+        console.warn('⚠️ Could not load course dates for Zelle note:', e.message || e);
+    }
+    const paymentNote = `Dance Registration #${registrationId}${courseDisplayName ? ` - ${courseDisplayName}` : ''}${dateRangeText}`;
+    
+    res.json({
+        success: true,
+        zelleEmail,
+        zellePhone,
+        paymentNote,
+        amount: parseFloat(amount).toFixed(2)
     });
 }));
 

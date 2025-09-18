@@ -3,6 +3,29 @@
 ## Current Work Focus
 
 ### Recently Completed (This Session)
+- ✅ Email Integration Enhancement
+  - Migrated from SMTP (blocked by Railway) to SendGrid API integration
+  - `utils/mailer.js` now uses `@sendgrid/mail` with proper error handling
+  - SendGrid API key configuration via `SENDGRID_API_KEY` environment variable
+  - Confirmation emails sent via SendGrid when admin approves payments
+  - Maintains same function signatures for backward compatibility
+
+- ✅ Dual Payment Method Implementation (Venmo + Zelle)
+  - Added Zelle payment option alongside existing Venmo flow
+  - Server endpoints:
+    - `POST /api/generate-venmo-link` (existing)
+    - `POST /api/generate-zelle-payment` (new)
+  - Frontend payment method selector:
+    - Initial screen shows choice between Venmo and Zelle payment cards
+    - Each method has dedicated payment flow with back navigation
+    - Consistent UX patterns for both payment types
+  - Zelle integration features:
+    - Email and phone recipient options with copy buttons
+    - Step-by-step payment instructions
+    - Payment note generation with course details and dates
+  - Default settings for both payment methods configurable via system settings
+  - Mobile-responsive design with appropriate icons and styling
+
 - ✅ Attendance workflow UX and visibility hardening
   - Paid-only roster in Manage Attendance:
     - Frontend now loads registrations with `GET /api/admin/registrations?course_id={id}&payment_status=completed`
