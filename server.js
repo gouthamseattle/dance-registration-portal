@@ -1070,16 +1070,19 @@ app.put('/api/admin/students/:id/classify', requireAuth, asyncHandler(async (req
  * GET /api/admin/crew-member-candidates
  */
 app.get('/api/admin/crew-member-candidates', requireAuth, asyncHandler(async (req, res) => {
+    // Use database-appropriate string aggregation function
+    const stringAggFunction = dbConfig.isProduction ? 'STRING_AGG(c.name, \', \')' : 'GROUP_CONCAT(c.name)';
+    
     const candidates = await dbConfig.all(`
         SELECT DISTINCT s.*, 
                COUNT(r.id) as crew_registrations,
-               GROUP_CONCAT(c.name) as crew_courses
+               ${stringAggFunction} as crew_courses
         FROM students s
         JOIN registrations r ON r.student_id = s.id
         JOIN courses c ON c.id = r.course_id
         WHERE c.course_type = 'crew_practice'
         AND r.payment_status = 'completed'
-        GROUP BY s.id
+        GROUP BY s.id, s.first_name, s.last_name, s.email, s.instagram_handle, s.dance_experience, s.student_type, s.admin_classified, s.created_at
         ORDER BY s.created_at DESC
     `);
 
