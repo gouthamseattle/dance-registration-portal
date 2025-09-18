@@ -259,7 +259,7 @@ app.get('/api/settings', asyncHandler(async (req, res) => {
         settingsObj.venmo_username = 'monicaradd';
     }
     
-    // Set default Zelle info if not configured
+    // Set default Zelle info if not configured (phone only, no email)
     if (!settingsObj.zelle_recipient_name) {
         settingsObj.zelle_recipient_name = 'Monica Radhakrishnan';
     }

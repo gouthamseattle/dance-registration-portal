@@ -848,7 +848,7 @@ class DanceRegistrationApp {
                         <div class="card payment-method-card" onclick="app.selectPaymentMethod('venmo')">
                             <div class="card-body text-center">
                                 <i class="fas fa-mobile-alt fa-3x text-primary mb-3"></i>
-                                <h6>Venmo</h6>
+                                <h6><i class="fas fa-mobile-alt me-2"></i>Venmo</h6>
                                 <small class="text-muted">Quick mobile payment</small>
                             </div>
                         </div>
@@ -857,7 +857,7 @@ class DanceRegistrationApp {
                         <div class="card payment-method-card" onclick="app.selectPaymentMethod('zelle')">
                             <div class="card-body text-center">
                                 <i class="fas fa-university fa-3x text-success mb-3"></i>
-                                <h6>Zelle</h6>
+                                <h6><i class="fas fa-university me-2"></i>Zelle</h6>
                                 <small class="text-muted">Bank-to-bank transfer</small>
                             </div>
                         </div>
@@ -1087,8 +1087,8 @@ class DanceRegistrationApp {
                             <i class="fas fa-university fa-2x text-success me-3"></i>
                             <div>
                                 <h6 class="mb-1">Send Zelle payment to:</h6>
-                                <strong>${zelleData.zelleEmail}</strong><br>
-                                <small>or ${zelleData.zellePhone}</small>
+                                <strong>${zelleData.zelleRecipientName}</strong><br>
+                                <small>${zelleData.zellePhone}</small>
                             </div>
                         </div>
                     </div>
@@ -1112,7 +1112,7 @@ class DanceRegistrationApp {
                             <ol class="mb-2 small">
                                 <li>Open your banking app or online banking</li>
                                 <li>Find "Zelle" or "Send Money" option</li>
-                                <li>Enter recipient: <strong>${zelleData.zelleEmail}</strong></li>
+                                <li>Enter recipient: <strong>${zelleData.zellePhone}</strong></li>
                                 <li>Enter amount: <strong>$${zelleData.amount}</strong></li>
                                 <li>Add memo/note: <strong>${zelleData.paymentNote}</strong></li>
                                 <li>Review and send payment</li>
@@ -1127,28 +1127,17 @@ class DanceRegistrationApp {
                     </div>
 
                     <div class="recipient-details mb-4">
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="card">
-                                    <div class="card-body text-center">
-                                        <i class="fas fa-envelope fa-2x text-success mb-2"></i>
-                                        <h6>Email</h6>
-                                        <code>${zelleData.zelleEmail}</code>
-                                        <button type="button" class="btn btn-sm btn-outline-success mt-2" onclick="navigator.clipboard.writeText('${zelleData.zelleEmail}')">
-                                            <i class="fas fa-copy me-1"></i>Copy
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="card">
-                                    <div class="card-body text-center">
-                                        <i class="fas fa-phone fa-2x text-success mb-2"></i>
-                                        <h6>Phone</h6>
-                                        <code>${zelleData.zellePhone}</code>
-                                        <button type="button" class="btn btn-sm btn-outline-success mt-2" onclick="navigator.clipboard.writeText('${zelleData.zellePhone}')">
-                                            <i class="fas fa-copy me-1"></i>Copy
-                                        </button>
+                        <div class="text-center">
+                            <div class="card">
+                                <div class="card-body">
+                                    <i class="fas fa-phone fa-3x text-success mb-3"></i>
+                                    <h5>${zelleData.zelleRecipientName}</h5>
+                                    <h6 class="text-success">${zelleData.zellePhone}</h6>
+                                    <button type="button" class="btn btn-success mt-3" onclick="navigator.clipboard.writeText('${zelleData.zellePhone}'); app.showSuccess('Phone number copied to clipboard!')">
+                                        <i class="fas fa-copy me-2"></i>Copy Phone Number
+                                    </button>
+                                    <div class="mt-2">
+                                        <small class="text-muted">Copy this number to send your Zelle payment</small>
                                     </div>
                                 </div>
                             </div>
