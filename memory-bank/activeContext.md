@@ -3,6 +3,31 @@
 ## Current Work Focus
 
 ### Recently Completed (This Session)
+- ✅ Zelle Payment Configuration Update
+  - Updated Zelle recipient configuration in server.js:
+    - Removed email option entirely from Zelle payment flow
+    - Updated phone number from 206-555-0123 to 4252159818
+    - Added recipient name "Monica Radhakrishnan" as default
+  - Modified `/api/settings` endpoint to set new Zelle defaults:
+    - `zelle_recipient_name: 'Monica Radhakrishnan'`
+    - `zelle_phone: '4252159818'`
+  - Updated `/api/generate-zelle-payment` endpoint:
+    - Removed email-related code and responses
+    - Returns only phone number option with new recipient details
+    - Maintains payment note generation and amount formatting
+
+- ✅ Payment Method Tracking System Implementation
+  - Added payment_method column to registrations table:
+    - Database migration handles both SQLite (dev) and PostgreSQL (prod)
+    - Column stores "venmo" or "zelle" values to track payment method choice
+    - Uses `ALTER TABLE registrations ADD COLUMN IF NOT EXISTS payment_method VARCHAR(10)` for PostgreSQL
+    - Uses `ALTER TABLE registrations ADD COLUMN payment_method TEXT` for SQLite with error handling
+  - Fixed PostgreSQL syntax issues:
+    - Removed AUTOINCREMENT from attendance_records SERIAL PRIMARY KEY definition
+    - Ensured compatibility between SQLite and PostgreSQL table creation
+  - Backend infrastructure ready for payment method tracking storage
+
+### Previously Completed Sessions
 - ✅ Email Integration Enhancement
   - Migrated from SMTP (blocked by Railway) to SendGrid API integration
   - `utils/mailer.js` now uses `@sendgrid/mail` with proper error handling
@@ -14,13 +39,13 @@
   - Added Zelle payment option alongside existing Venmo flow
   - Server endpoints:
     - `POST /api/generate-venmo-link` (existing)
-    - `POST /api/generate-zelle-payment` (new)
+    - `POST /api/generate-zelle-payment` (updated with new configuration)
   - Frontend payment method selector:
     - Initial screen shows choice between Venmo and Zelle payment cards
     - Each method has dedicated payment flow with back navigation
     - Consistent UX patterns for both payment types
   - Zelle integration features:
-    - Email and phone recipient options with copy buttons
+    - Phone recipient option with copy button (email removed)
     - Step-by-step payment instructions
     - Payment note generation with course details and dates
   - Default settings for both payment methods configurable via system settings
@@ -69,6 +94,11 @@
 - ✅ DDC branding/theme and student portal UX cleanups
 
 ## Current Status
+- Payment Method Tracking: Backend infrastructure complete
+  - Database: `payment_method` column added to registrations table (VARCHAR(10) for PostgreSQL, TEXT for SQLite)
+  - Zelle Configuration: Updated to phone-only with recipient "Monica Radhakrishnan" at 4252159818
+  - API: `/api/generate-zelle-payment` returns new phone-based configuration without email
+  - Ready for frontend integration to capture and store selected payment method
 - Attendance System: Core implemented and deployed
   - DB: `class_sessions`, `attendance_records` with `UNIQUE(session_id, student_id)`
   - APIs:
@@ -77,10 +107,10 @@
     - `GET /api/admin/sessions/:sessionId/attendance` (fetch)
     - `POST /api/admin/sessions/:sessionId/attendance` (bulk upsert)
     - `GET /api/admin/registrations?course_id=&payment_status=completed` (roster source)
-  - UI: Sessions list on left; Students with individual radios on right; bulk actions; “Save Attendance” persists and refreshes marks
+  - UI: Sessions list on left; Students with individual radios on right; bulk actions; "Save Attendance" persists and refreshes marks
 - Admin/UI: Buttons for payment confirmation are wired through global fallbacks and clickable
 - Deployment: Railway auto-deploy on git push; production cache-busting in place (`admin-styles.css?v=7`, `admin.js?v=17`)
-- Email stack: Nodemailer multi-mode config with diagnostics endpoints and resilient behavior remains active
+- Email stack: SendGrid API integration active with confirmation email flow
 
 ## Architecture and Patterns (Relevant)
 - Slot-Based Courses: source of truth for schedule_info and pricing (drives suggested attendance dates)
@@ -102,14 +132,21 @@
   - `utils/schedule.js`: course+slots aggregation and schedule_info composition
 
 ## Next Steps and Priorities
+- Payment Method Tracking Completion
+  - Update frontend registration flow (`public/js/registration.js`) to capture selected payment method
+  - Pass payment method ("venmo" or "zelle") to backend during registration submission
+  - Update admin interface to display payment method in registration listings
+  - Test both Venmo and Zelle payment flows end-to-end with method tracking
+- Admin Interface Enhancement
+  - Display payment method column in admin registrations table
+  - Filter/sort by payment method options
+  - Bulk operations: checkbox selection for registrations; bulk email/status ops
+  - Reporting dashboard: trends by series/status; refresh-on-demand
 - Attendance enhancements (Phase 3, follow-ups)
   - Attendance summary: per-session counts and percentages (present/late/absent) and per-student series completion %
   - Attendance export (CSV) for a session or entire series
-  - Auto-select heuristic: default to most recent past or nearest upcoming session (instead of “first”)
+  - Auto-select heuristic: default to most recent past or nearest upcoming session (instead of "first")
   - Mobile ergonomics: larger tap targets; sticky bulk bar on small screens
-- Admin efficiency
-  - Bulk operations: checkbox selection for registrations; bulk email/status ops
-  - Reporting dashboard: trends by series/status; refresh-on-demand
 - Series lifecycle
   - Completed Series: archive view (non-destructive) and archival actions
 
@@ -123,12 +160,15 @@
 - Bulk actions remain functional; “Save Attendance” persists marks (idempotent bulk upsert)
 
 ## Files Touched (this session)
-- `public/css/admin-styles.css` (visibility hardening: gridlines, column tint, larger radios, zebra striping, header backgrounds, dark mode)
-- `public/admin.html` (cache-bust admin CSS to `v=7`)
-- Verified `public/js/admin.js` has:
-  - Roster filtering to `payment_status=completed`
-  - Auto-select first session after load
-  - Individual radios and hint text rendering
+- `server.js` (major updates):
+  - Updated default Zelle settings in `/api/settings` endpoint (recipient name and phone)
+  - Added payment_method column migration in `initializeDatabase()` 
+  - Fixed PostgreSQL syntax in attendance_records table creation (removed AUTOINCREMENT)
+  - Updated `/api/generate-zelle-payment` endpoint to use new configuration and remove email option
+  - Database migration handles both SQLite dev and PostgreSQL production environments
+- Database schema:
+  - Added `payment_method` column to `registrations` table
+  - Column supports "venmo" and "zelle" values for tracking payment method choice
 
 ## Deployment Notes
 - Commit pushed to `main` triggers Railway deployment
@@ -140,4 +180,4 @@
 - Headers (Present/Late/Absent) readable in both themes
 - Roster is paid-only; bulk actions and save work end-to-end
 
-Last updated: 2025-09-15
+Last updated: 2025-09-17

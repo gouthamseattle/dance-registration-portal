@@ -14,6 +14,7 @@ class DanceRegistrationApp {
         this.selectedCourse = null;
         this.selectedDropIn = null;
         this.registrationData = {};
+        this.selectedPaymentMethod = null;
         this.paypalClientId = null;
         this.settings = {};
         this.isSelecting = false;
@@ -756,6 +757,11 @@ class DanceRegistrationApp {
         }
 
         try {
+            // Add payment method to registration data if available
+            if (this.selectedPaymentMethod) {
+                this.registrationData.payment_method = this.selectedPaymentMethod;
+            }
+
             // Create registration record
             const response = await fetch('/api/register', {
                 method: 'POST',
@@ -891,6 +897,9 @@ class DanceRegistrationApp {
     }
 
     async selectPaymentMethod(method) {
+        // Store the selected payment method
+        this.selectedPaymentMethod = method;
+        
         if (method === 'venmo') {
             await this.initializeVenmoPayment();
         } else if (method === 'zelle') {

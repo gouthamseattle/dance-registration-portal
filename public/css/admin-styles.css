@@ -708,6 +708,47 @@ h2 i {
     font-size: 0.8rem;
 }
 
+/* Payment Method Badges */
+.payment-method-venmo {
+    background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%) !important;
+    color: white !important;
+    border: none !important;
+    font-weight: 700;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+    transition: var(--transition-smooth);
+}
+
+.payment-method-venmo:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+}
+
+.payment-method-venmo i {
+    font-size: 0.9rem;
+    margin-right: 0.25rem;
+}
+
+.payment-method-zelle {
+    background: linear-gradient(135deg, #059669 0%, #047857 100%) !important;
+    color: white !important;
+    border: none !important;
+    font-weight: 700;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 2px 8px rgba(5, 150, 105, 0.3);
+    transition: var(--transition-smooth);
+}
+
+.payment-method-zelle:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(5, 150, 105, 0.4);
+}
+
+.payment-method-zelle i {
+    font-size: 0.9rem;
+    margin-right: 0.25rem;
+}
+
 /* Forms */
 .form-control,
 .form-select {

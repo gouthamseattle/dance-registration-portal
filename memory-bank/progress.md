@@ -17,10 +17,20 @@
 - Mobile-first design and WhatsApp-friendly sharing
 
 ### ✅ Payment Processing
-- Venmo deep link flow with mobile app handoff and desktop QR code
-  - POST /api/generate-venmo-link returns venmoLink, webLink, paymentNote, venmoUsername
-  - Desktop QR code generated client-side (api.qrserver.com)
-  - “I’ve Sent the Payment” flow and pending confirmation state
+- Dual payment method support (Venmo + Zelle):
+  - Venmo deep link flow with mobile app handoff and desktop QR code
+    - POST /api/generate-venmo-link returns venmoLink, webLink, paymentNote, venmoUsername
+    - Desktop QR code generated client-side (api.qrserver.com)
+  - Zelle payment integration with phone recipient option
+    - POST /api/generate-zelle-payment returns phone-based configuration
+    - Updated configuration: recipient "Monica Radhakrishnan" at 4252159818
+    - Email option removed from Zelle flow entirely
+    - Step-by-step payment instructions with copy buttons
+- Payment method tracking system:
+  - Database: payment_method column added to registrations table
+  - Backend infrastructure ready to capture "venmo" or "zelle" selection
+  - Frontend integration pending for method capture and storage
+- "I've Sent the Payment" flow and pending confirmation state
 - Admin confirm payment endpoint to mark registration as completed
 - Payment status tracking persisted in registrations
 

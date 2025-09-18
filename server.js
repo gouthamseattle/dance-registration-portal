@@ -99,6 +99,19 @@ async function initializeDatabase() {
         } catch (e) {
             console.log('ℹ️ Attendance tables check skipped:', e.message || e);
         }
+
+        // Ensure payment_method column exists on registrations table
+        try {
+            if (dbConfig.isProduction) {
+                await dbConfig.run('ALTER TABLE registrations ADD COLUMN IF NOT EXISTS payment_method VARCHAR(10)');
+            } else {
+                // SQLite: ignore if column exists
+                await dbConfig.run('ALTER TABLE registrations ADD COLUMN payment_method TEXT').catch(() => {});
+            }
+            console.log('✅ Ensured registrations.payment_method column exists');
+        } catch (e) {
+            console.log('ℹ️ payment_method column check skipped:', e.message || e);
+        }
         
         // Run migration if in production (non-blocking so server can start listening)
         if (process.env.NODE_ENV === 'production') {
@@ -247,11 +260,11 @@ app.get('/api/settings', asyncHandler(async (req, res) => {
     }
     
     // Set default Zelle info if not configured
-    if (!settingsObj.zelle_email) {
-        settingsObj.zelle_email = 'monicaradd@gmail.com';
+    if (!settingsObj.zelle_recipient_name) {
+        settingsObj.zelle_recipient_name = 'Monica Radhakrishnan';
     }
     if (!settingsObj.zelle_phone) {
-        settingsObj.zelle_phone = '206-555-0123';
+        settingsObj.zelle_phone = '4252159818';
     }
     
     res.json(settingsObj);
@@ -1716,12 +1729,12 @@ app.post('/api/generate-zelle-payment', asyncHandler(async (req, res) => {
         return res.status(400).json({ error: 'Registration ID and amount are required' });
     }
     
-    // Get Zelle contact info from settings
-    const zelleEmailSetting = await dbConfig.get('SELECT setting_value FROM system_settings WHERE setting_key = $1', ['zelle_email']);
+    // Get Zelle contact info from settings (phone only, no email)
+    const zelleRecipientNameSetting = await dbConfig.get('SELECT setting_value FROM system_settings WHERE setting_key = $1', ['zelle_recipient_name']);
     const zellePhoneSetting = await dbConfig.get('SELECT setting_value FROM system_settings WHERE setting_key = $1', ['zelle_phone']);
     
-    const zelleEmail = zelleEmailSetting ? zelleEmailSetting.setting_value : 'monicaradd@gmail.com';
-    const zellePhone = zellePhoneSetting ? zellePhoneSetting.setting_value : '206-555-0123';
+    const zelleRecipientName = zelleRecipientNameSetting ? zelleRecipientNameSetting.setting_value : 'Monica Radhakrishnan';
+    const zellePhone = zellePhoneSetting ? zellePhoneSetting.setting_value : '4252159818';
     
     // Create payment note with date or date range if available
     let courseDisplayName = courseName;
@@ -1766,7 +1779,7 @@ app.post('/api/generate-zelle-payment', asyncHandler(async (req, res) => {
     
     res.json({
         success: true,
-        zelleEmail,
+        zelleRecipientName,
         zellePhone,
         paymentNote,
         amount: parseFloat(amount).toFixed(2)

@@ -149,6 +149,13 @@ railway logs
 }
 ```
 
+### Database Schema Updates
+- **Registrations Table**: Added `payment_method` column
+  - SQLite: `TEXT` datatype
+  - PostgreSQL: `VARCHAR(10)` datatype
+  - Stores "venmo" or "zelle" to track selected payment method
+  - Migration handles both database types with proper syntax
+
 ### Development Dependencies
 ```json
 {

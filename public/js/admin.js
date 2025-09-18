@@ -116,6 +116,9 @@ class AdminDashboard {
         document.getElementById('regStatusFilter').addEventListener('change', () => {
             this.filterRegistrations();
         });
+        document.getElementById('regPaymentMethodFilter').addEventListener('change', () => {
+            this.filterRegistrations();
+        });
     }
 
     // Wrapper for API calls with credentials and 401 handling
@@ -336,6 +339,7 @@ class AdminDashboard {
                         <th>Student</th>
                         <th>Course</th>
                         <th>Amount</th>
+                        <th>Payment Method</th>
                         <th>Status</th>
                         <th>Date</th>
                     </tr>
@@ -353,6 +357,7 @@ class AdminDashboard {
                             </td>
                             <td>${reg.course_name || 'Drop-in Class'}</td>
                             <td>$${parseFloat(reg.payment_amount).toFixed(2)}</td>
+                            <td>${this.getPaymentMethodBadge(reg.payment_method)}</td>
                             <td>
                                 <span class="status-badge status-${reg.payment_status}">
                                     ${reg.payment_status}
@@ -593,6 +598,7 @@ class AdminDashboard {
     filterRegistrations() {
         const courseFilter = document.getElementById('regCourseFilter').value;
         const statusFilter = document.getElementById('regStatusFilter').value;
+        const paymentMethodFilter = document.getElementById('regPaymentMethodFilter').value;
         
         let filteredRegs = [...this.registrations];
         
@@ -602,6 +608,13 @@ class AdminDashboard {
         
         if (statusFilter) {
             filteredRegs = filteredRegs.filter(r => r.payment_status === statusFilter);
+        }
+
+        if (paymentMethodFilter) {
+            filteredRegs = filteredRegs.filter(r => {
+                const method = String(r.payment_method || '').toLowerCase();
+                return method === paymentMethodFilter.toLowerCase();
+            });
         }
 
         this.renderRegistrationsTable(filteredRegs);
@@ -632,6 +645,7 @@ class AdminDashboard {
                         <th>Course</th>
                         <th>Type</th>
                         <th>Amount</th>
+                        <th>Payment Method</th>
                         <th>Status</th>
                         <th>Date</th>
                         <th>Actions</th>
@@ -657,6 +671,7 @@ class AdminDashboard {
                                 <span class="badge bg-secondary">${reg.registration_type || '—'}</span>
                             </td>
                             <td>$${parseFloat(reg.payment_amount).toFixed(2)}</td>
+                            <td>${this.getPaymentMethodBadge(reg.payment_method)}</td>
                             <td>
                                 <span class="status-badge status-${reg.payment_status}">
                                     ${reg.payment_status}
@@ -1119,6 +1134,22 @@ class AdminDashboard {
         } catch (error) {
             console.error('Error saving settings:', error);
             this.showError('Failed to save settings');
+        }
+    }
+
+    // Helper function for payment method badge display
+    getPaymentMethodBadge(method) {
+        if (!method) {
+            return '<span class="badge bg-secondary">—</span>';
+        }
+        
+        const methodLower = String(method).toLowerCase();
+        if (methodLower === 'venmo') {
+            return '<span class="badge bg-primary payment-method-venmo"><i class="fas fa-mobile-alt me-1"></i>Venmo</span>';
+        } else if (methodLower === 'zelle') {
+            return '<span class="badge bg-success payment-method-zelle"><i class="fas fa-university me-1"></i>Zelle</span>';
+        } else {
+            return `<span class="badge bg-secondary">${method}</span>`;
         }
     }
 
@@ -1629,6 +1660,10 @@ Questions? Reply to this message`;
                             <div class="row">
                                 <div class="col-sm-4"><strong>Amount:</strong></div>
                                 <div class="col-sm-8">$${parseFloat(registration.payment_amount).toFixed(2)}</div>
+                            </div>
+                            <div class="row">
+                                <div class="col-sm-4"><strong>Payment Method:</strong></div>
+                                <div class="col-sm-8">${this.getPaymentMethodBadge(registration.payment_method)}</div>
                             </div>
                             <div class="row">
                                 <div class="col-sm-4"><strong>Status:</strong></div>

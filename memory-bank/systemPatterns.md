@@ -204,8 +204,13 @@ Admin Dashboard (admin.html)
 
 ### Payment Security
 - PayPal SDK handles all payment processing
+- Dual payment method support (Venmo + Zelle):
+  - Venmo: Deep link generation with QR codes for desktop
+  - Zelle: Phone-based recipient configuration with step-by-step instructions
+- Payment method tracking: `payment_method` column stores "venmo" or "zelle"
 - No sensitive payment data stored locally
 - Transaction IDs stored for reference only
+- Zelle configuration updates via system settings (recipient name, phone)
 
 ## Performance Considerations
 
