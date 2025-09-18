@@ -440,10 +440,16 @@ class DanceRegistrationApp {
     showRegistrationForm() {
         this.currentStep = 'form';
         // Switch views first; any errors in setup should not block navigation
-        document.getElementById('courseSelection').style.display = 'none';
-        document.getElementById('registrationForm').style.display = 'block';
-        document.getElementById('paymentSection').style.display = 'none';
-        document.getElementById('confirmationSection').style.display = 'none';
+        const courseSelection = document.getElementById('courseSelection');
+        const registrationForm = document.getElementById('registrationForm');
+        const paymentSection = document.getElementById('paymentSection');
+        const confirmationSection = document.getElementById('confirmationSection');
+
+        // Defensive programming: check if elements exist before manipulating them
+        if (courseSelection) courseSelection.style.display = 'none';
+        if (registrationForm) registrationForm.style.display = 'block';
+        if (paymentSection) paymentSection.style.display = 'none';
+        if (confirmationSection) confirmationSection.style.display = 'none';
 
         try {
             this.populateSelectedCourseInfo();
