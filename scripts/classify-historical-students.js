@@ -86,8 +86,8 @@ async function classifyHistoricalStudents() {
                 suggestion.action = 'already_classified';
                 alreadyClassified++;
             } else if (totalCount === 0) {
-                suggestion.reason = 'No registration history';
-                suggestion.action = 'no_change';
+                suggestion.reason = 'No registration history (possibly deleted)';
+                suggestion.action = 'show_no_history';  // Show these students prominently
                 noRegistrationHistory++;
             } else if (crewPracticeCount > 0) {
                 suggestion.suggestedType = 'crew_member';
