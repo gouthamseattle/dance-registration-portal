@@ -853,12 +853,6 @@ class DanceRegistrationApp {
         const form = document.getElementById('studentRegistrationForm');
         const formData = new FormData(form);
 
-        // Validate form
-        if (!form.checkValidity()) {
-            form.reportValidity();
-            return;
-        }
-
         // Validate payment method selection
         if (!this.selectedPaymentMethod) {
             this.showError('Please select a payment method (Venmo or Zelle) to continue.');
@@ -870,15 +864,34 @@ class DanceRegistrationApp {
             return;
         }
 
-        // Prepare registration data
+        // Use pre-filled student data from hidden fields or collect from form
+        const studentId = document.getElementById('studentId')?.value;
+        const preFilledEmail = document.getElementById('studentEmail')?.value;
+        const preFilledFirstName = document.getElementById('studentFirstName')?.value;
+        const preFilledLastName = document.getElementById('studentLastName')?.value;
+        const preFilledInstagram = document.getElementById('studentInstagram')?.value;
+        const preFilledExperience = document.getElementById('studentExperience')?.value;
+
+        // Prepare registration data using pre-filled data when available
         this.registrationData = {
-            email: formData.get('email'),
-            instagram_id: formData.get('instagram_id') || null,
-            dance_experience: formData.get('dance_experience') || null // Allow null for crew practice
+            email: preFilledEmail || formData.get('email'),
+            first_name: preFilledFirstName || formData.get('first_name'),
+            last_name: preFilledLastName || formData.get('last_name'),
+            instagram_id: preFilledInstagram || formData.get('instagram_id') || null,
+            dance_experience: preFilledExperience || formData.get('dance_experience') || null,
+            student_id: studentId || null
         };
+
+        console.log('📝 Using registration data:', {
+            hasPreFilledData: !!studentId,
+            email: this.registrationData.email,
+            student_id: this.registrationData.student_id
+        });
+
         // Include student_name when Crew Practice toggles the Instagram field into a name field
         if (this.selectedCourse && this.selectedCourse.course_type === 'crew_practice') {
-            this.registrationData.student_name = formData.get('student_name') || '';
+            this.registrationData.student_name = formData.get('student_name') || 
+                [preFilledFirstName, preFilledLastName].filter(Boolean).join(' ');
         }
 
         if (this.selectedCourse) {
