@@ -13,6 +13,14 @@ async function classifyHistoricalStudents() {
         await dbConfig.connect();
         console.log('✅ Connected to database');
         
+        // Use database-appropriate string aggregation function
+        const stringAggFunction = dbConfig.isProduction ? 
+            'STRING_AGG(DISTINCT c.name, \', \')' : 
+            'GROUP_CONCAT(DISTINCT c.name)';
+        const courseTypesAggFunction = dbConfig.isProduction ? 
+            'STRING_AGG(DISTINCT c.course_type, \', \')' : 
+            'GROUP_CONCAT(DISTINCT c.course_type)';
+        
         // Get all students with their registration history
         const studentsWithHistory = await dbConfig.all(`
             SELECT 
@@ -27,8 +35,8 @@ async function classifyHistoricalStudents() {
                 COUNT(r.id) as total_registrations,
                 COUNT(CASE WHEN c.course_type = 'crew_practice' THEN 1 END) as crew_practice_registrations,
                 COUNT(CASE WHEN c.course_type != 'crew_practice' THEN 1 END) as other_registrations,
-                GROUP_CONCAT(DISTINCT c.name) as course_names,
-                GROUP_CONCAT(DISTINCT c.course_type) as course_types
+                ${stringAggFunction} as course_names,
+                ${courseTypesAggFunction} as course_types
             FROM students s
             LEFT JOIN registrations r ON s.id = r.student_id
             LEFT JOIN courses c ON r.course_id = c.id
