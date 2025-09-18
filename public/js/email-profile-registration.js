@@ -82,7 +82,14 @@ class EmailProfileRegistrationApp {
     }
 
     async handleEmailEntry() {
-        const email = document.getElementById('email').value.trim();
+        const emailField = document.getElementById('email');
+        if (!emailField) {
+            console.error('Email field not found');
+            this.showError('Registration form not properly loaded. Please refresh the page.');
+            return;
+        }
+
+        const email = emailField.value.trim();
         
         if (!email) {
             this.showError('Please enter your email address');
@@ -112,7 +119,7 @@ class EmailProfileRegistrationApp {
             if (result.exists) {
                 // Existing student - show welcome back
                 this.currentStudent = result.student;
-                this.eligibleCourses = result.eligible_courses || [];
+                this.eligibleCourses = Array.isArray(result.eligible_courses) ? result.eligible_courses : [];
                 this.showWelcomeBack();
             } else {
                 // New student - show profile creation
