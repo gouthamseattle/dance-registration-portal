@@ -424,6 +424,9 @@
                             <button class="btn btn-warning" onclick="admin.loadCrewMemberCandidates()">
                                 <i class="fas fa-user-check"></i> Review Crew Candidates
                             </button>
+                            <button class="btn btn-info" onclick="admin.showHistoricalAnalysis()">
+                                <i class="fas fa-search"></i> Historical Analysis
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -476,6 +479,44 @@
                                 <button class="btn btn-outline-secondary" onclick="admin.hideCrewCandidates()">
                                     <i class="fas fa-eye-slash me-2"></i>Hide Candidates
                                 </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Historical Student Classification Analysis -->
+            <div class="row mb-4" id="historicalAnalysisRow" style="display: none;">
+                <div class="col-12">
+                    <div class="card border-info">
+                        <div class="card-header bg-info text-white">
+                            <h5 class="mb-0">
+                                <i class="fas fa-search me-2"></i>
+                                Historical Student Classification Analysis
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle me-2"></i>
+                                <strong>One-Time Setup:</strong> Analyze all existing students and their registration history to identify potential crew members based on their participation in crew practice sessions.
+                            </div>
+                            
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <div>
+                                    <button class="btn btn-primary" onclick="admin.runHistoricalAnalysis()">
+                                        <i class="fas fa-play me-2"></i>Run Analysis
+                                    </button>
+                                    <button class="btn btn-outline-secondary ms-2" onclick="admin.hideHistoricalAnalysis()">
+                                        <i class="fas fa-eye-slash me-2"></i>Hide Analysis
+                                    </button>
+                                </div>
+                                <div class="small text-muted">
+                                    <i class="fas fa-clock me-1"></i>Analysis examines all registration history
+                                </div>
+                            </div>
+                            
+                            <div id="historicalAnalysisResults">
+                                <!-- Analysis results will be loaded here -->
                             </div>
                         </div>
                     </div>

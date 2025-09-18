@@ -2927,6 +2927,14 @@ Questions? Reply to this message`;
         document.getElementById('crewCandidatesRow').style.display = 'none';
     }
 
+    hideHistoricalAnalysis() {
+        document.getElementById('historicalAnalysisRow').style.display = 'none';
+    }
+
+    showHistoricalAnalysis() {
+        document.getElementById('historicalAnalysisRow').style.display = 'block';
+    }
+
     async classifyStudent(studentId, studentType) {
         try {
             const response = await this.apiFetch(`/api/admin/students/${studentId}/classify`, {
