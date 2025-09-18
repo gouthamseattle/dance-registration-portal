@@ -309,7 +309,7 @@ class DanceRegistrationApp {
             }
 
             console.info('Course selected', { id: this.selectedCourse.id, name: this.selectedCourse.name });
-            this.showRegistrationForm();
+            this.showPaymentMethodSelection();
         } catch (error) {
             console.error('Error selecting course:', error, { currentStep: this.currentStep });
             if (this.currentStep !== 'form') {
@@ -353,7 +353,7 @@ class DanceRegistrationApp {
             }
 
             console.info('Drop-in selected', { id: this.selectedDropIn.id, name: this.selectedDropIn.course_name });
-            this.showRegistrationForm();
+            this.showPaymentMethodSelection();
         } catch (error) {
             console.error('Error selecting drop-in class:', error, { currentStep: this.currentStep });
             if (this.currentStep !== 'form') {
@@ -362,6 +362,79 @@ class DanceRegistrationApp {
         } finally {
             this.isSelectingDropIn = false;
         }
+    }
+
+    showPaymentMethodSelection() {
+        this.currentStep = 'payment-method-selection';
+        
+        // Hide course list and show payment method selection
+        document.getElementById('multiWeekCourses').style.display = 'none';
+        document.getElementById('dropInSection').style.display = 'none';
+        document.getElementById('coursePaymentMethodSection').style.display = 'block';
+        document.getElementById('registrationForm').style.display = 'none';
+        document.getElementById('paymentSection').style.display = 'none';
+        document.getElementById('confirmationSection').style.display = 'none';
+
+        // Set up payment method selection handlers
+        this.setupPaymentMethodSelectionHandlers();
+        this.scrollToTop();
+    }
+
+    setupPaymentMethodSelectionHandlers() {
+        // Remove any existing event listeners
+        const paymentCards = document.querySelectorAll('.payment-selection-card');
+        const backButton = document.getElementById('backToCourseSelectionBtn');
+
+        // Add click handlers for payment method cards
+        paymentCards.forEach(card => {
+            const method = card.dataset.method;
+            card.addEventListener('click', () => {
+                this.selectPaymentMethodAndProceed(method);
+            });
+        });
+
+        // Add back button handler
+        if (backButton) {
+            backButton.addEventListener('click', () => {
+                this.showCourseSelectionFromPayment();
+            });
+        }
+    }
+
+    selectPaymentMethodAndProceed(method) {
+        this.selectedPaymentMethod = method;
+        console.info('Payment method selected:', method);
+        
+        // Add visual feedback
+        const cards = document.querySelectorAll('.payment-selection-card');
+        cards.forEach(card => {
+            card.classList.remove('selected');
+            if (card.dataset.method === method) {
+                card.classList.add('selected');
+            }
+        });
+
+        // Proceed to registration form after a brief delay for visual feedback
+        setTimeout(() => {
+            this.showRegistrationForm();
+        }, 300);
+    }
+
+    showCourseSelectionFromPayment() {
+        // Reset selections and go back to course selection
+        this.selectedCourse = null;
+        this.selectedDropIn = null;
+        this.selectedPaymentMethod = null;
+        
+        document.getElementById('multiWeekCourses').style.display = 'block';
+        document.getElementById('dropInSection').style.display = 'block';
+        document.getElementById('coursePaymentMethodSection').style.display = 'none';
+        document.getElementById('registrationForm').style.display = 'none';
+        document.getElementById('paymentSection').style.display = 'none';
+        document.getElementById('confirmationSection').style.display = 'none';
+        
+        this.currentStep = 'courses';
+        this.scrollToTop();
     }
 
     showRegistrationForm() {
@@ -838,61 +911,86 @@ class DanceRegistrationApp {
         const container = document.getElementById('paypal-button-container');
         container.innerHTML = '';
 
-        // Show payment method selection
-        container.innerHTML = `
-            <div class="payment-methods-container">
-                <h6 class="mb-4"><i class="fas fa-credit-card me-2"></i>Choose Your Payment Method</h6>
-                
-                <div class="row g-3 mb-4">
-                    <div class="col-md-6">
-                        <div class="card payment-method-card" onclick="app.selectPaymentMethod('venmo')">
-                            <div class="card-body text-center">
-                                <i class="fas fa-mobile-alt fa-3x text-primary mb-3"></i>
-                                <h6><i class="fas fa-mobile-alt me-2"></i>Venmo</h6>
-                                <small class="text-muted">Quick mobile payment</small>
+        // Since payment method was already selected, go directly to the payment flow
+        if (this.selectedPaymentMethod) {
+            console.info('Skipping payment method selection, going directly to:', this.selectedPaymentMethod);
+            if (this.selectedPaymentMethod === 'venmo') {
+                await this.initializeVenmoPayment();
+            } else if (this.selectedPaymentMethod === 'zelle') {
+                await this.initializeZellePayment();
+            }
+        } else {
+            // Fallback: show payment method selection (shouldn't happen in 2-page flow)
+            console.warn('No payment method selected, showing selection screen');
+            container.innerHTML = `
+                <div class="payment-methods-container">
+                    <h6 class="mb-4"><i class="fas fa-credit-card me-2"></i>Choose Your Payment Method</h6>
+                    
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-6">
+                            <div class="card payment-method-card" onclick="app.selectPaymentMethod('venmo')">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-mobile-alt fa-3x text-primary mb-3"></i>
+                                    <h6><i class="fas fa-mobile-alt me-2"></i>Venmo</h6>
+                                    <small class="text-muted">Quick mobile payment</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card payment-method-card" onclick="app.selectPaymentMethod('zelle')">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-university fa-3x text-success mb-3"></i>
+                                    <h6><i class="fas fa-university me-2"></i>Zelle</h6>
+                                    <small class="text-muted">Bank-to-bank transfer</small>
+                                </div>
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-6">
-                        <div class="card payment-method-card" onclick="app.selectPaymentMethod('zelle')">
-                            <div class="card-body text-center">
-                                <i class="fas fa-university fa-3x text-success mb-3"></i>
-                                <h6><i class="fas fa-university me-2"></i>Zelle</h6>
-                                <small class="text-muted">Bank-to-bank transfer</small>
-                            </div>
-                        </div>
+
+                    <div class="text-center">
+                        <small class="text-muted">
+                            <i class="fas fa-shield-alt me-1"></i>
+                            Both methods are secure and widely accepted
+                        </small>
                     </div>
                 </div>
-
-                <div class="text-center">
-                    <small class="text-muted">
-                        <i class="fas fa-shield-alt me-1"></i>
-                        Both methods are secure and widely accepted
-                    </small>
-                </div>
-            </div>
-        `;
-
-        // Add CSS for payment method cards
-        if (!document.getElementById('payment-method-styles')) {
-            const style = document.createElement('style');
-            style.id = 'payment-method-styles';
-            style.textContent = `
-                .payment-method-card {
-                    cursor: pointer;
-                    transition: transform 0.2s, box-shadow 0.2s;
-                    border: 2px solid transparent;
-                }
-                .payment-method-card:hover {
-                    transform: translateY(-2px);
-                    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-                    border-color: var(--bs-primary);
-                }
-                .payment-method-card .card-body {
-                    padding: 1.5rem;
-                }
             `;
-            document.head.appendChild(style);
+
+            // Add CSS for payment method cards
+            if (!document.getElementById('payment-method-styles')) {
+                const style = document.createElement('style');
+                style.id = 'payment-method-styles';
+                style.textContent = `
+                    .payment-method-card {
+                        cursor: pointer;
+                        transition: transform 0.2s, box-shadow 0.2s;
+                        border: 2px solid transparent;
+                        background: var(--bg-card);
+                        color: var(--text-primary);
+                    }
+                    .payment-method-card:hover {
+                        transform: translateY(-2px);
+                        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                        border-color: var(--accent-primary);
+                    }
+                    .payment-method-card .card-body {
+                        padding: 1.5rem;
+                        color: var(--text-primary);
+                    }
+                    .payment-method-card h6 {
+                        color: var(--text-primary) !important;
+                        font-weight: 700;
+                        margin-bottom: 0.5rem;
+                    }
+                    .payment-method-card .text-muted {
+                        color: var(--text-secondary) !important;
+                    }
+                    .payment-method-card i.fa-3x {
+                        margin-bottom: 1rem;
+                    }
+                `;
+                document.head.appendChild(style);
+            }
         }
     }
 
