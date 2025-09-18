@@ -2122,6 +2122,85 @@ app.get('/api/admin/debug/course-slots/:courseId', requireAuth, asyncHandler(asy
     }
 }));
 
+/**
+ * Admin debug: detailed capacity analysis for a course
+ */
+app.get('/api/admin/debug/course-capacity/:courseId', requireAuth, asyncHandler(async (req, res) => {
+    const { courseId } = req.params;
+    try {
+        // Get basic course info
+        const course = await dbConfig.get('SELECT * FROM courses WHERE id = $1', [courseId]);
+        if (!course) {
+            return res.status(404).json({ error: 'Course not found' });
+        }
+
+        // Get slots with capacity calculation (same as main API)
+        const slots = await dbConfig.all(`
+            SELECT cs.*, 
+                   COUNT(DISTINCT r.id) as slot_registration_count,
+                   (cs.capacity - COUNT(DISTINCT r.id)) as available_spots
+            FROM course_slots cs
+            LEFT JOIN registrations r ON cs.course_id = r.course_id AND r.payment_status = 'completed'
+            WHERE cs.course_id = $1
+            GROUP BY cs.id
+            ORDER BY cs.created_at ASC
+        `, [courseId]);
+
+        // Get all registrations for this course
+        const allRegistrations = await dbConfig.all(`
+            SELECT r.*, s.first_name, s.last_name, s.email
+            FROM registrations r
+            LEFT JOIN students s ON r.student_id = s.id
+            WHERE r.course_id = $1
+            ORDER BY r.registration_date DESC
+        `, [courseId]);
+
+        // Get completed registrations only
+        const completedRegistrations = allRegistrations.filter(r => r.payment_status === 'completed');
+
+        // Calculate totals
+        const totalCapacity = slots.reduce((sum, slot) => sum + (slot.capacity || 0), 0);
+        const totalAvailableSpots = slots.reduce((sum, slot) => sum + (slot.available_spots || 0), 0);
+
+        res.json({
+            course: {
+                id: course.id,
+                name: course.name,
+                course_type: course.course_type,
+                is_active: course.is_active
+            },
+            capacity_analysis: {
+                total_capacity: totalCapacity,
+                total_available_spots: totalAvailableSpots,
+                completed_registrations_count: completedRegistrations.length,
+                all_registrations_count: allRegistrations.length
+            },
+            slots: slots.map(s => ({
+                id: s.id,
+                capacity: s.capacity,
+                slot_registration_count: Number(s.slot_registration_count),
+                available_spots: Number(s.available_spots)
+            })),
+            registrations_summary: {
+                completed: completedRegistrations.length,
+                pending: allRegistrations.filter(r => r.payment_status === 'pending').length,
+                failed: allRegistrations.filter(r => r.payment_status === 'failed').length,
+                total: allRegistrations.length
+            },
+            sample_registrations: allRegistrations.slice(0, 5).map(r => ({
+                id: r.id,
+                student_name: `${r.first_name || ''} ${r.last_name || ''}`.trim(),
+                email: r.email,
+                payment_status: r.payment_status,
+                registration_date: r.registration_date
+            }))
+        });
+    } catch (err) {
+        console.error('❌ Debug course capacity error:', err);
+        res.status(500).json({ error: 'Failed to analyze course capacity' });
+    }
+}));
+
 // Generate Venmo payment link
 app.post('/api/generate-venmo-link', asyncHandler(async (req, res) => {
     const { registrationId, amount, courseName } = req.body;
