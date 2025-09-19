@@ -376,7 +376,7 @@ class EmailProfileRegistrationApp {
         const col = document.createElement('div');
         col.className = 'col-lg-6 col-xl-4 mb-4';
 
-        const availableSpots = course.available_spots || 0;
+        const availableSpots = parseInt(course.available_spots) || 0;
         const hasFullCoursePrice = course.full_course_price && course.full_course_price > 0;
         const hasPerClassPrice = course.per_class_price && course.per_class_price > 0;
 
@@ -499,7 +499,7 @@ class EmailProfileRegistrationApp {
         const col = document.createElement('div');
         col.className = 'col-lg-6 mb-3';
 
-        const availableSpots = course.available_spots || 0;
+        const availableSpots = parseInt(course.available_spots) || 0;
         const hasPerClassPrice = course.per_class_price && course.per_class_price > 0;
 
         // For drop-in classes, get the class date from the slot
