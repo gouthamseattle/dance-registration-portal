@@ -1189,6 +1189,25 @@ app.post('/api/create-student-profile', asyncHandler(async (req, res) => {
             ORDER BY cs.created_at ASC
         `, [course.id]);
         
+        // Get pricing for each slot
+        const slotsWithPricing = await Promise.all(slots.map(async (slot) => {
+            const pricing = await dbConfig.all(`
+                SELECT pricing_type, price 
+                FROM course_pricing 
+                WHERE course_slot_id = $1
+            `, [slot.id]);
+            
+            const pricingObj = {};
+            pricing.forEach(p => {
+                pricingObj[p.pricing_type] = parseFloat(p.price);
+            });
+            
+            return {
+                ...slot,
+                pricing: pricingObj
+            };
+        }));
+        
         // Calculate totals
         const totalCapacity = slots.reduce((sum, slot) => sum + (slot.capacity || 0), 0);
         const totalAvailableSpots = slots.reduce((sum, slot) => sum + (Number(slot.available_spots) || 0), 0);
@@ -1197,8 +1216,8 @@ app.post('/api/create-student-profile', asyncHandler(async (req, res) => {
             ...course,
             capacity: totalCapacity,
             available_spots: totalAvailableSpots,
-            full_course_price: 0,
-            per_class_price: 0
+            full_course_price: slotsWithPricing[0]?.pricing?.full_package || 0,
+            per_class_price: slotsWithPricing[0]?.pricing?.drop_in || 0
         };
     }));
     
