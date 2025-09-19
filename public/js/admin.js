@@ -3129,7 +3129,8 @@ Questions? Reply to this message`;
             const result = await response.json();
 
             if (response.ok) {
-                this.showSuccess(`Student classified as ${studentType === 'crew_member' ? 'Crew Member' : 'General Student'}`);
+                const label = studentType === 'crew_member' ? 'Crew Member' : (studentType === 'test' ? 'Test' : 'General Student');
+                this.showSuccess(`Student classified as ${label}`);
                 await this.refreshStudentData();
             } else {
                 this.showError(result.error || 'Failed to classify student');
