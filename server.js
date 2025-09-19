@@ -392,7 +392,7 @@ app.get('/api/courses', asyncHandler(async (req, res) => {
         
         // Calculate total capacity and available spots across all slots
         const totalCapacity = slots.reduce((sum, slot) => sum + (slot.capacity || 0), 0);
-        const totalAvailableSpots = slots.reduce((sum, slot) => sum + (slot.available_spots || 0), 0);
+        const totalAvailableSpots = slots.reduce((sum, slot) => sum + (Number(slot.available_spots) || 0), 0);
         
         // Debug: log slots for crew_practice to verify practice_date coming from DB
         if (course.course_type === 'crew_practice') {
@@ -883,7 +883,7 @@ app.post('/api/check-student-profile', asyncHandler(async (req, res) => {
         
         // Calculate totals and build schedule info (same logic as /api/courses)
         const totalCapacity = slots.reduce((sum, slot) => sum + (slot.capacity || 0), 0);
-        const totalAvailableSpots = slots.reduce((sum, slot) => sum + (slot.available_spots || 0), 0);
+        const totalAvailableSpots = slots.reduce((sum, slot) => sum + (Number(slot.available_spots) || 0), 0);
         
         // Build computed schedule_info
         let computedScheduleInfo = '';
