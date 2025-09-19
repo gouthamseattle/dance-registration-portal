@@ -232,6 +232,9 @@ class AdminDashboard {
             case 'students':
                 this.loadStudentManagement();
                 break;
+            case 'waitlist':
+                this.loadWaitlistManagement();
+                break;
             case 'settings':
                 this.loadSettings();
                 break;
@@ -2966,6 +2969,321 @@ Questions? Reply to this message`;
         } catch (e) {
             console.error('Save attendance error:', e);
             this.showError(e.message || 'Failed to save attendance');
+        }
+    }
+
+    // =========================
+    // Waitlist Management
+    // =========================
+
+    async loadWaitlistManagement() {
+        await this.refreshWaitlists();
+        this.populateWaitlistCourseFilter();
+    }
+
+    async refreshWaitlists() {
+        const container = document.getElementById('waitlistsContainer');
+        const courseFilter = document.getElementById('waitlistCourseFilter');
+        
+        // Show loading state
+        container.innerHTML = `
+            <div class="col-12">
+                <div class="text-center py-5">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading waitlists...</span>
+                    </div>
+                    <p class="mt-3 text-muted">Loading waitlist data...</p>
+                </div>
+            </div>
+        `;
+
+        try {
+            const courseId = courseFilter?.value || '';
+            const url = courseId ? `/api/admin/waitlists?course_id=${courseId}` : '/api/admin/waitlists';
+            const response = await this.apiFetch(url);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            
+            const waitlistData = await response.json();
+            this.renderWaitlistCards(waitlistData);
+            
+        } catch (error) {
+            console.error('Error loading waitlists:', error);
+            container.innerHTML = `
+                <div class="col-12">
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        Failed to load waitlist data: ${error.message}
+                    </div>
+                </div>
+            `;
+            this.showError('Failed to load waitlist data');
+        }
+    }
+
+    populateWaitlistCourseFilter() {
+        const select = document.getElementById('waitlistCourseFilter');
+        if (!select) return;
+        
+        select.innerHTML = '<option value="">All Courses</option>';
+        this.courses.forEach(course => {
+            const option = document.createElement('option');
+            option.value = course.id;
+            option.textContent = course.name;
+            select.appendChild(option);
+        });
+
+        // Add event listener for filter changes
+        if (!select._waitlistWired) {
+            select._waitlistWired = true;
+            select.addEventListener('change', () => {
+                this.refreshWaitlists();
+            });
+        }
+    }
+
+    renderWaitlistCards(waitlistData) {
+        const container = document.getElementById('waitlistsContainer');
+        
+        if (!waitlistData || !Array.isArray(waitlistData) || waitlistData.length === 0) {
+            container.innerHTML = `
+                <div class="col-12">
+                    <div class="text-center py-5">
+                        <i class="fas fa-list-ol fa-4x text-muted mb-4"></i>
+                        <h4>No Waitlists Found</h4>
+                        <p class="text-muted">No students are currently on any waitlists, or no courses have waitlists yet.</p>
+                    </div>
+                </div>
+            `;
+            return;
+        }
+
+        // Group waitlist entries by course
+        const groupedByCourse = {};
+        waitlistData.forEach(entry => {
+            const courseKey = entry.course_id || 'unknown';
+            if (!groupedByCourse[courseKey]) {
+                groupedByCourse[courseKey] = {
+                    course_name: entry.course_name || 'Unknown Course',
+                    course_id: entry.course_id,
+                    entries: []
+                };
+            }
+            groupedByCourse[courseKey].entries.push(entry);
+        });
+
+        const cards = Object.values(groupedByCourse).map(courseWaitlist => {
+            const entries = courseWaitlist.entries.sort((a, b) => (a.position || 0) - (b.position || 0));
+            
+            return `
+                <div class="col-lg-6 col-xl-4 mb-4">
+                    <div class="card waitlist-card">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h6 class="mb-0">
+                                <i class="fas fa-graduation-cap text-primary me-2"></i>
+                                ${courseWaitlist.course_name}
+                            </h6>
+                            <span class="badge bg-warning">${entries.length} waiting</span>
+                        </div>
+                        <div class="card-body">
+                            <div class="waitlist-entries">
+                                ${entries.slice(0, 5).map(entry => `
+                                    <div class="waitlist-entry d-flex justify-content-between align-items-center py-2 border-bottom">
+                                        <div class="d-flex align-items-center">
+                                            <div class="form-check me-2">
+                                                <input class="form-check-input waitlist-checkbox" type="checkbox" 
+                                                       value="${entry.id}" data-course-id="${entry.course_id}">
+                                            </div>
+                                            <div class="position-badge me-2">
+                                                <span class="badge bg-secondary">#${entry.position || '?'}</span>
+                                            </div>
+                                            <div class="student-info">
+                                                <div class="student-name">
+                                                    <strong>${[entry.first_name, entry.last_name].filter(Boolean).join(' ').trim() || '(No name)'}</strong>
+                                                </div>
+                                                <small class="text-muted">
+                                                    ${entry.email || '(No email)'}
+                                                    ${entry.phone ? ` • ${entry.phone}` : ''}
+                                                </small>
+                                            </div>
+                                        </div>
+                                        <div class="waitlist-actions">
+                                            <span class="badge bg-${entry.status === 'active' ? 'success' : 
+                                                entry.status === 'notified' ? 'warning' : 'secondary'}">
+                                                ${entry.status || 'active'}
+                                            </span>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                                ${entries.length > 5 ? `
+                                    <div class="text-center py-2">
+                                        <small class="text-muted">... and ${entries.length - 5} more</small>
+                                    </div>
+                                ` : ''}
+                            </div>
+                            <div class="waitlist-stats mt-3">
+                                <div class="row text-center">
+                                    <div class="col-4">
+                                        <div class="stat-number text-success">${entries.filter(e => e.status === 'active').length}</div>
+                                        <div class="stat-label">Active</div>
+                                    </div>
+                                    <div class="col-4">
+                                        <div class="stat-number text-warning">${entries.filter(e => e.status === 'notified').length}</div>
+                                        <div class="stat-label">Notified</div>
+                                    </div>
+                                    <div class="col-4">
+                                        <div class="stat-number text-muted">${entries.filter(e => e.status === 'expired').length}</div>
+                                        <div class="stat-label">Expired</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card-footer">
+                            <div class="btn-group w-100" role="group">
+                                <button class="btn btn-outline-primary btn-sm" onclick="admin.notifyWaitlistForCourse(${courseWaitlist.course_id})">
+                                    <i class="fas fa-envelope"></i> Notify Next
+                                </button>
+                                <button class="btn btn-outline-info btn-sm" onclick="admin.viewCourseWaitlist(${courseWaitlist.course_id})">
+                                    <i class="fas fa-eye"></i> View All
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        container.innerHTML = cards;
+    }
+
+    async exportWaitlists() {
+        try {
+            const courseFilter = document.getElementById('waitlistCourseFilter')?.value || '';
+            const params = new URLSearchParams();
+            if (courseFilter) params.set('course_id', courseFilter);
+            
+            const url = `/api/admin/waitlists/export${params.toString() ? `?${params.toString()}` : ''}`;
+            window.open(url, '_blank');
+            
+        } catch (error) {
+            console.error('Export waitlists error:', error);
+            this.showError('Failed to export waitlists');
+        }
+    }
+
+    async notifySelectedStudents() {
+        const selectedCheckboxes = document.querySelectorAll('.waitlist-checkbox:checked');
+        const selectedIds = Array.from(selectedCheckboxes).map(cb => parseInt(cb.value));
+
+        if (selectedIds.length === 0) {
+            this.showError('Please select at least one student to notify');
+            return;
+        }
+
+        if (!confirm(`Notify ${selectedIds.length} selected students that spots are available? This will send them registration links.`)) {
+            return;
+        }
+
+        try {
+            const response = await this.apiFetch('/api/admin/waitlists/notify', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    waitlist_ids: selectedIds
+                })
+            });
+
+            const result = await response.json();
+
+            if (response.ok) {
+                this.showSuccess(`Notified ${result.notified_count || selectedIds.length} students successfully`);
+                await this.refreshWaitlists();
+            } else {
+                this.showError(result.error || 'Failed to notify students');
+            }
+        } catch (error) {
+            console.error('Error notifying students:', error);
+            this.showError('Failed to notify selected students');
+        }
+    }
+
+    async removeSelectedFromWaitlist() {
+        const selectedCheckboxes = document.querySelectorAll('.waitlist-checkbox:checked');
+        const selectedIds = Array.from(selectedCheckboxes).map(cb => parseInt(cb.value));
+
+        if (selectedIds.length === 0) {
+            this.showError('Please select at least one student to remove');
+            return;
+        }
+
+        if (!confirm(`Remove ${selectedIds.length} selected students from their waitlists? This action cannot be undone.`)) {
+            return;
+        }
+
+        try {
+            const response = await this.apiFetch('/api/admin/waitlists/remove', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    waitlist_ids: selectedIds
+                })
+            });
+
+            const result = await response.json();
+
+            if (response.ok) {
+                this.showSuccess(`Removed ${result.removed_count || selectedIds.length} students from waitlists`);
+                await this.refreshWaitlists();
+            } else {
+                this.showError(result.error || 'Failed to remove students');
+            }
+        } catch (error) {
+            console.error('Error removing students:', error);
+            this.showError('Failed to remove selected students');
+        }
+    }
+
+    async notifyWaitlistForCourse(courseId) {
+        if (!confirm('Notify the next student on this waitlist that a spot is available?')) {
+            return;
+        }
+
+        try {
+            const response = await this.apiFetch(`/api/admin/courses/${courseId}/waitlist/notify-next`, {
+                method: 'POST'
+            });
+
+            const result = await response.json();
+
+            if (response.ok) {
+                if (result.notified_student) {
+                    this.showSuccess(`Notified ${result.notified_student.first_name} ${result.notified_student.last_name} about available spot`);
+                } else {
+                    this.showSuccess('No active students on waitlist to notify');
+                }
+                await this.refreshWaitlists();
+            } else {
+                this.showError(result.error || 'Failed to notify next student');
+            }
+        } catch (error) {
+            console.error('Error notifying next student:', error);
+            this.showError('Failed to notify next student');
+        }
+    }
+
+    async viewCourseWaitlist(courseId) {
+        // This could open a modal with detailed waitlist view
+        // For now, just filter to show only this course's waitlist
+        const courseFilter = document.getElementById('waitlistCourseFilter');
+        if (courseFilter) {
+            courseFilter.value = courseId;
+            await this.refreshWaitlists();
         }
     }
 
