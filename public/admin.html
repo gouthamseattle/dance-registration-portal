@@ -90,6 +90,12 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a class="nav-link" href="#" data-section="waitlist">
+                            <i class="fas fa-list-ol"></i>
+                            Waitlists
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a class="nav-link" href="#" data-section="reports">
                             <i class="fas fa-chart-bar"></i>
                             Reports
@@ -366,6 +372,61 @@
                                 <!-- Registrations table will be loaded here -->
                             </div>
                         </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Waitlists Section -->
+        <div id="waitlistSection" class="content-section" style="display: none;">
+            <div class="row">
+                <div class="col-12">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h2><i class="fas fa-list-ol text-primary"></i> Waitlist Management</h2>
+                        <div class="btn-group">
+                            <button class="btn btn-outline-primary" onclick="admin.refreshWaitlists()">
+                                <i class="fas fa-sync"></i>
+                                Refresh
+                            </button>
+                            <button class="btn btn-success" onclick="admin.exportWaitlists()">
+                                <i class="fas fa-download"></i>
+                                Export Waitlists
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Course Filter -->
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <select class="form-select" id="waitlistCourseFilter">
+                        <option value="">All Courses</option>
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-warning" onclick="admin.notifySelectedStudents()">
+                            <i class="fas fa-envelope"></i>
+                            Notify Selected
+                        </button>
+                        <button class="btn btn-outline-danger" onclick="admin.removeSelectedFromWaitlist()">
+                            <i class="fas fa-trash"></i>
+                            Remove Selected
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Waitlists Cards -->
+            <div class="row" id="waitlistsContainer">
+                <!-- Waitlist cards will be loaded here -->
+                <div class="col-12">
+                    <div class="text-center py-5">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading waitlists...</span>
+                        </div>
+                        <p class="mt-3 text-muted">Loading waitlist data...</p>
                     </div>
                 </div>
             </div>
