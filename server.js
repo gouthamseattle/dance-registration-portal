@@ -9,7 +9,7 @@ require('dotenv').config();
 
 // Import our database configuration
 const DatabaseConfig = require('./database-config');
-const { sendRegistrationConfirmationEmail, sendEmailWithFallback, verifyEmailTransport } = require('./utils/mailer');
+const { sendRegistrationConfirmationEmail, sendWaitlistNotificationEmail, sendEmailWithFallback, verifyEmailTransport } = require('./utils/mailer');
 const { fetchCourseWithSlots } = require('./utils/schedule');
 
 const app = express();
@@ -1947,17 +1947,64 @@ app.post('/api/admin/waitlist/:id/notify', requireAuth, asyncHandler(async (req,
         WHERE id = $3
     `, [expiresAt.toISOString(), paymentToken, id]);
     
-    // TODO: Send email notification to student
-    // For now, just create the secure registration URL
+    // Create the secure registration URL
     const registrationUrl = `${req.protocol}://${req.get('host')}/waitlist-register/${paymentToken}`;
     
-    console.log('📧 Waitlist notification sent', { 
-        id, 
-        email: waitlistEntry.email, 
-        course: waitlistEntry.course_name,
-        expires_at: expiresAt.toISOString(),
-        registration_url: registrationUrl
-    });
+    // Send actual email notification
+    try {
+        // Check if email notifications are enabled
+        const setting = await dbConfig.get('SELECT setting_value FROM system_settings WHERE setting_key = $1', ['email_notifications_enabled']);
+        const emailEnabled = setting && setting.setting_value === 'true';
+
+        if (emailEnabled && process.env.SENDGRID_API_KEY) {
+            // Get course pricing and schedule info for email
+            const { schedule_info } = await fetchCourseWithSlots(dbConfig, waitlistEntry.course_id);
+            
+            // Get course pricing from slots
+            const courseSlots = await dbConfig.all(`
+                SELECT cs.id FROM course_slots cs WHERE cs.course_id = $1 LIMIT 1
+            `, [waitlistEntry.course_id]);
+            
+            let amount = '0';
+            if (courseSlots.length > 0) {
+                const pricing = await dbConfig.get(`
+                    SELECT price FROM course_pricing 
+                    WHERE course_slot_id = $1 AND pricing_type = 'full_package'
+                    ORDER BY price DESC LIMIT 1
+                `, [courseSlots[0].id]);
+                amount = pricing ? String(pricing.price) : '0';
+            }
+            
+            await sendWaitlistNotificationEmail(waitlistEntry.email, {
+                courseName: waitlistEntry.course_name,
+                scheduleInfo: schedule_info,
+                amount: amount,
+                studentName: `${waitlistEntry.first_name} ${waitlistEntry.last_name}`.trim(),
+                position: waitlistEntry.waitlist_position,
+                registrationUrl: registrationUrl,
+                expiresAt: expiresAt.toISOString(),
+                expiresHours: expires_hours
+            });
+            
+            console.log('📧 Waitlist notification email sent', { 
+                id, 
+                email: waitlistEntry.email, 
+                course: waitlistEntry.course_name,
+                expires_at: expiresAt.toISOString(),
+                registration_url: registrationUrl
+            });
+        } else {
+            console.log('📧 Waitlist notification logged (email disabled)', { 
+                id, 
+                email: waitlistEntry.email, 
+                course: waitlistEntry.course_name,
+                registration_url: registrationUrl
+            });
+        }
+    } catch (emailError) {
+        console.error('❌ Failed to send waitlist notification email:', emailError);
+        // Don't fail the entire request just because email failed
+    }
     
     res.json({ 
         success: true,
@@ -2065,12 +2112,58 @@ app.post('/api/admin/waitlists/notify', requireAuth, asyncHandler(async (req, re
                 WHERE id = $3
             `, [expiresAt.toISOString(), paymentToken, id]);
             
-            // TODO: Send actual email notification
-            console.log('📧 Notified waitlist student', { 
-                id, 
-                email: waitlistEntry.email, 
-                course: waitlistEntry.course_name 
-            });
+            // Send actual email notification
+            try {
+                const setting = await dbConfig.get('SELECT setting_value FROM system_settings WHERE setting_key = $1', ['email_notifications_enabled']);
+                const emailEnabled = setting && setting.setting_value === 'true';
+
+                if (emailEnabled && process.env.SENDGRID_API_KEY) {
+                    const { schedule_info } = await fetchCourseWithSlots(dbConfig, waitlistEntry.course_id);
+                    
+                    const courseSlots = await dbConfig.all(`
+                        SELECT cs.id FROM course_slots cs WHERE cs.course_id = $1 LIMIT 1
+                    `, [waitlistEntry.course_id]);
+                    
+                    let amount = '0';
+                    if (courseSlots.length > 0) {
+                        const pricing = await dbConfig.get(`
+                            SELECT price FROM course_pricing 
+                            WHERE course_slot_id = $1 AND pricing_type = 'full_package'
+                            ORDER BY price DESC LIMIT 1
+                        `, [courseSlots[0].id]);
+                        amount = pricing ? String(pricing.price) : '0';
+                    }
+                    
+                    // Generate registration URL
+                    const registrationUrl = `${req.protocol}://${req.get('host')}/waitlist-register/${paymentToken}`;
+                    
+                    await sendWaitlistNotificationEmail(waitlistEntry.email, {
+                        courseName: waitlistEntry.course_name,
+                        scheduleInfo: schedule_info,
+                        amount: amount,
+                        studentName: `${waitlistEntry.first_name} ${waitlistEntry.last_name}`.trim(),
+                        position: waitlistEntry.waitlist_position,
+                        registrationUrl: registrationUrl,
+                        expiresAt: expiresAt.toISOString(),
+                        expiresHours: 48
+                    });
+                    
+                    console.log('📧 Waitlist notification email sent', { 
+                        id, 
+                        email: waitlistEntry.email, 
+                        course: waitlistEntry.course_name 
+                    });
+                } else {
+                    console.log('📧 Waitlist notification logged (email disabled)', { 
+                        id, 
+                        email: waitlistEntry.email, 
+                        course: waitlistEntry.course_name 
+                    });
+                }
+            } catch (emailError) {
+                console.error('❌ Failed to send waitlist notification email:', emailError);
+                // Don't fail the entire request just because email failed
+            }
             
             notifiedCount++;
         } catch (error) {
@@ -2243,13 +2336,60 @@ app.post('/api/admin/courses/:courseId/waitlist/notify-next', requireAuth, async
             WHERE id = $3
         `, [expiresAt.toISOString(), paymentToken, nextStudent.id]);
         
-        // TODO: Send actual email notification
-        console.log('📧 Notified next waitlist student', { 
-            student_id: nextStudent.student_id,
-            email: nextStudent.email, 
-            course: nextStudent.course_name,
-            position: nextStudent.waitlist_position
-        });
+        // Send actual email notification
+        try {
+            const setting = await dbConfig.get('SELECT setting_value FROM system_settings WHERE setting_key = $1', ['email_notifications_enabled']);
+            const emailEnabled = setting && setting.setting_value === 'true';
+
+            if (emailEnabled && process.env.SENDGRID_API_KEY) {
+                const { schedule_info } = await fetchCourseWithSlots(dbConfig, courseId);
+                
+                const courseSlots = await dbConfig.all(`
+                    SELECT cs.id FROM course_slots cs WHERE cs.course_id = $1 LIMIT 1
+                `, [courseId]);
+                
+                let amount = '0';
+                if (courseSlots.length > 0) {
+                    const pricing = await dbConfig.get(`
+                        SELECT price FROM course_pricing 
+                        WHERE course_slot_id = $1 AND pricing_type = 'full_package'
+                        ORDER BY price DESC LIMIT 1
+                    `, [courseSlots[0].id]);
+                    amount = pricing ? String(pricing.price) : '0';
+                }
+                
+                // Generate registration URL
+                const registrationUrl = `${req.protocol}://${req.get('host')}/waitlist-register/${paymentToken}`;
+                
+                await sendWaitlistNotificationEmail(nextStudent.email, {
+                    courseName: nextStudent.course_name,
+                    scheduleInfo: schedule_info,
+                    amount: amount,
+                    studentName: `${nextStudent.first_name} ${nextStudent.last_name}`.trim(),
+                    position: nextStudent.waitlist_position,
+                    registrationUrl: registrationUrl,
+                    expiresAt: expiresAt.toISOString(),
+                    expiresHours: 48
+                });
+                
+                console.log('📧 Waitlist notification email sent to next student', { 
+                    student_id: nextStudent.student_id,
+                    email: nextStudent.email, 
+                    course: nextStudent.course_name,
+                    position: nextStudent.waitlist_position
+                });
+            } else {
+                console.log('📧 Waitlist notification logged (email disabled)', { 
+                    student_id: nextStudent.student_id,
+                    email: nextStudent.email, 
+                    course: nextStudent.course_name,
+                    position: nextStudent.waitlist_position
+                });
+            }
+        } catch (emailError) {
+            console.error('❌ Failed to send waitlist notification email to next student:', emailError);
+            // Don't fail the entire request just because email failed
+        }
         
         res.json({ 
             success: true,
