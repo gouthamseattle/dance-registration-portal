@@ -2,6 +2,24 @@
 
 ## Current Work Focus (2025-09-18)
 
+### ✅ Admin Registrations Management Enhancements - COMPLETED & DEPLOYED
+- Features: Admin can Cancel, Uncancel, and Edit registrations
+  - Cancel sets payment_status = 'canceled' and records canceled_at, canceled_by, cancellation_reason
+  - Uncancel restores to payment_status = 'pending'
+  - Edit allows updating student name/email/phone and payment_amount
+- Emails: Cancellation email sent via SendGrid when email_notifications_enabled is true
+- API Endpoints (auth required):
+  - PUT /api/admin/registrations/:id/cancel  { reason?: string }
+  - PUT /api/admin/registrations/:id/uncancel
+  - PUT /api/admin/registrations/:id/edit    { first_name?, last_name?, email?, phone?, payment_amount? }
+- UI:
+  - Registrations table actions: View, Edit, Cancel (or Uncancel when canceled)
+  - Status filter includes “Canceled”
+  - Badge style for status-canceled
+  - Cache-busting: admin-styles.css?v=10, admin.js?v=19
+- Deployment: Triggered via git push (commit c2a2386)
+
+
 ### ✅ Historical Student Classification System - COMPLETED & DEPLOYED
 - ✅ **Planning Session Completed**: Designed one-time automated classification system
 - ✅ **Implementation Completed**: Full system implemented with comprehensive error handling

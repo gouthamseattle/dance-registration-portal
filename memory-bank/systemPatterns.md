@@ -231,6 +231,23 @@ Admin Dashboard (admin.html)
 
 ## New Architecture Additions (Sept 2025)
 
+### Admin Registrations Management Enhancements (2025-09-18)
+- Implemented and deployed admin-side Cancel/Uncancel/Edit for registrations.
+- Endpoints (requireAuth):
+  - PUT /api/admin/registrations/:id/cancel  Body: { reason?: string }
+  - PUT /api/admin/registrations/:id/uncancel
+  - PUT /api/admin/registrations/:id/edit    Body: { first_name?, last_name?, email?, phone?, payment_amount? }
+- Database:
+  - registrations: added audit columns canceled_at, canceled_by, cancellation_reason
+  - payment_status now includes 'canceled' (used for UI and reporting)
+- Emails:
+  - sendRegistrationCancellationEmail via SendGrid when system setting email_notifications_enabled = true
+- Frontend (Admin):
+  - Registrations table actions: View, Edit, Cancel (or Uncancel when already canceled)
+  - Status filter includes "Canceled"
+  - Status badge style: .status-canceled for clear visual indication
+  - Cache-busting bump: admin-styles.css?v=10 and admin.js?v=19
+
 ### Email-First Registration System (2025-09-18)
 - **Pattern**: Email → Profile Recognition → Pre-populated Registration → Course Access Filtering
 - **Student Profile Integration**:
@@ -348,6 +365,6 @@ Admin Dashboard (admin.html)
 
 ### Cache Busting and Staleness Prevention
 - `public/admin.html` references:
-  - `css/admin-styles.css?v=7`
-  - `js/admin.js?v=17`
+  - `css/admin-styles.css?v=10`
+  - `js/admin.js?v=19`
 - Pattern: bump version query params when making CSS/JS changes that affect production UI to ensure immediate rollout.

@@ -2,6 +2,30 @@
 
 ## Latest Updates (2025-09-18)
 
+### ✅ Admin Registrations Management Enhancements - DEPLOYED
+- Admin can Cancel, Uncancel, and Edit registrations from the Registrations page
+- API (auth required):
+  - PUT /api/admin/registrations/:id/cancel  Body: { reason?: string }
+  - PUT /api/admin/registrations/:id/uncancel
+  - PUT /api/admin/registrations/:id/edit    Body: { first_name?, last_name?, email?, phone?, payment_amount? }
+- Database:
+  - registrations now records canceled_at, canceled_by, cancellation_reason when canceled
+  - payment_status now includes 'canceled' (UI reflects via status-canceled badge)
+- Emails:
+  - Cancellation email sent via SendGrid when system setting email_notifications_enabled='true'
+- UI:
+  - New “Canceled” filter option; actions include Edit, Cancel/Uncancel, View
+  - Cache-busting: admin-styles.css?v=10, admin.js?v=19
+- Files touched:
+  - server.js (new endpoints, schema ensures audit columns)
+  - utils/mailer.js (sendRegistrationCancellationEmail)
+  - public/js/admin.js (actions, edit modal, cancel/uncancel flows)
+  - public/admin.html (filters + cache-busting)
+  - public/css/admin-styles.css (.status-canceled styling)
+- Deployment:
+  - Triggered via git push (commit c2a2386)
+
+
 ### ✅ Historical Student Classification System - FULLY DEPLOYED
 - **✅ Comprehensive Implementation**: Complete historical analysis system for crew member identification
   - **Root Cause Resolved**: System now accesses PostgreSQL production database containing "Dreamers Crew Practice" registrations

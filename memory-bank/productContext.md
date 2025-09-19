@@ -39,6 +39,14 @@ Dance instructors face significant challenges managing class registrations:
    - Mark Present / Late / Absent per student with both individual radios and bulk actions
    - Save attendance records for future reporting (does not affect payment status)
 
+### Admin Registrations Management (New)
+- Admins can Cancel, Uncancel, and Edit registrations directly from the Registrations page
+- Cancel sets status to 'canceled' and records: canceled_at, canceled_by, cancellation_reason
+- Uncancel restores the registration to 'pending'
+- Edit allows updating student first/last name, email, phone, and payment amount
+- Cancellation emails are sent automatically via SendGrid when notifications are enabled
+- UI shows a clear "Canceled" badge and adds a "Canceled" filter option
+
 ## User Experience Goals
 
 ### For Students

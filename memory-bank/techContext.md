@@ -10,7 +10,7 @@
   - PostgreSQL (production via Railway)
 - **Authentication**: bcryptjs for password hashing
 - **Session Management**: express-session
-- **Email**: nodemailer (configurable SMTP)
+- **Email**: SendGrid (@sendgrid/mail) for transactional emails; legacy nodemailer notes retained for reference
 
 ### Frontend Technologies
 - **Core**: Vanilla HTML5, CSS3, JavaScript (ES6+)
@@ -66,7 +66,13 @@ SESSION_SECRET=your-secret-key
 # Database (production only)
 DATABASE_URL=postgresql://...
 
-# Email (optional)
+# Email (primary - SendGrid)
+SENDGRID_API_KEY=your-sendgrid-api-key
+FROM_EMAIL=sender@example.com
+FROM_NAME="Your Sender Name"
+REPLY_TO=reply@example.com
+
+# Email (legacy SMTP - optional/fallback reference)
 EMAIL_HOST=smtp.gmail.com
 EMAIL_PORT=587
 EMAIL_USER=your-email@gmail.com
@@ -314,8 +320,8 @@ const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
 
 ### Admin Assets Cache Busting (Production)
 - public/admin.html references:
-  - `css/admin-styles.css?v=7`
-  - `js/admin.js?v=17`
+  - `css/admin-styles.css?v=10`
+  - `js/admin.js?v=19`
 - Pattern: bump version query params on CSS/JS changes to force production refresh.
 
 ### Commits
