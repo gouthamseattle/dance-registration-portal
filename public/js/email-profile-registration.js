@@ -482,11 +482,11 @@ class EmailProfileRegistrationApp {
                         </div>
                     ` : ''}
 
-                    <button class="btn register-btn" 
+                    <button class="btn register-btn ${availableSpots <= 0 ? 'waitlist-btn' : ''}" 
                             onclick="app.selectCourse(${course.id})"
-                            ${availableSpots <= 0 ? 'disabled' : ''}>
-                        <i class="fas fa-user-plus"></i>
-                        ${availableSpots > 0 ? 'Register Now' : 'Course Full'}
+                            ${availableSpots <= 0 ? '' : ''}>
+                        <i class="fas ${availableSpots > 0 ? 'fa-user-plus' : 'fa-list-alt'}"></i>
+                        ${availableSpots > 0 ? 'Register Now' : 'Join Waitlist'}
                     </button>
                 </div>
             </div>
@@ -558,11 +558,11 @@ class EmailProfileRegistrationApp {
 
                     ${course.description ? `<p class="text-muted small mb-3">${course.description}</p>` : ''}
 
-                    <button class="btn register-btn" 
+                    <button class="btn register-btn ${availableSpots <= 0 ? 'waitlist-btn' : ''}" 
                             onclick="app.selectCourse(${course.id})"
-                            ${availableSpots <= 0 ? 'disabled' : ''}>
-                        <i class="fas fa-user-plus"></i>
-                        ${availableSpots > 0 ? 'Register Now' : 'Class Full'}
+                            ${availableSpots <= 0 ? '' : ''}>
+                        <i class="fas ${availableSpots > 0 ? 'fa-user-plus' : 'fa-list-alt'}"></i>
+                        ${availableSpots > 0 ? 'Register Now' : 'Join Waitlist'}
                     </button>
                 </div>
             </div>
@@ -580,9 +580,18 @@ class EmailProfileRegistrationApp {
         }
 
         this.selectedCourse = course;
-        console.log('Course selected:', course.name);
+        const availableSpots = parseInt(course.available_spots) || 0;
+        
+        console.log('Course selected:', course.name, 'Available spots:', availableSpots);
 
-        // Store selected course and student data for main registration system
+        // Check if course is full and needs waitlist registration
+        if (availableSpots <= 0) {
+            console.log('Course is full, proceeding with waitlist registration');
+            await this.handleWaitlistRegistration(course);
+            return;
+        }
+
+        // Course has spots available, proceed with regular registration
         const registrationData = {
             email: this.currentEmail,
             student_id: this.currentStudent.id,
@@ -604,10 +613,124 @@ class EmailProfileRegistrationApp {
         console.log('✅ Redirecting to main registration with student data:', registrationData);
         
         // Redirect to main registration portal with pre-filled data
-        // Add a small delay to show the loading state
         setTimeout(() => {
             window.location.href = `/index-registration.html?${params.toString()}`;
         }, 500);
+    }
+
+    async handleWaitlistRegistration(course) {
+        this.showLoading();
+
+        try {
+            // Prepare waitlist registration data
+            const waitlistData = {
+                first_name: this.currentStudent.first_name,
+                last_name: this.currentStudent.last_name,
+                email: this.currentEmail,
+                phone: this.currentStudent.phone || '',
+                instagram_handle: this.currentStudent.instagram_handle || '',
+                dance_experience: this.currentStudent.dance_experience || '',
+                course_id: course.id,
+                payment_amount: course.full_course_price || course.per_class_price || 0,
+                how_heard_about_us: 'Existing student'
+            };
+
+            console.log('Submitting waitlist registration:', waitlistData);
+
+            const response = await fetch('/api/waitlist', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(waitlistData)
+            });
+
+            const result = await response.json();
+
+            this.hideLoading();
+
+            if (!response.ok) {
+                throw new Error(result.error || 'Failed to join waitlist');
+            }
+
+            console.log('✅ Waitlist registration successful:', result);
+            
+            // Show waitlist success message
+            this.showWaitlistSuccess(course, result.position);
+
+        } catch (error) {
+            this.hideLoading();
+            console.error('Waitlist registration failed:', error);
+            this.showError(`Failed to join waitlist: ${error.message}`);
+        }
+    }
+
+    showWaitlistSuccess(course, position) {
+        this.currentStep = 'waitlist-success';
+        this.hideAllSections();
+        
+        // Create waitlist success section if it doesn't exist
+        let waitlistSection = document.getElementById('waitlistSuccessSection');
+        if (!waitlistSection) {
+            waitlistSection = document.createElement('section');
+            waitlistSection.id = 'waitlistSuccessSection';
+            waitlistSection.className = 'py-5';
+            waitlistSection.innerHTML = `
+                <div class="container">
+                    <div class="row justify-content-center">
+                        <div class="col-md-8">
+                            <div class="card text-center success-animation">
+                                <div class="card-header">
+                                    <h3><i class="fas fa-list-alt text-warning"></i> You're on the Waitlist!</h3>
+                                </div>
+                                <div class="card-body">
+                                    <div class="mb-4">
+                                        <i class="fas fa-clock fa-4x text-warning mb-3"></i>
+                                        <h4 id="waitlistCourseName">${course.name}</h4>
+                                        <p class="lead">You are <strong>#${position}</strong> on the waitlist</p>
+                                    </div>
+                                    <div class="alert alert-info mb-4">
+                                        <h6><i class="fas fa-info-circle"></i> What happens next?</h6>
+                                        <ol class="text-left mb-0">
+                                            <li>We'll notify you by email when a spot becomes available</li>
+                                            <li>You'll have 48 hours to complete your registration</li>
+                                            <li>Payment is only required when you get notified</li>
+                                        </ol>
+                                    </div>
+                                    <div class="confirmation-details">
+                                        <div class="confirmation-item">
+                                            <span class="confirmation-label">Course:</span>
+                                            <span class="confirmation-value">${course.name}</span>
+                                        </div>
+                                        <div class="confirmation-item">
+                                            <span class="confirmation-label">Your Email:</span>
+                                            <span class="confirmation-value">${this.currentEmail}</span>
+                                        </div>
+                                        <div class="confirmation-item">
+                                            <span class="confirmation-label">Waitlist Position:</span>
+                                            <span class="confirmation-value">#${position}</span>
+                                        </div>
+                                        <div class="confirmation-item">
+                                            <span class="confirmation-label">Expected Price:</span>
+                                            <span class="confirmation-value">$${course.full_course_price || course.per_class_price || 0}</span>
+                                        </div>
+                                    </div>
+                                    <button class="btn btn-primary btn-lg" onclick="app.showEmailEntry()">
+                                        <i class="fas fa-arrow-left"></i> Register for Another Class
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.querySelector('main').appendChild(waitlistSection);
+        }
+        
+        // Update dynamic content
+        document.getElementById('waitlistCourseName').textContent = course.name;
+        waitlistSection.style.display = 'block';
+        this.scrollToTop();
     }
 
     // Utility methods
