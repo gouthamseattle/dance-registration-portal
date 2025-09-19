@@ -938,12 +938,12 @@ app.post('/api/check-student-profile', asyncHandler(async (req, res) => {
         };
     }));
     
-    // Only require profile completion for crew members who have never completed their profile
-    // AND are missing critical info. Don't force existing users to re-complete profiles.
+    // Check profile completion for ALL users (not just crew members)
+    // Profile is incomplete if missing instagram_handle OR dance_experience
     const profileComplete = dbConfig.isProduction ? student.profile_complete : Boolean(student.profile_complete);
-    const requiresCompletion = (student.student_type === 'crew_member') && 
-                              !profileComplete &&
-                              (!student.instagram_handle || !student.dance_experience);
+    const hasInstagram = student.instagram_handle && student.instagram_handle.trim() !== '';
+    const hasExperience = student.dance_experience && student.dance_experience.trim() !== '';
+    const requiresCompletion = !profileComplete || !hasInstagram || !hasExperience;
 
     res.json({
         exists: true,
