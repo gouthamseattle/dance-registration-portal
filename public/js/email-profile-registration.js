@@ -522,11 +522,14 @@ class EmailProfileRegistrationApp {
 
         col.innerHTML = `
             <div class="card dropin-card fade-in">
+                <div class="dropin-card-header">
+                    <div class="goumo-text-logo">GouMo Dance Chronicles</div>
+                </div>
                 <div class="card-body">
                     <div class="dropin-header">
                         <div>
                             <h6 class="dropin-title">${course.name}</h6>
-                            <small class="text-muted">Drop-in Class<span class="goumo-text-logo">GouMo Dance Chronicles</span></small>
+                            <small class="text-muted">Drop-in Class</small>
                         </div>
                         <div class="dropin-price">$${course.per_class_price || '0'}</div>
                     </div>

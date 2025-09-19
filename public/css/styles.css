@@ -1813,63 +1813,121 @@ select:-webkit-autofill:active {
     width: 100%;
     height: 100%;
     background-image: url('/assets/media/DDC_Logo_inverted_transparent.png');
-    background-size: contain;
+    background-size: 120px;
     background-repeat: no-repeat;
     background-position: right center;
-    opacity: 0.15;
+    opacity: 0.3;
     z-index: 1;
     transition: var(--transition-smooth);
 }
 
 .course-card:hover .ddc-card-header-background {
-    opacity: 0.25;
-    transform: scale(1.05);
+    opacity: 0.5;
+    transform: scale(1.08);
 }
 
-/* Ensure text content is above background logo */
+/* Ensure text content is above background logo with strong contrast */
 .course-card .card-header * {
     position: relative;
-    z-index: 2;
+    z-index: 3;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
 }
 
-/* GouMo Dance Chronicles Text Logo */
+.course-card .card-header .badge {
+    background: rgba(245, 158, 11, 0.95) !important;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    z-index: 4;
+}
+
+/* GouMo Dance Chronicles Text Logo - Enhanced Design */
 .goumo-text-logo {
     font-family: var(--font-display);
-    font-size: 0.85rem;
-    font-weight: 700;
+    font-size: 1.2rem;
+    font-weight: 800;
     background: var(--gradient-primary);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
-    display: inline-flex;
+    letter-spacing: 1px;
+    display: flex;
     align-items: center;
-    gap: 0.5rem;
-    margin-left: 0.75rem;
+    justify-content: center;
+    gap: 0.75rem;
+    margin: 0;
+    padding: 1rem 1.5rem;
     position: relative;
+    border-radius: var(--radius-md);
+    background-color: rgba(0, 212, 255, 0.05);
+    border: 2px solid rgba(0, 212, 255, 0.2);
+    backdrop-filter: blur(10px);
+    text-shadow: 0 0 10px rgba(0, 212, 255, 0.3);
+    transition: var(--transition-smooth);
 }
 
 .goumo-text-logo::before {
     content: '🕺';
-    font-size: 1rem;
+    font-size: 1.8rem;
     background: none;
     -webkit-background-clip: unset;
     -webkit-text-fill-color: unset;
     background-clip: unset;
-    filter: drop-shadow(0 0 4px rgba(0, 212, 255, 0.3));
-    animation: bounce 2s infinite;
+    filter: drop-shadow(0 0 8px rgba(0, 212, 255, 0.5));
+    animation: dance 3s ease-in-out infinite;
 }
 
 .goumo-text-logo::after {
     content: '';
     position: absolute;
-    bottom: -2px;
+    top: 0;
     left: 0;
     right: 0;
-    height: 1px;
-    background: var(--gradient-primary);
-    opacity: 0.6;
+    bottom: 0;
+    background: linear-gradient(45deg, transparent 30%, rgba(0, 212, 255, 0.1) 50%, transparent 70%);
+    border-radius: var(--radius-md);
+    animation: shine 3s ease-in-out infinite;
+    pointer-events: none;
+}
+
+.goumo-text-logo:hover {
+    transform: scale(1.05);
+    border-color: rgba(0, 212, 255, 0.5);
+    background-color: rgba(0, 212, 255, 0.1);
+    box-shadow: 0 0 20px rgba(0, 212, 255, 0.3);
+}
+
+@keyframes dance {
+    0%, 100% { transform: rotate(-5deg) scale(1); }
+    25% { transform: rotate(5deg) scale(1.1); }
+    50% { transform: rotate(-5deg) scale(1); }
+    75% { transform: rotate(5deg) scale(1.1); }
+}
+
+@keyframes shine {
+    0%, 100% { transform: translateX(-100%); }
+    50% { transform: translateX(100%); }
+}
+
+/* Drop-in Card Header with Prominent Logo */
+.dropin-card-header {
+    background: var(--gradient-dark);
+    padding: 1.5rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+}
+
+.dropin-card-header::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="dropinPattern" patternUnits="userSpaceOnUse" width="20" height="20"><circle cx="10" cy="10" r="1" fill="rgba(0,212,255,0.1)"/></pattern></defs><rect width="100" height="100" fill="url(%23dropinPattern)"/></svg>');
+    opacity: 0.3;
 }
 
 .ddc-footer-logo {
