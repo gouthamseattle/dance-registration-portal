@@ -3351,6 +3351,9 @@ Questions? Reply to this message`;
                                 <button class="btn btn-outline-secondary btn-sm" onclick="admin.classifyStudent(${student.id}, 'general')">
                                     <i class="fas fa-user"></i> General Student
                                 </button>
+                                <button class="btn btn-outline-info btn-sm" onclick="admin.classifyStudent(${student.id}, 'test')">
+                                    <i class="fas fa-vial"></i> Test
+                                </button>
                             </div>
                         </div>
                     </div>
