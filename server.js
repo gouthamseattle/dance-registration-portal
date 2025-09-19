@@ -1243,18 +1243,32 @@ app.post('/api/admin/historical-classification/analyze', requireAuth, asyncHandl
 // GET /api/admin/historical-analysis/students
 app.get('/api/admin/historical-analysis/students', requireAuth, asyncHandler(async (req, res) => {
     try {
+        console.log('🔍 Historical analysis endpoint called');
+        console.log('📊 Database config isProduction:', dbConfig.isProduction);
+        
+        // Simplified query that should work on both SQLite and PostgreSQL
         const rows = await dbConfig.all(`
             SELECT 
                 id, first_name, last_name, email, instagram_handle, dance_experience,
                 student_type, admin_classified, profile_complete, created_at
             FROM students
             WHERE email IS NOT NULL
-              AND TRIM(email) != ''
-              AND (student_type IS NULL OR student_type NOT IN ('crew_member','test'))
+              AND email != ''
             ORDER BY created_at ASC
         `, []);
-        // Normalize booleans for SQLite
-        const normalized = rows.map(s => ({
+        
+        console.log('📋 Raw query results:', rows.length, 'students found');
+        
+        // Filter out crew_member and test students in JavaScript to avoid SQL dialect issues
+        const filtered = rows.filter(s => {
+            const studentType = s.student_type;
+            return !studentType || (studentType !== 'crew_member' && studentType !== 'test');
+        });
+        
+        console.log('🔍 After filtering crew/test:', filtered.length, 'students remain');
+        
+        // Normalize booleans for SQLite/PostgreSQL compatibility
+        const normalized = filtered.map(s => ({
             id: s.id,
             first_name: s.first_name || '',
             last_name: s.last_name || '',
@@ -1266,10 +1280,13 @@ app.get('/api/admin/historical-analysis/students', requireAuth, asyncHandler(asy
             profile_complete: dbConfig.isProduction ? !!s.profile_complete : Boolean(s.profile_complete),
             created_at: s.created_at
         }));
+        
+        console.log('✅ Returning', normalized.length, 'normalized students');
         res.json({ total: normalized.length, students: normalized });
     } catch (err) {
         console.error('❌ Simple historical analysis failed:', err);
-        res.status(500).json({ error: 'Failed to run historical analysis' });
+        console.error('❌ Stack trace:', err.stack);
+        res.status(500).json({ error: 'Failed to run historical analysis', details: err.message });
     }
 }));
 
