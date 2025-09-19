@@ -724,7 +724,7 @@ class EmailProfileRegistrationApp {
                     </div>
                 </div>
             `;
-            document.querySelector('main').appendChild(waitlistSection);
+            document.getElementById('mainContent').appendChild(waitlistSection);
         }
         
         // Update dynamic content
