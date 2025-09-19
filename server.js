@@ -3466,5 +3466,30 @@ process.on('SIGINT', async () => {
     }
 });
 
+// Quick test endpoint to make courses available for waitlist testing
+app.post('/api/test/make-course-available', asyncHandler(async (req, res) => {
+    try {
+        // Make course ID 5 (the full one with 0 spots) available to all users for waitlist testing
+        await dbConfig.run("UPDATE courses SET required_student_type = 'any' WHERE id = 5");
+        
+        // Also make course ID 1 available with some spots for regular registration
+        await dbConfig.run("UPDATE courses SET required_student_type = 'any' WHERE id = 1");
+        
+        console.log('🔧 Test courses made available to all users for waitlist testing');
+        
+        res.json({ 
+            success: true,
+            message: 'Test courses are now available to all users',
+            courses_updated: [
+                { id: 5, name: 'Full course - perfect for waitlist testing' },
+                { id: 1, name: 'Course with available spots' }
+            ]
+        });
+    } catch (error) {
+        console.error('❌ Error making test courses available:', error);
+        res.status(500).json({ error: 'Failed to update course access' });
+    }
+}));
+
 // Start the server
 startServer().catch(console.error);
