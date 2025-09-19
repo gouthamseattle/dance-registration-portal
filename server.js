@@ -1720,21 +1720,49 @@ app.post('/api/waitlist', asyncHandler(async (req, res) => {
         student = { id: newStudentId, email, first_name: effectiveFirstName || 'Student', last_name: effectiveLastName || '' };
     }
     
-    // Check if student is already on waitlist for this course
+    // Check if student is already on waitlist for this course (any status)
     const existingWaitlist = await dbConfig.get(
-        'SELECT id, waitlist_position FROM waitlist WHERE student_id = $1 AND course_id = $2 AND status = \'active\'',
+        'SELECT id, waitlist_position, status FROM waitlist WHERE student_id = $1 AND course_id = $2',
         [student.id, course_id]
     );
     
     if (existingWaitlist) {
-        console.log('ℹ️ Student already on waitlist', { student_id: student.id, course_id, position: existingWaitlist.waitlist_position });
-        return res.json({ 
-            success: true, 
-            waitlistId: existingWaitlist.id,
-            studentId: student.id,
-            position: existingWaitlist.waitlist_position,
-            message: `You are already on the waitlist at position #${existingWaitlist.waitlist_position}`
-        });
+        console.log('ℹ️ Student already on waitlist', { student_id: student.id, course_id, position: existingWaitlist.waitlist_position, status: existingWaitlist.status });
+        
+        // If active, return current position
+        if (existingWaitlist.status === 'active') {
+            return res.json({ 
+                success: true, 
+                waitlistId: existingWaitlist.id,
+                studentId: student.id,
+                position: existingWaitlist.waitlist_position,
+                message: `You are already on the waitlist at position #${existingWaitlist.waitlist_position}`
+            });
+        }
+        
+        // If notified or other status, reactivate the existing entry
+        if (existingWaitlist.status === 'notified' || existingWaitlist.status !== 'active') {
+            await dbConfig.run(`
+                UPDATE waitlist SET 
+                    status = 'active',
+                    notification_sent = ${dbConfig.isProduction ? 'false' : '0'},
+                    notification_sent_at = NULL,
+                    notification_expires_at = NULL,
+                    payment_link_token = NULL,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = $1
+            `, [existingWaitlist.id]);
+            
+            console.log('🔄 Reactivated existing waitlist entry', { id: existingWaitlist.id, student_id: student.id, course_id });
+            
+            return res.json({ 
+                success: true, 
+                waitlistId: existingWaitlist.id,
+                studentId: student.id,
+                position: existingWaitlist.waitlist_position,
+                message: `You have been added back to the waitlist at position #${existingWaitlist.waitlist_position}`
+            });
+        }
     }
     
     // Get next waitlist position for this course
