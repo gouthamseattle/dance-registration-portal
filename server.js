@@ -1127,30 +1127,63 @@ app.put('/api/admin/students/:id/classify', requireAuth, asyncHandler(async (req
     const { id } = req.params;
     const { student_type } = req.body;
 
+    console.log('🔍 Student classification request:', { id, student_type, admin: req.session.adminUsername });
+
     if (!student_type || !['general', 'crew_member', 'test'].includes(student_type)) {
         return res.status(400).json({ error: 'student_type must be one of "general", "crew_member", or "test"' });
     }
 
-    // Update student classification
-    // If promoting to crew_member and profile is incomplete (missing instagram_handle or dance_experience),
-    // force profile_complete = false so they complete it on next login.
-    const falseLiteral = dbConfig.isProduction ? 'false' : '0';
-    await dbConfig.run(`
-        UPDATE students SET 
-            student_type = $1, 
-            admin_classified = ${dbConfig.isProduction ? 'true' : '1'},
-            profile_complete = CASE 
-                WHEN $1 = 'crew_member' AND (COALESCE(TRIM(instagram_handle), '') = '' OR COALESCE(TRIM(dance_experience), '') = '')
-                    THEN ${falseLiteral}
-                ELSE profile_complete
-            END,
-            updated_at = CURRENT_TIMESTAMP 
-        WHERE id = $2
-    `, [student_type, id]);
+    try {
+        // Get current student data first to check profile completeness
+        const student = await dbConfig.get('SELECT * FROM students WHERE id = $1', [id]);
+        if (!student) {
+            return res.status(404).json({ error: 'Student not found' });
+        }
 
-    console.log('👤 Student classified:', { id, student_type, admin: req.session.adminUsername });
+        console.log('📋 Current student data:', { 
+            id: student.id, 
+            email: student.email, 
+            instagram_handle: student.instagram_handle, 
+            dance_experience: student.dance_experience 
+        });
 
-    res.json({ success: true, student_type });
+        // Update student classification
+        // If promoting to crew_member and profile is incomplete (missing instagram_handle or dance_experience),
+        // force profile_complete = false so they complete it on next login.
+        const shouldForceProfileCompletion = student_type === 'crew_member' && 
+            (!student.instagram_handle || !student.dance_experience || 
+             student.instagram_handle.trim() === '' || student.dance_experience.trim() === '');
+
+        // Use simpler SQL to avoid compatibility issues
+        if (shouldForceProfileCompletion) {
+            await dbConfig.run(`
+                UPDATE students SET 
+                    student_type = $1, 
+                    admin_classified = ${dbConfig.isProduction ? 'true' : '1'},
+                    profile_complete = ${dbConfig.isProduction ? 'false' : '0'},
+                    updated_at = CURRENT_TIMESTAMP 
+                WHERE id = $2
+            `, [student_type, id]);
+            
+            console.log('👤 Student classified with profile completion required:', { id, student_type });
+        } else {
+            await dbConfig.run(`
+                UPDATE students SET 
+                    student_type = $1, 
+                    admin_classified = ${dbConfig.isProduction ? 'true' : '1'},
+                    updated_at = CURRENT_TIMESTAMP 
+                WHERE id = $2
+            `, [student_type, id]);
+            
+            console.log('👤 Student classified:', { id, student_type });
+        }
+
+        res.json({ success: true, student_type });
+    } catch (error) {
+        console.error('❌ Student classification failed:', error);
+        console.error('❌ Stack trace:', error.stack);
+        res.status(500).json({ error: 'Failed to classify student', details: error.message });
+    }
 }));
 
 /**
