@@ -1000,7 +1000,7 @@ app.post('/api/create-student-profile', asyncHandler(async (req, res) => {
         return res.status(500).json({ error: 'Failed to create student profile' });
     }
     
-    // Get eligible courses (only open to all since new students default to 'general')
+    // Get eligible courses with full slot and pricing data (same as check-student-profile)
     let courseQuery = `
         SELECT c.*, COUNT(DISTINCT r.id) as registration_count
         FROM courses c
@@ -1010,7 +1010,33 @@ app.post('/api/create-student-profile', asyncHandler(async (req, res) => {
         GROUP BY c.id ORDER BY c.created_at DESC
     `;
     
-    const eligibleCourses = await dbConfig.all(courseQuery);
+    const rawCourses = await dbConfig.all(courseQuery);
+    
+    // Process courses with slots and pricing (same logic as check-student-profile)
+    const eligibleCourses = await Promise.all(rawCourses.map(async (course) => {
+        const slots = await dbConfig.all(`
+            SELECT cs.*, 
+                   COUNT(DISTINCT r.id) as slot_registration_count,
+                   (cs.capacity - COUNT(DISTINCT r.id)) as available_spots
+            FROM course_slots cs
+            LEFT JOIN registrations r ON cs.course_id = r.course_id AND r.payment_status = 'completed'
+            WHERE cs.course_id = $1
+            GROUP BY cs.id
+            ORDER BY cs.created_at ASC
+        `, [course.id]);
+        
+        // Calculate totals
+        const totalCapacity = slots.reduce((sum, slot) => sum + (slot.capacity || 0), 0);
+        const totalAvailableSpots = slots.reduce((sum, slot) => sum + (Number(slot.available_spots) || 0), 0);
+        
+        return {
+            ...course,
+            capacity: totalCapacity,
+            available_spots: totalAvailableSpots,
+            full_course_price: 0,
+            per_class_price: 0
+        };
+    }));
     
     console.log('👤 New student profile created:', { id: studentId, email, first_name });
     
@@ -1075,7 +1101,34 @@ app.post('/api/update-student-profile', asyncHandler(async (req, res) => {
     }
     courseQuery += ' GROUP BY c.id ORDER BY c.created_at DESC';
 
-    const eligibleCourses = await dbConfig.all(courseQuery, []);
+    const rawCourses = await dbConfig.all(courseQuery, []);
+    
+    // Process courses with slots and pricing (same logic as other endpoints)
+    const eligibleCourses = await Promise.all(rawCourses.map(async (course) => {
+        const slots = await dbConfig.all(`
+            SELECT cs.*, 
+                   COUNT(DISTINCT r.id) as slot_registration_count,
+                   (cs.capacity - COUNT(DISTINCT r.id)) as available_spots
+            FROM course_slots cs
+            LEFT JOIN registrations r ON cs.course_id = r.course_id AND r.payment_status = 'completed'
+            WHERE cs.course_id = $1
+            GROUP BY cs.id
+            ORDER BY cs.created_at ASC
+        `, [course.id]);
+        
+        // Calculate totals
+        const totalCapacity = slots.reduce((sum, slot) => sum + (slot.capacity || 0), 0);
+        const totalAvailableSpots = slots.reduce((sum, slot) => sum + (Number(slot.available_spots) || 0), 0);
+        
+        return {
+            ...course,
+            capacity: totalCapacity,
+            available_spots: totalAvailableSpots,
+            full_course_price: 0,
+            per_class_price: 0
+        };
+    }));
+    
     res.json({
         success: true,
         student: {
