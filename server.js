@@ -938,6 +938,13 @@ app.post('/api/check-student-profile', asyncHandler(async (req, res) => {
         };
     }));
     
+    // Only require profile completion for crew members who have never completed their profile
+    // AND are missing critical info. Don't force existing users to re-complete profiles.
+    const profileComplete = dbConfig.isProduction ? student.profile_complete : Boolean(student.profile_complete);
+    const requiresCompletion = (student.student_type === 'crew_member') && 
+                              !profileComplete &&
+                              (!student.instagram_handle || !student.dance_experience);
+
     res.json({
         exists: true,
         student: {
@@ -948,9 +955,9 @@ app.post('/api/check-student-profile', asyncHandler(async (req, res) => {
             instagram_handle: student.instagram_handle,
             dance_experience: student.dance_experience,
             student_type: student.student_type,
-            profile_complete: dbConfig.isProduction ? student.profile_complete : Boolean(student.profile_complete)
+            profile_complete: profileComplete
         },
-        requires_profile_completion: (student.student_type === 'crew_member') && (!(dbConfig.isProduction ? student.profile_complete : Boolean(student.profile_complete)) || !student.instagram_handle || !student.dance_experience),
+        requires_profile_completion: requiresCompletion,
         eligible_courses: coursesWithSlots
     });
 }));
