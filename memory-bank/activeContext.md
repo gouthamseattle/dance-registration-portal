@@ -229,8 +229,23 @@ registrations:
 - **✅ Debug Tools**: Ready to diagnose course access control issues
 - **⚠️ Pending Resolution**: "Course Full" issue (likely access control configuration)
 
-### Next Immediate Priority
-**Course Access Control Fix**: Use debug endpoint to identify if Dreamers Crew Practice has `required_student_type = 'crew_member'` when it should be `'any'` for open access.
+### ✅ PROFILE VALIDATION ISSUE RESOLVED (2025-09-18 Evening)
+- **Issue Identified**: Profile validation inconsistency causing "profile appears to be incomplete" error with no way for users to complete missing information
+- **Root Cause**: Email-profile system only checked crew member profiles, but main registration system validated ALL users at payment time
+- **Solution Applied**: Updated `/api/check-student-profile` to validate ALL users for profile completeness after email entry
+- **Key Changes**:
+  - Profile now considered incomplete if missing `instagram_handle` OR `dance_experience`
+  - All users (not just crew members) redirected to profile completion when incomplete
+  - Eliminates dead-end error at payment time
+- **Files Modified**: `server.js` - profile validation logic in `/api/check-student-profile`
+- **Deployment**: Successfully deployed to Railway (commit ff5f40d)
+
+### Current System Status (Post-Profile Fix)
+- **✅ Email-First Registration**: Fully operational without DOM crashes
+- **✅ Profile Validation**: Now checks ALL users and redirects to completion immediately
+- **✅ Student Profile Integration**: No duplicate data collection, proper validation flow
+- **✅ Data Validation**: Robust error handling with actionable user guidance
+- **✅ Debug Tools**: Ready to diagnose course access control issues
 
 ---
 

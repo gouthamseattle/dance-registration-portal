@@ -439,15 +439,18 @@ class EmailProfileRegistrationApp {
             `;
         }
 
-        // Add course type badge
+        // Add course type badge and DDC background for crew practice
         let typeBadge = '';
+        let ddcBackground = '';
         if (course.course_type === 'crew_practice') {
             typeBadge = '<span class="badge bg-warning mb-2">Crew Members Only</span>';
+            ddcBackground = '<div class="ddc-card-header-background"></div>';
         }
 
         col.innerHTML = `
             <div class="card course-card fade-in">
                 <div class="card-header">
+                    ${ddcBackground}
                     ${typeBadge}
                     <h5 class="card-title">${course.name}</h5>
                     <p class="card-subtitle">${course.level || 'All Levels'} • ${course.duration_weeks || 0} weeks</p>
@@ -523,7 +526,7 @@ class EmailProfileRegistrationApp {
                     <div class="dropin-header">
                         <div>
                             <h6 class="dropin-title">${course.name}</h6>
-                            <small class="text-muted">Drop-in Class</small>
+                            <small class="text-muted">Drop-in Class<span class="goumo-text-logo">GouMo Dance Chronicles</span></small>
                         </div>
                         <div class="dropin-price">$${course.per_class_price || '0'}</div>
                     </div>
