@@ -100,6 +100,56 @@ async function initializeDatabase() {
             console.log('ℹ️ Attendance tables check skipped:', e.message || e);
         }
 
+        // Ensure waitlist table exists
+        try {
+            if (dbConfig.isProduction) {
+                await dbConfig.run(`
+                    CREATE TABLE IF NOT EXISTS waitlist (
+                        id SERIAL PRIMARY KEY,
+                        student_id INTEGER NOT NULL,
+                        course_id INTEGER NOT NULL,
+                        waitlist_position INTEGER NOT NULL,
+                        notification_sent BOOLEAN DEFAULT FALSE,
+                        notification_sent_at TIMESTAMP NULL,
+                        notification_expires_at TIMESTAMP NULL,
+                        payment_link_token VARCHAR(255) NULL,
+                        status VARCHAR(20) DEFAULT 'active',
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (student_id) REFERENCES students(id),
+                        FOREIGN KEY (course_id) REFERENCES courses(id)
+                    )
+                `);
+                await dbConfig.run(`
+                    CREATE UNIQUE INDEX IF NOT EXISTS waitlist_unique_student_course
+                    ON waitlist(student_id, course_id)
+                `);
+            } else {
+                await dbConfig.run(`
+                    CREATE TABLE IF NOT EXISTS waitlist (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        student_id INTEGER NOT NULL,
+                        course_id INTEGER NOT NULL,
+                        waitlist_position INTEGER NOT NULL,
+                        notification_sent INTEGER DEFAULT 0,
+                        notification_sent_at TEXT NULL,
+                        notification_expires_at TEXT NULL,
+                        payment_link_token TEXT NULL,
+                        status TEXT DEFAULT 'active',
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                    )
+                `);
+                await dbConfig.run(`
+                    CREATE UNIQUE INDEX IF NOT EXISTS waitlist_unique_student_course
+                    ON waitlist(student_id, course_id)
+                `);
+            }
+            console.log('✅ Ensured waitlist table exists');
+        } catch (e) {
+            console.log('ℹ️ Waitlist table check skipped:', e.message || e);
+        }
+
         // Ensure payment_method column exists on registrations table
         try {
             if (dbConfig.isProduction) {
@@ -128,6 +178,21 @@ async function initializeDatabase() {
             console.log('✅ Ensured registrations cancellation audit columns exist');
         } catch (e) {
             console.log('ℹ️ registrations cancellation columns check skipped:', e.message || e);
+        }
+
+        // Ensure waitlist-related columns exist on registrations table
+        try {
+            if (dbConfig.isProduction) {
+                await dbConfig.run('ALTER TABLE registrations ADD COLUMN IF NOT EXISTS created_from_waitlist BOOLEAN DEFAULT FALSE');
+                await dbConfig.run('ALTER TABLE registrations ADD COLUMN IF NOT EXISTS waitlist_notification_sent_at TIMESTAMP NULL');
+            } else {
+                // SQLite: ignore if column exists
+                await dbConfig.run('ALTER TABLE registrations ADD COLUMN created_from_waitlist INTEGER DEFAULT 0').catch(() => {});
+                await dbConfig.run('ALTER TABLE registrations ADD COLUMN waitlist_notification_sent_at TEXT').catch(() => {});
+            }
+            console.log('✅ Ensured registrations waitlist columns exist');
+        } catch (e) {
+            console.log('ℹ️ registrations waitlist columns check skipped:', e.message || e);
         }
 
         // Ensure student profile and access control columns exist
@@ -1470,6 +1535,339 @@ app.post('/api/admin/historical-classification/apply', requireAuth, asyncHandler
  * Note: Implemented above near historical-classification routes.
  */
 
+// Waitlist APIs
+
+/**
+ * Add student to waitlist when course is full
+ * POST /api/waitlist
+ * Body: same as registration data
+ */
+app.post('/api/waitlist', asyncHandler(async (req, res) => {
+    const {
+        first_name, last_name, email, phone, date_of_birth,
+        emergency_contact_name, emergency_contact_phone, medical_conditions,
+        dance_experience, instagram_handle, instagram_id, how_heard_about_us,
+        course_id, payment_amount, special_requests
+    } = req.body;
+    
+    // Handle both instagram_handle and instagram_id field names
+    const instagram = instagram_handle || instagram_id;
+
+    // Derive names from student_name if provided (e.g., Crew Practice)
+    let effectiveFirstName = first_name;
+    let effectiveLastName = last_name;
+    if ((!effectiveFirstName && !effectiveLastName) && req.body.student_name) {
+        const parts = String(req.body.student_name).trim().split(/\s+/);
+        effectiveFirstName = parts.shift() || 'Student';
+        effectiveLastName = parts.join(' ') || '';
+    }
+    
+    if (!email || !course_id || !payment_amount) {
+        return res.status(400).json({ error: 'Required fields missing: email, course_id, and payment_amount are required' });
+    }
+    
+    // Check if registration is open
+    const settings = await dbConfig.get('SELECT setting_value FROM system_settings WHERE setting_key = $1', ['registration_open']);
+    if (settings && settings.setting_value !== 'true') {
+        return res.status(400).json({ error: 'Registration is currently closed' });
+    }
+    
+    // Verify course exists and is active
+    const courseCheck = await dbConfig.get(`
+        SELECT c.id, c.name, c.course_type
+        FROM courses c
+        WHERE c.id = $1 AND c.is_active = ${dbConfig.isProduction ? 'true' : '1'}
+    `, [course_id]);
+
+    if (!courseCheck) {
+        return res.status(400).json({ error: 'Course not found or inactive' });
+    }
+    
+    // Create or update student (same logic as registration)
+    let student = await dbConfig.get('SELECT * FROM students WHERE email = $1', [email]);
+    
+    if (student) {
+        await dbConfig.run(`
+            UPDATE students SET 
+                first_name = $1, last_name = $2, phone = $3, date_of_birth = $4,
+                emergency_contact_name = $5, emergency_contact_phone = $6, 
+                medical_conditions = $7, dance_experience = $8, instagram_handle = $9,
+                how_heard_about_us = $10, updated_at = CURRENT_TIMESTAMP 
+            WHERE id = $11
+        `, [
+            effectiveFirstName || 'Student', effectiveLastName || '', phone, date_of_birth,
+            emergency_contact_name, emergency_contact_phone, medical_conditions,
+            dance_experience, instagram, how_heard_about_us, student.id
+        ]);
+    } else {
+        const result = await dbConfig.run(`
+            INSERT INTO students (
+                first_name, last_name, email, phone, date_of_birth,
+                emergency_contact_name, emergency_contact_phone, medical_conditions,
+                dance_experience, instagram_handle, how_heard_about_us
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            ${dbConfig.isProduction ? 'RETURNING id' : ''}
+        `, [
+            effectiveFirstName || 'Student', effectiveLastName || '', email, phone, date_of_birth,
+            emergency_contact_name, emergency_contact_phone, medical_conditions,
+            dance_experience, instagram, how_heard_about_us
+        ]);
+        let newStudentId;
+        if (dbConfig.isProduction) {
+            newStudentId = result[0]?.id;
+        } else {
+            newStudentId = result.lastID;
+        }
+        student = { id: newStudentId, email, first_name: effectiveFirstName || 'Student', last_name: effectiveLastName || '' };
+    }
+    
+    // Check if student is already on waitlist for this course
+    const existingWaitlist = await dbConfig.get(
+        'SELECT id, waitlist_position FROM waitlist WHERE student_id = $1 AND course_id = $2 AND status = \'active\'',
+        [student.id, course_id]
+    );
+    
+    if (existingWaitlist) {
+        console.log('ℹ️ Student already on waitlist', { student_id: student.id, course_id, position: existingWaitlist.waitlist_position });
+        return res.json({ 
+            success: true, 
+            waitlistId: existingWaitlist.id,
+            studentId: student.id,
+            position: existingWaitlist.waitlist_position,
+            message: `You are already on the waitlist at position #${existingWaitlist.waitlist_position}`
+        });
+    }
+    
+    // Get next waitlist position for this course
+    const positionResult = await dbConfig.get(
+        'SELECT COALESCE(MAX(waitlist_position), 0) + 1 as next_position FROM waitlist WHERE course_id = $1 AND status = \'active\'',
+        [course_id]
+    );
+    const nextPosition = positionResult.next_position || 1;
+    
+    // Create waitlist entry
+    const waitlistResult = await dbConfig.run(`
+        INSERT INTO waitlist (
+            student_id, course_id, waitlist_position, status
+        ) VALUES ($1, $2, $3, 'active')
+        ${dbConfig.isProduction ? 'RETURNING id' : ''}
+    `, [student.id, course_id, nextPosition]);
+    
+    let waitlistId;
+    if (dbConfig.isProduction) {
+        waitlistId = waitlistResult[0]?.id;
+    } else {
+        waitlistId = waitlistResult.lastID;
+    }
+    
+    console.log('📝 Waitlist entry created', { id: waitlistId, course_id, email, position: nextPosition });
+    
+    res.json({ 
+        success: true, 
+        waitlistId: waitlistId,
+        studentId: student.id,
+        position: nextPosition,
+        courseName: courseCheck.name
+    });
+}));
+
+/**
+ * Get waitlist for a course (admin only)
+ * GET /api/admin/waitlist/:courseId
+ */
+app.get('/api/admin/waitlist/:courseId', requireAuth, asyncHandler(async (req, res) => {
+    const { courseId } = req.params;
+    
+    const waitlistEntries = await dbConfig.all(`
+        SELECT w.*, s.first_name, s.last_name, s.email, s.phone, s.instagram_handle, s.dance_experience,
+               c.name as course_name
+        FROM waitlist w
+        JOIN students s ON w.student_id = s.id
+        JOIN courses c ON w.course_id = c.id
+        WHERE w.course_id = $1 AND w.status = 'active'
+        ORDER BY w.waitlist_position ASC
+    `, [courseId]);
+    
+    const formatted = waitlistEntries.map(entry => ({
+        id: entry.id,
+        student_id: entry.student_id,
+        waitlist_position: entry.waitlist_position,
+        status: entry.status,
+        notification_sent: dbConfig.isProduction ? entry.notification_sent : Boolean(entry.notification_sent),
+        notification_sent_at: entry.notification_sent_at,
+        created_at: entry.created_at,
+        student: {
+            first_name: entry.first_name || '',
+            last_name: entry.last_name || '',
+            email: entry.email || '',
+            phone: entry.phone || '',
+            instagram_handle: entry.instagram_handle || '',
+            dance_experience: entry.dance_experience || ''
+        },
+        course_name: entry.course_name
+    }));
+    
+    res.json(formatted);
+}));
+
+/**
+ * Remove student from waitlist (admin only)
+ * DELETE /api/admin/waitlist/:id
+ */
+app.delete('/api/admin/waitlist/:id', requireAuth, asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    
+    // Get waitlist entry info before deletion for position adjustment
+    const waitlistEntry = await dbConfig.get('SELECT course_id, waitlist_position FROM waitlist WHERE id = $1', [id]);
+    
+    if (!waitlistEntry) {
+        return res.status(404).json({ error: 'Waitlist entry not found' });
+    }
+    
+    // Delete waitlist entry
+    await dbConfig.run('DELETE FROM waitlist WHERE id = $1', [id]);
+    
+    // Adjust positions for remaining students (move everyone up)
+    await dbConfig.run(`
+        UPDATE waitlist 
+        SET waitlist_position = waitlist_position - 1,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE course_id = $1 AND waitlist_position > $2 AND status = 'active'
+    `, [waitlistEntry.course_id, waitlistEntry.waitlist_position]);
+    
+    console.log('🗑️ Removed from waitlist', { id, course_id: waitlistEntry.course_id, position: waitlistEntry.waitlist_position });
+    
+    res.json({ success: true });
+}));
+
+/**
+ * Update waitlist position (admin only)
+ * PUT /api/admin/waitlist/:id/position
+ * Body: { new_position: number }
+ */
+app.put('/api/admin/waitlist/:id/position', requireAuth, asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const { new_position } = req.body;
+    
+    if (!new_position || new_position < 1) {
+        return res.status(400).json({ error: 'new_position must be a positive number' });
+    }
+    
+    // Get current waitlist entry
+    const entry = await dbConfig.get('SELECT course_id, waitlist_position FROM waitlist WHERE id = $1', [id]);
+    if (!entry) {
+        return res.status(404).json({ error: 'Waitlist entry not found' });
+    }
+    
+    const oldPosition = entry.waitlist_position;
+    const courseId = entry.course_id;
+    
+    if (oldPosition === new_position) {
+        return res.json({ success: true, message: 'Position unchanged' });
+    }
+    
+    // Get max position for validation
+    const maxResult = await dbConfig.get('SELECT MAX(waitlist_position) as max_pos FROM waitlist WHERE course_id = $1 AND status = \'active\'', [courseId]);
+    const maxPosition = maxResult.max_pos || 0;
+    
+    if (new_position > maxPosition) {
+        return res.status(400).json({ error: `Position ${new_position} exceeds maximum position ${maxPosition}` });
+    }
+    
+    // Adjust other positions first
+    if (new_position < oldPosition) {
+        // Moving up - shift others down
+        await dbConfig.run(`
+            UPDATE waitlist 
+            SET waitlist_position = waitlist_position + 1,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE course_id = $1 AND waitlist_position >= $2 AND waitlist_position < $3 AND status = 'active'
+        `, [courseId, new_position, oldPosition]);
+    } else {
+        // Moving down - shift others up
+        await dbConfig.run(`
+            UPDATE waitlist 
+            SET waitlist_position = waitlist_position - 1,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE course_id = $1 AND waitlist_position > $2 AND waitlist_position <= $3 AND status = 'active'
+        `, [courseId, oldPosition, new_position]);
+    }
+    
+    // Update the target entry
+    await dbConfig.run(`
+        UPDATE waitlist 
+        SET waitlist_position = $1,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = $2
+    `, [new_position, id]);
+    
+    console.log('🔄 Waitlist position updated', { id, course_id: courseId, old_position: oldPosition, new_position });
+    
+    res.json({ success: true });
+}));
+
+/**
+ * Send notification to waitlist student (admin only)
+ * POST /api/admin/waitlist/:id/notify
+ * Body: { expires_hours?: number } (default 48 hours)
+ */
+app.post('/api/admin/waitlist/:id/notify', requireAuth, asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const { expires_hours = 48 } = req.body;
+    
+    // Get waitlist entry with student and course info
+    const waitlistEntry = await dbConfig.get(`
+        SELECT w.*, s.first_name, s.last_name, s.email, c.name as course_name, c.id as course_id
+        FROM waitlist w
+        JOIN students s ON w.student_id = s.id
+        JOIN courses c ON w.course_id = c.id
+        WHERE w.id = $1
+    `, [id]);
+    
+    if (!waitlistEntry) {
+        return res.status(404).json({ error: 'Waitlist entry not found' });
+    }
+    
+    // Generate secure token for waitlist registration
+    const crypto = require('crypto');
+    const paymentToken = crypto.randomBytes(32).toString('hex');
+    
+    // Calculate expiration time
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + expires_hours);
+    
+    // Update waitlist entry with notification details
+    await dbConfig.run(`
+        UPDATE waitlist SET
+            notification_sent = ${dbConfig.isProduction ? 'true' : '1'},
+            notification_sent_at = CURRENT_TIMESTAMP,
+            notification_expires_at = $1,
+            payment_link_token = $2,
+            status = 'notified',
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = $3
+    `, [expiresAt.toISOString(), paymentToken, id]);
+    
+    // TODO: Send email notification to student
+    // For now, just create the secure registration URL
+    const registrationUrl = `${req.protocol}://${req.get('host')}/waitlist-register/${paymentToken}`;
+    
+    console.log('📧 Waitlist notification sent', { 
+        id, 
+        email: waitlistEntry.email, 
+        course: waitlistEntry.course_name,
+        expires_at: expiresAt.toISOString(),
+        registration_url: registrationUrl
+    });
+    
+    res.json({ 
+        success: true,
+        registration_url: registrationUrl,
+        expires_at: expiresAt.toISOString(),
+        expires_hours: expires_hours
+    });
+}));
+
 // Students and Registrations
 app.post('/api/register', asyncHandler(async (req, res) => {
     const {
@@ -1542,7 +1940,11 @@ app.post('/api/register', asyncHandler(async (req, res) => {
     }
     
     if (currentRegistrationsNum >= totalCapacityNum) {
-        return res.status(400).json({ error: 'Course is full' });
+        return res.status(400).json({ 
+            error: 'Course is full',
+            course_full: true,
+            course_name: courseCheck.name
+        });
     }
     
     // Create or update student

@@ -996,7 +996,7 @@ class DanceRegistrationApp {
                 this.registrationData.payment_method = this.selectedPaymentMethod;
             }
 
-            // Create registration record
+            // Try regular registration first
             const response = await fetch('/api/register', {
                 method: 'POST',
                 headers: {
@@ -1008,10 +1008,17 @@ class DanceRegistrationApp {
             const result = await response.json();
 
             if (!response.ok) {
-                throw new Error(result.error || 'Registration failed');
+                // Check if course is full and try waitlist
+                if (result.course_full) {
+                    console.log('🎯 Course is full, attempting waitlist registration');
+                    await this.handleWaitlistRegistration();
+                    return;
+                } else {
+                    throw new Error(result.error || 'Registration failed');
+                }
             }
 
-            // Ensure registrationId is properly set
+            // Regular registration successful
             this.registrationData.registrationId = result.registrationId;
             this.registrationData.studentId = result.studentId;
 
@@ -1033,6 +1040,197 @@ class DanceRegistrationApp {
         } catch (error) {
             console.error('Registration error:', error);
             this.showError(error.message || 'Registration failed. Please try again.');
+        }
+    }
+
+    async handleWaitlistRegistration() {
+        try {
+            console.log('📝 Adding to waitlist with data:', this.registrationData);
+            
+            // Add to waitlist
+            const waitlistResponse = await fetch('/api/waitlist', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(this.registrationData)
+            });
+
+            const waitlistResult = await waitlistResponse.json();
+
+            if (!waitlistResponse.ok) {
+                throw new Error(waitlistResult.error || 'Failed to join waitlist');
+            }
+
+            // Store waitlist data
+            this.registrationData.waitlistId = waitlistResult.waitlistId;
+            this.registrationData.waitlistPosition = waitlistResult.position;
+            this.registrationData.courseName = waitlistResult.courseName;
+
+            console.log('✅ Waitlist registration successful:', {
+                waitlistId: this.registrationData.waitlistId,
+                position: this.registrationData.waitlistPosition,
+                course: this.registrationData.courseName
+            });
+
+            // Show waitlist success page
+            this.showWaitlistSuccess();
+
+        } catch (error) {
+            console.error('Waitlist registration error:', error);
+            this.showError(error.message || 'Failed to join waitlist. Please try again.');
+        }
+    }
+
+    showWaitlistSuccess() {
+        this.currentStep = 'waitlist-success';
+        
+        // Hide all sections
+        document.getElementById('courseSelection').style.display = 'none';
+        document.getElementById('registrationForm').style.display = 'none';
+        document.getElementById('paymentSection').style.display = 'none';
+        document.getElementById('confirmationSection').style.display = 'none';
+        
+        // Create and show waitlist success section
+        this.createWaitlistSuccessSection();
+        this.scrollToTop();
+    }
+
+    createWaitlistSuccessSection() {
+        // Create waitlist success section if it doesn't exist
+        let waitlistSection = document.getElementById('waitlistSuccessSection');
+        
+        if (!waitlistSection) {
+            waitlistSection = document.createElement('section');
+            waitlistSection.id = 'waitlistSuccessSection';
+            waitlistSection.className = 'container py-5';
+            
+            // Insert after confirmation section
+            const confirmationSection = document.getElementById('confirmationSection');
+            confirmationSection.parentNode.insertBefore(waitlistSection, confirmationSection.nextSibling);
+        }
+
+        const courseName = this.selectedCourse ? this.selectedCourse.name : 
+                          this.selectedDropIn ? this.selectedDropIn.course_name : 'Course';
+
+        waitlistSection.innerHTML = `
+            <div class="row justify-content-center">
+                <div class="col-lg-8">
+                    <div class="card waitlist-success-card">
+                        <div class="card-body text-center">
+                            <div class="waitlist-success-icon mb-4">
+                                <i class="fas fa-list-ol text-primary" style="font-size: 4rem;"></i>
+                            </div>
+                            
+                            <h2 class="text-primary mb-3">You're on the Waitlist!</h2>
+                            
+                            <div class="alert alert-info mb-4">
+                                <div class="row align-items-center">
+                                    <div class="col-md-8">
+                                        <h5 class="mb-1">${courseName}</h5>
+                                        <p class="mb-0">Your waitlist position: <strong>#${this.registrationData.waitlistPosition}</strong></p>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="waitlist-position-badge">
+                                            <span class="badge bg-primary" style="font-size: 1.2rem; padding: 0.5rem 1rem;">
+                                                #${this.registrationData.waitlistPosition}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="waitlist-next-steps mb-4">
+                                <h5><i class="fas fa-info-circle text-primary me-2"></i>What happens next?</h5>
+                                <div class="row text-start">
+                                    <div class="col-md-6">
+                                        <div class="next-step-item mb-3">
+                                            <i class="fas fa-envelope text-success me-2"></i>
+                                            <strong>Email Confirmation</strong><br>
+                                            <small class="text-muted">You'll receive a confirmation email shortly</small>
+                                        </div>
+                                        <div class="next-step-item mb-3">
+                                            <i class="fas fa-clock text-warning me-2"></i>
+                                            <strong>Wait for Notification</strong><br>
+                                            <small class="text-muted">We'll email you when a spot opens up</small>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="next-step-item mb-3">
+                                            <i class="fas fa-hourglass-half text-info me-2"></i>
+                                            <strong>48-Hour Window</strong><br>
+                                            <small class="text-muted">You'll have 48 hours to complete registration</small>
+                                        </div>
+                                        <div class="next-step-item mb-3">
+                                            <i class="fas fa-credit-card text-primary me-2"></i>
+                                            <strong>Pay When Notified</strong><br>
+                                            <small class="text-muted">No payment required until a spot opens</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="alert alert-warning">
+                                <h6><i class="fas fa-exclamation-triangle me-2"></i>Important</h6>
+                                <p class="mb-0 small">Please check your email (including spam folder) for waitlist confirmation and future notifications about available spots.</p>
+                            </div>
+
+                            <div class="waitlist-actions">
+                                <div class="d-grid gap-2 d-md-block">
+                                    <button type="button" class="btn btn-primary btn-lg" onclick="app.resetRegistration()">
+                                        <i class="fas fa-plus me-2"></i>Register for Another Course
+                                    </button>
+                                    <button type="button" class="btn btn-outline-secondary btn-lg" onclick="app.shareRegistration()">
+                                        <i class="fas fa-share me-2"></i>Share with Friends
+                                    </button>
+                                </div>
+                            </div>
+
+                            ${this.registrationData.waitlistId ? `
+                                <div class="waitlist-details mt-4">
+                                    <small class="text-muted">Waitlist ID: #${this.registrationData.waitlistId}</small>
+                                </div>
+                            ` : ''}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        waitlistSection.style.display = 'block';
+        
+        // Add some custom CSS for waitlist success
+        if (!document.getElementById('waitlist-success-styles')) {
+            const style = document.createElement('style');
+            style.id = 'waitlist-success-styles';
+            style.textContent = `
+                .waitlist-success-card {
+                    box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+                    border: none;
+                    border-radius: 15px;
+                }
+                .waitlist-success-icon {
+                    animation: pulse 2s infinite;
+                }
+                @keyframes pulse {
+                    0% { transform: scale(1); }
+                    50% { transform: scale(1.05); }
+                    100% { transform: scale(1); }
+                }
+                .next-step-item {
+                    padding: 0.5rem 0;
+                }
+                .waitlist-position-badge {
+                    margin-top: 0.5rem;
+                }
+                @media (max-width: 768px) {
+                    .waitlist-position-badge {
+                        margin-top: 1rem;
+                        margin-bottom: 1rem;
+                    }
+                }
+            `;
+            document.head.appendChild(style);
         }
     }
 
