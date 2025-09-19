@@ -698,6 +698,18 @@ class AdminDashboard {
                                     <button class="btn btn-outline-info" onclick="admin.viewRegistration(${reg.id})" title="View Details">
                                         <i class="fas fa-eye"></i>
                                     </button>
+                                    <button class="btn btn-outline-primary" onclick="admin.editRegistration(${reg.id})" title="Edit Registration">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    ${reg.payment_status === 'canceled' ? `
+                                    <button class="btn btn-outline-secondary" onclick="admin.uncancelRegistration(${reg.id})" title="Uncancel Registration">
+                                        <i class="fas fa-undo"></i>
+                                    </button>
+                                    ` : `
+                                    <button class="btn btn-outline-danger" onclick="admin.cancelRegistration(${reg.id})" title="Cancel Registration">
+                                        <i class="fas fa-ban"></i>
+                                    </button>
+                                    `}
                                     ${reg.payment_status === 'pending' ? `
                                     <button class="btn btn-outline-success" onclick="window.markPaidModal(${reg.id}, this)" title="Mark as Paid (with note)">
                                         <i class="fas fa-pen"></i>
@@ -1930,6 +1942,175 @@ Questions? Reply to this message`;
         } catch (err) {
             console.error('Assign student error:', err);
             this.showError('Failed to assign student');
+        }
+    }
+
+    // Cancel a registration
+    async cancelRegistration(registrationId) {
+        try {
+            if (!confirm(`Cancel registration #${registrationId}? This will free capacity and notify the student (if emails are enabled).`)) {
+                return;
+            }
+            const reason = prompt('Cancellation reason (optional):') || '';
+            const response = await this.apiFetch(`/api/admin/registrations/${registrationId}/cancel`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ reason })
+            });
+            const result = await response.json().catch(() => ({}));
+            if (response.ok && result.success) {
+                await this.loadInitialData();
+                const msg = result.email_sent
+                    ? 'Registration canceled. Cancellation email sent.'
+                    : (result.email_skipped ? 'Registration canceled. Emails are disabled.' : 'Registration canceled.');
+                this.showSuccess(msg);
+                if (this.currentSection === 'registrations') {
+                    this.loadRegistrations();
+                }
+            } else {
+                this.showError(result.error || 'Failed to cancel registration');
+            }
+        } catch (err) {
+            console.error('Cancel registration error:', err);
+            this.showError('Failed to cancel registration');
+        }
+    }
+
+    // Uncancel a registration (restore to pending)
+    async uncancelRegistration(registrationId) {
+        try {
+            const response = await this.apiFetch(`/api/admin/registrations/${registrationId}/uncancel`, {
+                method: 'PUT'
+            });
+            const result = await response.json().catch(() => ({}));
+            if (response.ok && result.success) {
+                await this.loadInitialData();
+                this.showSuccess('Registration restored to pending');
+                if (this.currentSection === 'registrations') {
+                    this.loadRegistrations();
+                }
+            } else {
+                this.showError(result.error || 'Failed to uncancel registration');
+            }
+        } catch (err) {
+            console.error('Uncancel registration error:', err);
+            this.showError('Failed to uncancel registration');
+        }
+    }
+
+    // Open edit modal for a registration
+    editRegistration(registrationId) {
+        const registration = this.registrations.find(r => r.id === registrationId);
+        if (!registration) {
+            this.showError('Registration not found');
+            return;
+        }
+
+        const modalHtml = `
+            <div class="modal fade" id="registrationEditModal" tabindex="-1">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">
+                                <i class="fas fa-edit text-primary me-2"></i>
+                                Edit Registration #${registration.id}
+                            </h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <form id="registrationEditForm">
+                                <div class="row g-2">
+                                    <div class="col-md-6">
+                                        <label class="form-label">First Name</label>
+                                        <input type="text" class="form-control" id="edit_first_name" value="${registration.first_name || ''}">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Last Name</label>
+                                        <input type="text" class="form-control" id="edit_last_name" value="${registration.last_name || ''}">
+                                    </div>
+                                    <div class="col-md-12">
+                                        <label class="form-label">Email</label>
+                                        <input type="email" class="form-control" id="edit_email" value="${registration.email || ''}">
+                                    </div>
+                                    <div class="col-md-12">
+                                        <label class="form-label">Phone</label>
+                                        <input type="text" class="form-control" id="edit_phone" value="${registration.phone || ''}">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Payment Amount</label>
+                                        <div class="input-group">
+                                            <span class="input-group-text">$</span>
+                                            <input type="number" class="form-control" id="edit_payment_amount" min="0" step="0.01" value="${Number(registration.payment_amount || 0)}">
+                                        </div>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                            <button type="button" class="btn btn-primary" id="saveRegistrationEditBtn">
+                                <i class="fas fa-save me-2"></i>Save Changes
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Remove any existing modal and insert new
+        const existing = document.getElementById('registrationEditModal');
+        if (existing) existing.remove();
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+        const modal = new bootstrap.Modal(document.getElementById('registrationEditModal'));
+        modal.show();
+
+        // Wire save button
+        const saveBtn = document.getElementById('saveRegistrationEditBtn');
+        if (saveBtn && !saveBtn._wired) {
+            saveBtn._wired = true;
+            saveBtn.addEventListener('click', () => this.saveRegistrationEdits(registrationId));
+        }
+    }
+
+    // Save edits to registration
+    async saveRegistrationEdits(registrationId) {
+        try {
+            const body = {
+                first_name: document.getElementById('edit_first_name')?.value || '',
+                last_name: document.getElementById('edit_last_name')?.value || '',
+                email: document.getElementById('edit_email')?.value || '',
+                phone: document.getElementById('edit_phone')?.value || '',
+                payment_amount: (() => {
+                    const v = document.getElementById('edit_payment_amount')?.value;
+                    return v === '' || v === null || v === undefined ? undefined : parseFloat(v);
+                })()
+            };
+
+            const response = await this.apiFetch(`/api/admin/registrations/${registrationId}/edit`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            const result = await response.json().catch(() => ({}));
+            if (response.ok && result.success) {
+                // Close modal
+                const modalEl = document.getElementById('registrationEditModal');
+                if (modalEl) {
+                    const modal = bootstrap.Modal.getInstance(modalEl);
+                    modal?.hide();
+                }
+                await this.loadInitialData();
+                this.showSuccess('Registration updated');
+                if (this.currentSection === 'registrations') {
+                    this.loadRegistrations();
+                }
+            } else {
+                this.showError(result.error || 'Failed to update registration');
+            }
+        } catch (err) {
+            console.error('Save registration edits error:', err);
+            this.showError('Failed to update registration');
         }
     }
 

@@ -704,6 +704,12 @@ h2 i {
     color: white;
 }
 
+/* Canceled status */
+.status-canceled {
+    background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
+    color: white;
+}
+
 .status-badge i {
     font-size: 0.8rem;
 }

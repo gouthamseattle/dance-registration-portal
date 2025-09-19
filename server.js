@@ -113,6 +113,23 @@ async function initializeDatabase() {
             console.log('ℹ️ payment_method column check skipped:', e.message || e);
         }
 
+        // Ensure cancellation audit columns exist on registrations table
+        try {
+            if (dbConfig.isProduction) {
+                await dbConfig.run('ALTER TABLE registrations ADD COLUMN IF NOT EXISTS canceled_at TIMESTAMP');
+                await dbConfig.run('ALTER TABLE registrations ADD COLUMN IF NOT EXISTS canceled_by INTEGER');
+                await dbConfig.run('ALTER TABLE registrations ADD COLUMN IF NOT EXISTS cancellation_reason TEXT');
+            } else {
+                // SQLite: ignore if column exists
+                await dbConfig.run('ALTER TABLE registrations ADD COLUMN canceled_at TEXT').catch(() => {});
+                await dbConfig.run('ALTER TABLE registrations ADD COLUMN canceled_by INTEGER').catch(() => {});
+                await dbConfig.run('ALTER TABLE registrations ADD COLUMN cancellation_reason TEXT').catch(() => {});
+            }
+            console.log('✅ Ensured registrations cancellation audit columns exist');
+        } catch (e) {
+            console.log('ℹ️ registrations cancellation columns check skipped:', e.message || e);
+        }
+
         // Ensure student profile and access control columns exist
         try {
             if (dbConfig.isProduction) {
@@ -1965,6 +1982,154 @@ app.post('/api/admin/registrations/:id/resend-confirmation', requireAuth, asyncH
         console.error('❌ Error resending confirmation email:', err);
         email_error = err.message || String(err);
         res.json({ success: true, message: 'Resend attempted', email_sent, email_error });
+    }
+}));
+
+/**
+ * Admin: Cancel a registration (frees capacity; sends cancellation email if enabled)
+ * PUT /api/admin/registrations/:id/cancel
+ * Body: { reason?: string }
+ */
+app.put('/api/admin/registrations/:id/cancel', requireAuth, asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const { reason } = req.body || {};
+    try {
+        // Update registration as canceled with audit fields
+        await dbConfig.run(`
+            UPDATE registrations SET
+                payment_status = 'canceled',
+                canceled_at = CURRENT_TIMESTAMP,
+                canceled_by = $1,
+                cancellation_reason = $2,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = $3
+        `, [req.session.adminId || null, reason || null, id]);
+
+        // Email notifications (optional)
+        let email_sent = false, email_skipped = false, email_error = null;
+
+        try {
+            const setting = await dbConfig.get('SELECT setting_value FROM system_settings WHERE setting_key = $1', ['email_notifications_enabled']);
+            const emailEnabled = setting && setting.setting_value === 'true';
+
+            if (!emailEnabled) {
+                email_skipped = true;
+            } else {
+                // Load registration with student and course info
+                const reg = await dbConfig.get(`
+                    SELECT r.id, r.payment_amount, r.course_id,
+                           s.email, s.first_name, s.last_name,
+                           c.name AS course_name
+                    FROM registrations r
+                    JOIN students s ON s.id = r.student_id
+                    JOIN courses c ON c.id = r.course_id
+                    WHERE r.id = $1
+                `, [id]);
+
+                if (reg && reg.email) {
+                    const { schedule_info } = await fetchCourseWithSlots(dbConfig, reg.course_id);
+                    const { sendRegistrationCancellationEmail } = require('./utils/mailer');
+                    await sendRegistrationCancellationEmail(reg.email, {
+                        courseName: reg.course_name,
+                        scheduleInfo: schedule_info,
+                        amount: reg.payment_amount,
+                        registrationId: reg.id,
+                        studentName: [reg.first_name, reg.last_name].filter(Boolean).join(' '),
+                        cancellationReason: reason || ''
+                    });
+                    email_sent = true;
+                }
+            }
+        } catch (err) {
+            email_error = err.message || String(err);
+            console.error('❌ Error sending cancellation email:', err);
+        }
+
+        res.json({ success: true, email_sent, email_skipped, email_error });
+    } catch (err) {
+        console.error('❌ Cancel registration failed:', err);
+        res.status(500).json({ error: 'Failed to cancel registration' });
+    }
+}));
+
+/**
+ * Admin: Uncancel a registration (restores to pending; returns capacity info)
+ * PUT /api/admin/registrations/:id/uncancel
+ */
+app.put('/api/admin/registrations/:id/uncancel', requireAuth, asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    try {
+        // Restore registration to pending and clear cancellation audit fields
+        await dbConfig.run(`
+            UPDATE registrations SET
+                payment_status = 'pending',
+                canceled_at = NULL,
+                canceled_by = NULL,
+                cancellation_reason = NULL,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = $1
+        `, [id]);
+
+        // Capacity information (for UI hints)
+        const row = await dbConfig.get('SELECT course_id FROM registrations WHERE id = $1', [id]);
+        let capacity_available = true;
+        if (row && row.course_id) {
+            const stats = await dbConfig.get(`
+                SELECT
+                  (SELECT COALESCE(SUM(cs.capacity), 0) FROM course_slots cs WHERE cs.course_id = c.id) AS total_capacity,
+                  (SELECT COUNT(*) FROM registrations r WHERE r.course_id = c.id AND r.payment_status = 'completed') AS completed_count
+                FROM courses c
+                WHERE c.id = $1
+            `, [row.course_id]);
+            const totalCap = Number(stats?.total_capacity || 0);
+            const completedCount = Number(stats?.completed_count || 0);
+            capacity_available = completedCount < totalCap;
+        }
+
+        res.json({ success: true, capacity_available });
+    } catch (err) {
+        console.error('❌ Uncancel registration failed:', err);
+        res.status(500).json({ error: 'Failed to uncancel registration' });
+    }
+}));
+
+/**
+ * Admin: Edit a registration (student details and payment amount)
+ * PUT /api/admin/registrations/:id/edit
+ * Body: { first_name?, last_name?, email?, phone?, payment_amount? }
+ */
+app.put('/api/admin/registrations/:id/edit', requireAuth, asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const { first_name, last_name, email, phone, payment_amount } = req.body || {};
+    try {
+        // Load registration to get student_id
+        const reg = await dbConfig.get('SELECT id, student_id FROM registrations WHERE id = $1', [id]);
+        if (!reg) {
+            return res.status(404).json({ error: 'Registration not found' });
+        }
+
+        // Update student fields if provided
+        const updates = [];
+        const params = [];
+        let i = 1;
+        if (first_name !== undefined) { updates.push(`first_name = $${i++}`); params.push(first_name || ''); }
+        if (last_name !== undefined)  { updates.push(`last_name = $${i++}`);  params.push(last_name || ''); }
+        if (email !== undefined)      { updates.push(`email = $${i++}`);      params.push(email || ''); }
+        if (phone !== undefined)      { updates.push(`phone = $${i++}`);      params.push(phone || ''); }
+        if (updates.length > 0) {
+            params.push(reg.student_id);
+            await dbConfig.run(`UPDATE students SET ${updates.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = $${i}`, params);
+        }
+
+        // Update registration payment amount if provided
+        if (payment_amount !== undefined) {
+            await dbConfig.run('UPDATE registrations SET payment_amount = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2', [payment_amount, id]);
+        }
+
+        res.json({ success: true });
+    } catch (err) {
+        console.error('❌ Edit registration failed:', err);
+        res.status(500).json({ error: 'Failed to edit registration' });
     }
 }));
 

@@ -271,6 +271,172 @@ async function verifyEmailTransport() {
  * Sends email using SendGrid (replaces the SMTP fallback method)
  * Maintains the same function signature for compatibility
  */
+async function sendRegistrationCancellationEmail(to, data = {}) {
+  if (!process.env.SENDGRID_API_KEY) {
+    throw new Error('SendGrid API key is not configured. Please set SENDGRID_API_KEY environment variable.');
+  }
+
+  const {
+    courseName,
+    scheduleInfo,
+    amount,
+    registrationId,
+    studentName,
+    cancellationReason
+  } = data;
+
+  const from = buildFromAddress();
+  const subject = `Registration Canceled - ${courseName || 'Dance Class'}`;
+  const safeAmount = typeof amount === 'number' ? amount.toFixed(2) : amount;
+
+  const html = `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Registration Canceled - ${escapeHtml(courseName || 'Dance Class')}</title>
+    </head>
+    <body style="margin:0; padding:0; font-family:Arial, sans-serif; background-color:#f5f5f5;">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f5f5f5; padding:20px 0;">
+        <tr>
+          <td align="center">
+            <table width="600" cellpadding="0" cellspacing="0" border="0" style="background-color:#ffffff; border-radius:8px; box-shadow:0 2px 4px rgba(0,0,0,0.1);">
+              <!-- Header -->
+              <tr>
+                <td style="padding:30px 30px 20px; text-align:center; background-color:#6c757d; border-radius:8px 8px 0 0;">
+                  <h1 style="margin:0; color:#ffffff; font-size:24px; font-weight:bold;">Registration Canceled</h1>
+                  <p style="margin:8px 0 0; color:#e2e3e5; font-size:14px;">GouMo Dance Chronicles</p>
+                </td>
+              </tr>
+              
+              <!-- Content -->
+              <tr>
+                <td style="padding:30px;">
+                  <p style="margin:0 0 16px; font-size:16px; color:#333; line-height:1.5;">
+                    Hi ${studentName ? escapeHtml(studentName) : 'Student'},
+                  </p>
+                  
+                  <p style="margin:0 0 16px; font-size:16px; color:#333; line-height:1.5;">
+                    Your registration for <strong>${escapeHtml(courseName || 'Dance Class')}</strong> has been canceled.
+                  </p>
+
+                  ${cancellationReason ? `
+                  <div style="margin:16px 0; padding:16px; background:#fff3cd; border-left:4px solid #ffc107; border-radius:4px;">
+                    <strong style="color:#856404; display:block; margin-bottom:6px;">Reason provided:</strong>
+                    <div style="color:#856404; font-size:14px; white-space:pre-wrap;">${escapeHtml(String(cancellationReason))}</div>
+                  </div>
+                  ` : ''}
+
+                  <table width="100%" cellpadding="8" cellspacing="0" border="0" style="background-color:#f8f9fa; border-radius:6px; margin:20px 0;">
+                    <tr>
+                      <td style="padding:20px;">
+                        <h3 style="margin:0 0 16px; color:#6c757d; font-size:18px;">Registration Details</h3>
+                        
+                        ${scheduleInfo ? `
+                        <p style="margin:0 0 12px; font-size:14px; color:#555;">
+                          <strong>Schedule:</strong> ${escapeHtml(scheduleInfo)}
+                        </p>
+                        ` : ''}
+
+                        ${safeAmount ? `
+                        <p style="margin:0 0 12px; font-size:14px; color:#555;">
+                          <strong>Original Amount:</strong> $${escapeHtml(String(safeAmount))}
+                        </p>
+                        ` : ''}
+
+                        <p style="margin:0; font-size:14px; color:#555;">
+                          <strong>Registration ID:</strong> #${escapeHtml(String(registrationId || ''))}
+                        </p>
+                      </td>
+                    </tr>
+                  </table>
+
+                  <div style="margin:24px 0; padding:16px; background:#e2e3e5; border-radius:6px;">
+                    <p style="margin:0; color:#495057; font-size:14px;">
+                      If this cancellation was a mistake or you have questions, please reply to this email.
+                    </p>
+                  </div>
+                </td>
+              </tr>
+              
+              <!-- Footer -->
+              <tr>
+                <td style="padding:20px 30px; text-align:center; background-color:#f8f9fa; border-radius:0 0 8px 8px; border-top:1px solid #dee2e6;">
+                  <p style="margin:0 0 8px; color:#6c757d; font-size:13px; line-height:1.4;">
+                    This email was sent regarding your dance class registration with GouMo Dance Chronicles.
+                  </p>
+                  <p style="margin:0 0 8px; color:#6c757d; font-size:12px;">
+                    <a href="mailto:${buildFromAddress().email}?subject=Unsubscribe%20Request" 
+                       style="color:#6c757d; text-decoration:underline;">
+                      Unsubscribe from future emails
+                    </a>
+                  </p>
+                  <p style="margin:0; color:#adb5bd; font-size:11px;">
+                    © 2024 GouMo Dance Chronicles. All rights reserved.
+                  </p>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+    </body>
+    </html>`;
+
+  const text = `
+Registration Canceled
+
+Hi ${studentName || 'Student'},
+
+Your registration for ${courseName || 'Dance Class'} has been canceled.
+${cancellationReason ? `Reason: ${cancellationReason}\n` : ''}${scheduleInfo ? `Schedule: ${scheduleInfo}\n` : ''}${safeAmount ? `Original Amount: $${safeAmount}\n` : ''}Registration ID: #${registrationId || ''}
+
+If this cancellation was a mistake or you have questions, please reply to this email.
+
+---
+This email was sent regarding your dance class registration with GouMo Dance Chronicles.
+To unsubscribe from future emails, reply with "UNSUBSCRIBE" in the subject line.
+
+© 2024 GouMo Dance Chronicles. All rights reserved.
+  `.trim();
+
+  const msg = {
+    to,
+    from,
+    subject,
+    html,
+    text,
+    replyTo: process.env.REPLY_TO || from.email,
+    headers: {
+      'List-Unsubscribe': `mailto:${buildFromAddress().email}?subject=Unsubscribe%20Request`,
+      'X-Entity-Ref-ID': `registration-cancel-${registrationId || 'unknown'}`,
+    },
+    trackingSettings: {
+      clickTracking: { enable: false },
+      openTracking: { enable: false }
+    },
+    mailSettings: { sandboxMode: { enable: false } }
+  };
+
+  dbg('sending cancellation email', {
+    to,
+    from: from.email,
+    subject,
+    registrationId
+  });
+
+  try {
+    await sgMail.send(msg);
+    dbg('✅ Cancellation email sent successfully via SendGrid');
+    console.log('✅ Registration cancellation email sent to:', to);
+  } catch (error) {
+    dbg('❌ SendGrid cancellation error:', error.message || error);
+    console.error('❌ Failed to send cancellation email via SendGrid:', error.message || error);
+    throw error;
+  }
+}
+
 async function sendEmailWithFallback(to, data) {
   // This function now uses SendGrid instead of SMTP fallback
   // but maintains the same signature for compatibility
@@ -299,6 +465,7 @@ function getTransporter() {
 module.exports = {
   getTransporter,
   sendRegistrationConfirmationEmail,
+  sendRegistrationCancellationEmail,
   sendEmailWithFallback,
   verifyEmailTransport
 };
