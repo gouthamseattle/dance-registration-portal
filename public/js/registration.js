@@ -64,6 +64,9 @@ class DanceRegistrationApp {
             const courses = await coursesResponse.json();
             const dropIns = await dropInsResponse.json();
 
+            // Check if crew practice mode should be enabled
+            this.checkAndApplyCrewPracticeMode(courses);
+
             this.renderCourses(courses);
             this.renderDropInClasses(dropIns);
 
@@ -73,6 +76,43 @@ class DanceRegistrationApp {
         } catch (error) {
             console.error('Error loading courses:', error);
             this.showError('Failed to load available courses.');
+        }
+    }
+
+    checkAndApplyCrewPracticeMode(courses) {
+        // Check if any course is crew practice type
+        const hasCrewPractice = courses.some(course => course.course_type === 'crew_practice');
+        
+        if (hasCrewPractice) {
+            // Apply crew practice mode globally
+            document.body.classList.add('crew-practice-mode', 'crew-bg-strong');
+            
+            // Update header with DDC branding
+            const headerSection = document.querySelector('.header-section');
+            const headerTitle = headerSection?.querySelector('h1');
+            const headerSubtitle = headerSection?.querySelector('.lead');
+            const footer = document.querySelector('.footer');
+            
+            if (headerTitle && headerSubtitle) {
+                headerTitle.innerHTML = `
+                    <span class="ddc-hero">
+                        <img src="images/ddc-logo.png" alt="DDC" class="ddc-header-logo">
+                        <span class="ddc-hero-text" data-text="Dreamers Dance Crew">Dreamers Dance Crew</span>
+                    </span>
+                `;
+                headerSubtitle.textContent = 'Dancing the American Dream';
+            }
+            
+            // Add DDC logo to footer
+            if (footer && !footer.querySelector('.ddc-footer-logo')) {
+                const footerLogo = document.createElement('div');
+                footerLogo.className = 'ddc-footer-logo';
+                footerLogo.innerHTML = '<img src="images/ddc-logo.png" alt="Dreamers Dance Crew" class="ddc-footer-img">';
+                footer.appendChild(footerLogo);
+            }
+        } else {
+            // Remove crew practice mode if no crew practice courses
+            document.body.classList.remove('crew-practice-mode', 'crew-bg-strong');
         }
     }
 
@@ -238,8 +278,14 @@ class DanceRegistrationApp {
         const classDate = new Date(dropIn.class_date).toLocaleDateString();
         const classTime = dropIn.class_time;
 
+        // Check if crew practice mode is active for DDC logo integration
+        const isCrewPracticeMode = document.body.classList.contains('crew-practice-mode');
+        const ddcLogoHtml = isCrewPracticeMode ? 
+            '<img src="images/ddc-logo.png" alt="DDC" class="ddc-dropin-logo">' : '';
+
         col.innerHTML = `
             <div class="card dropin-card fade-in">
+                ${ddcLogoHtml}
                 <div class="card-body">
                     <div class="dropin-header">
                         <div>
