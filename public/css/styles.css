@@ -1805,40 +1805,6 @@ select:-webkit-autofill:active {
     transform: scale(1.1);
 }
 
-/* DDC Background Logo for Crew Practice Card Headers */
-.ddc-card-header-background {
-    position: absolute;
-    top: 0;
-    right: 0;
-    width: 100%;
-    height: 100%;
-    background-image: url('/assets/media/DDC_Logo_inverted_transparent.png');
-    background-size: 120px;
-    background-repeat: no-repeat;
-    background-position: right center;
-    opacity: 0.3;
-    z-index: 1;
-    transition: var(--transition-smooth);
-}
-
-.course-card:hover .ddc-card-header-background {
-    opacity: 0.5;
-    transform: scale(1.08);
-}
-
-/* Ensure text content is above background logo with strong contrast */
-.course-card .card-header * {
-    position: relative;
-    z-index: 3;
-    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
-}
-
-.course-card .card-header .badge {
-    background: rgba(245, 158, 11, 0.95) !important;
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    z-index: 4;
-}
 
 /* GouMo Dance Chronicles Text Logo - Enhanced Design */
 .goumo-text-logo {

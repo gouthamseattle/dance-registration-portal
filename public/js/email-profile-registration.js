@@ -439,18 +439,15 @@ class EmailProfileRegistrationApp {
             `;
         }
 
-        // Add course type badge and DDC background for crew practice
+        // Add course type badge
         let typeBadge = '';
-        let ddcBackground = '';
         if (course.course_type === 'crew_practice') {
             typeBadge = '<span class="badge bg-warning mb-2">Crew Members Only</span>';
-            ddcBackground = '<div class="ddc-card-header-background"></div>';
         }
 
         col.innerHTML = `
             <div class="card course-card fade-in">
                 <div class="card-header">
-                    ${ddcBackground}
                     ${typeBadge}
                     <h5 class="card-title">${course.name}</h5>
                     <p class="card-subtitle">${course.level || 'All Levels'} • ${course.duration_weeks || 0} weeks</p>
