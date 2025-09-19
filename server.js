@@ -1214,6 +1214,7 @@ app.post('/api/create-student-profile', asyncHandler(async (req, res) => {
         
         return {
             ...course,
+            slots: slotsWithPricing,
             capacity: totalCapacity,
             available_spots: totalAvailableSpots,
             full_course_price: slotsWithPricing[0]?.pricing?.full_package || 0,
