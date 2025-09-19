@@ -1967,6 +1967,306 @@ app.post('/api/admin/waitlist/:id/notify', requireAuth, asyncHandler(async (req,
     });
 }));
 
+/**
+ * Get all waitlists (admin only)
+ * GET /api/admin/waitlists?course_id=optional
+ */
+app.get('/api/admin/waitlists', requireAuth, asyncHandler(async (req, res) => {
+    const { course_id } = req.query;
+    
+    let query = `
+        SELECT w.*, s.first_name, s.last_name, s.email, s.phone, s.instagram_handle, s.dance_experience,
+               c.name as course_name, c.id as course_id
+        FROM waitlist w
+        JOIN students s ON w.student_id = s.id
+        JOIN courses c ON w.course_id = c.id
+        WHERE w.status = 'active'
+    `;
+    
+    const params = [];
+    
+    if (course_id) {
+        query += ' AND w.course_id = $1';
+        params.push(course_id);
+    }
+    
+    query += ' ORDER BY c.name ASC, w.waitlist_position ASC';
+    
+    const waitlistEntries = await dbConfig.all(query, params);
+    
+    const formatted = waitlistEntries.map(entry => ({
+        id: entry.id,
+        student_id: entry.student_id,
+        course_id: entry.course_id,
+        course_name: entry.course_name,
+        position: entry.waitlist_position,
+        status: entry.status,
+        notification_sent: dbConfig.isProduction ? entry.notification_sent : Boolean(entry.notification_sent),
+        notification_sent_at: entry.notification_sent_at,
+        created_at: entry.created_at,
+        first_name: entry.first_name || '',
+        last_name: entry.last_name || '',
+        email: entry.email || '',
+        phone: entry.phone || '',
+        instagram_handle: entry.instagram_handle || '',
+        dance_experience: entry.dance_experience || ''
+    }));
+    
+    res.json(formatted);
+}));
+
+/**
+ * Notify selected waitlist students (admin only)
+ * POST /api/admin/waitlists/notify
+ * Body: { waitlist_ids: [1, 2, 3] }
+ */
+app.post('/api/admin/waitlists/notify', requireAuth, asyncHandler(async (req, res) => {
+    const { waitlist_ids } = req.body;
+    
+    if (!Array.isArray(waitlist_ids) || waitlist_ids.length === 0) {
+        return res.status(400).json({ error: 'waitlist_ids array is required' });
+    }
+    
+    let notifiedCount = 0;
+    const crypto = require('crypto');
+    
+    for (const id of waitlist_ids) {
+        try {
+            // Get waitlist entry
+            const waitlistEntry = await dbConfig.get(`
+                SELECT w.*, s.first_name, s.last_name, s.email, c.name as course_name
+                FROM waitlist w
+                JOIN students s ON w.student_id = s.id
+                JOIN courses c ON w.course_id = c.id
+                WHERE w.id = $1 AND w.status = 'active'
+            `, [id]);
+            
+            if (!waitlistEntry) {
+                console.warn('⚠️ Waitlist entry not found or inactive:', id);
+                continue;
+            }
+            
+            // Generate secure token
+            const paymentToken = crypto.randomBytes(32).toString('hex');
+            
+            // Set expiration to 48 hours
+            const expiresAt = new Date();
+            expiresAt.setHours(expiresAt.getHours() + 48);
+            
+            // Update waitlist entry
+            await dbConfig.run(`
+                UPDATE waitlist SET
+                    notification_sent = ${dbConfig.isProduction ? 'true' : '1'},
+                    notification_sent_at = CURRENT_TIMESTAMP,
+                    notification_expires_at = $1,
+                    payment_link_token = $2,
+                    status = 'notified',
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = $3
+            `, [expiresAt.toISOString(), paymentToken, id]);
+            
+            // TODO: Send actual email notification
+            console.log('📧 Notified waitlist student', { 
+                id, 
+                email: waitlistEntry.email, 
+                course: waitlistEntry.course_name 
+            });
+            
+            notifiedCount++;
+        } catch (error) {
+            console.error('❌ Error notifying waitlist student:', id, error);
+        }
+    }
+    
+    res.json({ 
+        success: true,
+        notified_count: notifiedCount,
+        message: `Notified ${notifiedCount} students successfully`
+    });
+}));
+
+/**
+ * Remove selected students from waitlists (admin only)
+ * POST /api/admin/waitlists/remove
+ * Body: { waitlist_ids: [1, 2, 3] }
+ */
+app.post('/api/admin/waitlists/remove', requireAuth, asyncHandler(async (req, res) => {
+    const { waitlist_ids } = req.body;
+    
+    if (!Array.isArray(waitlist_ids) || waitlist_ids.length === 0) {
+        return res.status(400).json({ error: 'waitlist_ids array is required' });
+    }
+    
+    let removedCount = 0;
+    
+    for (const id of waitlist_ids) {
+        try {
+            // Get waitlist entry info before deletion for position adjustment
+            const waitlistEntry = await dbConfig.get('SELECT course_id, waitlist_position FROM waitlist WHERE id = $1', [id]);
+            
+            if (!waitlistEntry) {
+                console.warn('⚠️ Waitlist entry not found:', id);
+                continue;
+            }
+            
+            // Delete waitlist entry
+            await dbConfig.run('DELETE FROM waitlist WHERE id = $1', [id]);
+            
+            // Adjust positions for remaining students (move everyone up)
+            await dbConfig.run(`
+                UPDATE waitlist 
+                SET waitlist_position = waitlist_position - 1,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE course_id = $1 AND waitlist_position > $2 AND status = 'active'
+            `, [waitlistEntry.course_id, waitlistEntry.waitlist_position]);
+            
+            console.log('🗑️ Removed from waitlist', { id, course_id: waitlistEntry.course_id });
+            removedCount++;
+        } catch (error) {
+            console.error('❌ Error removing waitlist student:', id, error);
+        }
+    }
+    
+    res.json({ 
+        success: true,
+        removed_count: removedCount,
+        message: `Removed ${removedCount} students from waitlists`
+    });
+}));
+
+/**
+ * Export waitlists to CSV (admin only)
+ * GET /api/admin/waitlists/export?course_id=optional
+ */
+app.get('/api/admin/waitlists/export', requireAuth, asyncHandler(async (req, res) => {
+    const { course_id } = req.query;
+    
+    let query = `
+        SELECT w.*, s.first_name, s.last_name, s.email, s.phone, s.instagram_handle, s.dance_experience,
+               c.name as course_name
+        FROM waitlist w
+        JOIN students s ON w.student_id = s.id
+        JOIN courses c ON w.course_id = c.id
+    `;
+    
+    const params = [];
+    
+    if (course_id) {
+        query += ' WHERE w.course_id = $1';
+        params.push(course_id);
+    }
+    
+    query += ' ORDER BY c.name ASC, w.waitlist_position ASC';
+    
+    const waitlistEntries = await dbConfig.all(query, params);
+    
+    // CSV helpers
+    const esc = (v) => {
+        if (v === null || v === undefined) return '';
+        const s = String(v);
+        const needsQuotes = s.includes(',') || s.includes('\n') || s.includes('"');
+        return needsQuotes ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    
+    const headers = ['Waitlist ID', 'Position', 'Course', 'Student Name', 'Email', 'Phone', 'Instagram', 'Experience', 'Status', 'Notified', 'Created Date'];
+    const lines = [headers.join(',')];
+    
+    for (const entry of waitlistEntries) {
+        const name = [entry.first_name, entry.last_name].filter(Boolean).join(' ').trim();
+        const notified = dbConfig.isProduction ? entry.notification_sent : Boolean(entry.notification_sent);
+        const line = [
+            esc(entry.id),
+            esc(entry.waitlist_position),
+            esc(entry.course_name),
+            esc(name),
+            esc(entry.email || ''),
+            esc(entry.phone || ''),
+            esc(entry.instagram_handle || ''),
+            esc(entry.dance_experience || ''),
+            esc(entry.status),
+            esc(notified ? 'Yes' : 'No'),
+            esc(new Date(entry.created_at).toLocaleDateString())
+        ].join(',');
+        lines.push(line);
+    }
+    
+    const csv = lines.join('\n');
+    const filename = `waitlists-${new Date().toISOString().slice(0,10)}.csv`;
+    
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(csv);
+}));
+
+/**
+ * Notify next student on course waitlist (admin only)
+ * POST /api/admin/courses/:courseId/waitlist/notify-next
+ */
+app.post('/api/admin/courses/:courseId/waitlist/notify-next', requireAuth, asyncHandler(async (req, res) => {
+    const { courseId } = req.params;
+    
+    // Get next active student on waitlist (lowest position number)
+    const nextStudent = await dbConfig.get(`
+        SELECT w.*, s.first_name, s.last_name, s.email, c.name as course_name
+        FROM waitlist w
+        JOIN students s ON w.student_id = s.id
+        JOIN courses c ON w.course_id = c.id
+        WHERE w.course_id = $1 AND w.status = 'active'
+        ORDER BY w.waitlist_position ASC
+        LIMIT 1
+    `, [courseId]);
+    
+    if (!nextStudent) {
+        return res.json({ 
+            success: true,
+            message: 'No active students on waitlist to notify'
+        });
+    }
+    
+    try {
+        const crypto = require('crypto');
+        const paymentToken = crypto.randomBytes(32).toString('hex');
+        
+        // Set expiration to 48 hours
+        const expiresAt = new Date();
+        expiresAt.setHours(expiresAt.getHours() + 48);
+        
+        // Update waitlist entry
+        await dbConfig.run(`
+            UPDATE waitlist SET
+                notification_sent = ${dbConfig.isProduction ? 'true' : '1'},
+                notification_sent_at = CURRENT_TIMESTAMP,
+                notification_expires_at = $1,
+                payment_link_token = $2,
+                status = 'notified',
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = $3
+        `, [expiresAt.toISOString(), paymentToken, nextStudent.id]);
+        
+        // TODO: Send actual email notification
+        console.log('📧 Notified next waitlist student', { 
+            student_id: nextStudent.student_id,
+            email: nextStudent.email, 
+            course: nextStudent.course_name,
+            position: nextStudent.waitlist_position
+        });
+        
+        res.json({ 
+            success: true,
+            notified_student: {
+                first_name: nextStudent.first_name,
+                last_name: nextStudent.last_name,
+                email: nextStudent.email,
+                position: nextStudent.waitlist_position
+            },
+            message: `Notified ${nextStudent.first_name} ${nextStudent.last_name} about available spot`
+        });
+    } catch (error) {
+        console.error('❌ Error notifying next student:', error);
+        res.status(500).json({ error: 'Failed to notify next student' });
+    }
+}));
+
 // Students and Registrations
 app.post('/api/register', asyncHandler(async (req, res) => {
     const {
