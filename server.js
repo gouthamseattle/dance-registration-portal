@@ -950,6 +950,7 @@ app.post('/api/check-student-profile', asyncHandler(async (req, res) => {
             student_type: student.student_type,
             profile_complete: dbConfig.isProduction ? student.profile_complete : Boolean(student.profile_complete)
         },
+        requires_profile_completion: (student.student_type === 'crew_member') && (!(dbConfig.isProduction ? student.profile_complete : Boolean(student.profile_complete)) || !student.instagram_handle || !student.dance_experience),
         eligible_courses: coursesWithSlots
     });
 }));
@@ -1023,6 +1024,68 @@ app.post('/api/create-student-profile', asyncHandler(async (req, res) => {
 }));
 
 /**
+ * Update existing student profile (e.g., require completion for crew members)
+ * POST /api/update-student-profile
+ * Body: { email, first_name, last_name, instagram_handle, dance_experience }
+ */
+app.post('/api/update-student-profile', asyncHandler(async (req, res) => {
+    const { email, first_name, last_name, instagram_handle, dance_experience } = req.body || {};
+    if (!email || !first_name) {
+        return res.status(400).json({ error: 'Email and first name are required' });
+    }
+
+    // Find existing student
+    const student = await dbConfig.get('SELECT * FROM students WHERE email = $1', [email]);
+    if (!student) {
+        return res.status(404).json({ error: 'Student not found' });
+    }
+
+    // Update profile and mark complete
+    await dbConfig.run(`
+        UPDATE students SET
+            first_name = $1,
+            last_name = $2,
+            instagram_handle = $3,
+            dance_experience = $4,
+            profile_complete = ${dbConfig.isProduction ? 'true' : '1'},
+            updated_at = CURRENT_TIMESTAMP
+        WHERE email = $5
+    `, [first_name, last_name || '', instagram_handle || '', dance_experience || '', email]);
+
+    // Reload and compute eligible courses based on student_type
+    const updated = await dbConfig.get('SELECT * FROM students WHERE email = $1', [email]);
+
+    let courseQuery = `
+        SELECT c.*, COUNT(DISTINCT r.id) as registration_count
+        FROM courses c
+        LEFT JOIN registrations r ON c.id = r.course_id AND r.payment_status = 'completed'
+        WHERE c.is_active = ${dbConfig.isProduction ? 'true' : '1'}
+    `;
+    if (updated.student_type === 'crew_member') {
+        courseQuery += ' AND (c.required_student_type = \'any\' OR c.required_student_type = \'crew_member\')';
+    } else {
+        courseQuery += ' AND c.required_student_type = \'any\'';
+    }
+    courseQuery += ' GROUP BY c.id ORDER BY c.created_at DESC';
+
+    const eligibleCourses = await dbConfig.all(courseQuery, []);
+    res.json({
+        success: true,
+        student: {
+            id: updated.id,
+            first_name: updated.first_name || '',
+            last_name: updated.last_name || '',
+            email: updated.email,
+            instagram_handle: updated.instagram_handle || '',
+            dance_experience: updated.dance_experience || '',
+            student_type: updated.student_type || 'general',
+            profile_complete: dbConfig.isProduction ? updated.profile_complete : Boolean(updated.profile_complete)
+        },
+        eligible_courses: eligibleCourses
+    });
+}));
+
+/**
  * Admin: Get pending student classifications
  * GET /api/admin/students/pending
  */
@@ -1058,21 +1121,29 @@ app.get('/api/admin/students/pending', requireAuth, asyncHandler(async (req, res
 /**
  * Admin: Classify student type
  * PUT /api/admin/students/:id/classify
- * Body: { student_type: 'general' | 'crew_member' }
+ * Body: { student_type: 'general' | 'crew_member' | 'test' }
  */
 app.put('/api/admin/students/:id/classify', requireAuth, asyncHandler(async (req, res) => {
     const { id } = req.params;
     const { student_type } = req.body;
 
-    if (!student_type || !['general', 'crew_member'].includes(student_type)) {
-        return res.status(400).json({ error: 'student_type must be either "general" or "crew_member"' });
+    if (!student_type || !['general', 'crew_member', 'test'].includes(student_type)) {
+        return res.status(400).json({ error: 'student_type must be one of "general", "crew_member", or "test"' });
     }
 
     // Update student classification
+    // If promoting to crew_member and profile is incomplete (missing instagram_handle or dance_experience),
+    // force profile_complete = false so they complete it on next login.
+    const falseLiteral = dbConfig.isProduction ? 'false' : '0';
     await dbConfig.run(`
         UPDATE students SET 
             student_type = $1, 
             admin_classified = ${dbConfig.isProduction ? 'true' : '1'},
+            profile_complete = CASE 
+                WHEN $1 = 'crew_member' AND (COALESCE(TRIM(instagram_handle), '') = '' OR COALESCE(TRIM(dance_experience), '') = '')
+                    THEN ${falseLiteral}
+                ELSE profile_complete
+            END,
             updated_at = CURRENT_TIMESTAMP 
         WHERE id = $2
     `, [student_type, id]);
@@ -1168,6 +1239,40 @@ app.post('/api/admin/historical-classification/analyze', requireAuth, asyncHandl
     }
 }));
 
+// Simple Historical Analysis: Return students with non-null/non-empty email excluding crew members
+// GET /api/admin/historical-analysis/students
+app.get('/api/admin/historical-analysis/students', requireAuth, asyncHandler(async (req, res) => {
+    try {
+        const rows = await dbConfig.all(`
+            SELECT 
+                id, first_name, last_name, email, instagram_handle, dance_experience,
+                student_type, admin_classified, profile_complete, created_at
+            FROM students
+            WHERE email IS NOT NULL
+              AND TRIM(email) != ''
+              AND (student_type IS NULL OR student_type NOT IN ('crew_member','test'))
+            ORDER BY created_at ASC
+        `, []);
+        // Normalize booleans for SQLite
+        const normalized = rows.map(s => ({
+            id: s.id,
+            first_name: s.first_name || '',
+            last_name: s.last_name || '',
+            email: s.email || '',
+            instagram_handle: s.instagram_handle || '',
+            dance_experience: s.dance_experience || '',
+            student_type: s.student_type || 'general',
+            admin_classified: dbConfig.isProduction ? !!s.admin_classified : Boolean(s.admin_classified),
+            profile_complete: dbConfig.isProduction ? !!s.profile_complete : Boolean(s.profile_complete),
+            created_at: s.created_at
+        }));
+        res.json({ total: normalized.length, students: normalized });
+    } catch (err) {
+        console.error('❌ Simple historical analysis failed:', err);
+        res.status(500).json({ error: 'Failed to run historical analysis' });
+    }
+}));
+
 /**
  * Admin: Apply historical classification suggestions
  * POST /api/admin/historical-classification/apply
@@ -1248,6 +1353,12 @@ app.post('/api/admin/historical-classification/apply', requireAuth, asyncHandler
         });
     }
 }));
+
+/**
+ * Simple Historical Analysis (UI consumes this): students with email present and not crew members
+ * GET /api/admin/historical-analysis/students
+ * Note: Implemented above near historical-classification routes.
+ */
 
 // Students and Registrations
 app.post('/api/register', asyncHandler(async (req, res) => {

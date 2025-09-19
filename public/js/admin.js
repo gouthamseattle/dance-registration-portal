@@ -3301,14 +3301,13 @@ Questions? Reply to this message`;
         }
 
         try {
-            const response = await this.apiFetch('/api/admin/historical-classification/analyze', {
-                method: 'POST'
-            });
+            // New simple analysis: students with email (excluding crew/test) from Postgres
+            const response = await this.apiFetch('/api/admin/historical-analysis/students');
 
             const result = await response.json();
 
             if (response.ok) {
-                this.renderHistoricalAnalysisResults(result);
+                this.renderSimpleHistoricalAnalysisResults(result);
                 this.showSuccess('Historical analysis completed successfully');
             } else {
                 this.showError(result.error || 'Failed to run historical analysis');
@@ -3533,6 +3532,97 @@ Questions? Reply to this message`;
             });
         }
 
+        resultsDiv.style.display = 'block';
+    }
+
+    // New renderer for simple historical analysis (students with email, excluding crew/test)
+    renderSimpleHistoricalAnalysisResults(data) {
+        const resultsDiv = document.getElementById('historicalAnalysisResults');
+        if (!resultsDiv) return;
+
+        const students = Array.isArray(data?.students) ? data.students : [];
+        const total = Number(data?.total || students.length || 0);
+
+        if (students.length === 0) {
+            resultsDiv.innerHTML = `
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <strong>No students found with a non-empty email.</strong><br>
+                    Query basis: SELECT * FROM students WHERE email IS NOT NULL
+                </div>
+            `;
+            resultsDiv.style.display = 'block';
+            return;
+        }
+
+        const rows = students.map(s => {
+            const name = [s.first_name, s.last_name].filter(Boolean).join(' ').trim() || 'Unknown Name';
+            const statusBadge = s.student_type === 'crew_member'
+                ? '<span class="badge bg-warning">Crew Member</span>'
+                : (s.student_type === 'test'
+                    ? '<span class="badge bg-secondary">Test</span>'
+                    : '<span class="badge bg-info">General</span>');
+            const classifiedBadge = s.admin_classified
+                ? '<span class="badge bg-success ms-1">Admin Classified</span>'
+                : '<span class="badge bg-secondary ms-1">Pending</span>';
+            const exp = s.dance_experience || '';
+            const ig = s.instagram_handle ? `@${s.instagram_handle}` : '';
+            return `
+                <tr>
+                    <td>
+                        <strong>${name}</strong><br>
+                        ${ig ? `<small class="text-muted">${ig}</small><br>` : ''}
+                        ${exp ? `<small class="text-muted">${this.formatExperience(exp) || exp}</small>` : ''}
+                    </td>
+                    <td><strong>${s.email || ''}</strong></td>
+                    <td>${statusBadge}${classifiedBadge}</td>
+                    <td>
+                        <div class="btn-group btn-group-sm" role="group">
+                            <button class="btn btn-outline-warning" onclick="admin.classifyStudent(${s.id}, 'crew_member')">
+                                <i class="fas fa-user-check"></i> Crew
+                            </button>
+                            <button class="btn btn-outline-secondary" onclick="admin.classifyStudent(${s.id}, 'test')">
+                                <i class="fas fa-vial"></i> Test
+                            </button>
+                            <button class="btn btn-outline-info" onclick="admin.classifyStudent(${s.id}, 'general')">
+                                <i class="fas fa-user"></i> General
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+
+        resultsDiv.innerHTML = `
+            <div class="card border-primary">
+                <div class="card-header bg-primary text-white">
+                    <h6 class="mb-0">
+                        <i class="fas fa-users me-2"></i>
+                        Students with email (excluding Crew/Test)
+                        <span class="badge bg-light text-dark ms-2">${total}</span>
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <i class="fas fa-database me-2"></i>
+                        Data source: <code>SELECT * FROM students WHERE email IS NOT NULL</code> (with UI filter to exclude Crew/Test)
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Student</th>
+                                    <th>Email</th>
+                                    <th>Status</th>
+                                    <th style="width: 280px;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>${rows}</tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        `;
         resultsDiv.style.display = 'block';
     }
 

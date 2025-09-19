@@ -117,9 +117,17 @@ class EmailProfileRegistrationApp {
             this.hideLoading();
 
             if (result.exists) {
-                // Existing student - show welcome back
+                // Existing student - show welcome back or require profile completion
                 this.currentStudent = result.student;
                 this.eligibleCourses = Array.isArray(result.eligible_courses) ? result.eligible_courses : [];
+
+                // If server indicates profile completion is required (e.g., newly classified crew without full profile),
+                // force the profile creation flow on next login.
+                if (result.requires_profile_completion) {
+                    this.showProfileCreation();
+                    return;
+                }
+
                 this.showWelcomeBack();
             } else {
                 // New student - show profile creation
