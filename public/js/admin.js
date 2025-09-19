@@ -3113,7 +3113,15 @@ Questions? Reply to this message`;
     }
 
     showHistoricalAnalysis() {
-        document.getElementById('historicalAnalysisRow').style.display = 'block';
+        const analysisRow = document.getElementById('historicalAnalysisRow');
+        if (analysisRow) {
+            analysisRow.style.display = 'block';
+            // Scroll to the analysis section for better UX
+            analysisRow.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        } else {
+            console.error('Historical analysis row not found in DOM');
+            this.showError('Historical analysis interface not found. Please refresh the page.');
+        }
     }
 
     async classifyStudent(studentId, studentType) {
@@ -3165,36 +3173,35 @@ Questions? Reply to this message`;
         `;
 
         try {
-            // Add historical classification interface
+            // Simple interface - the main historical analysis is in the dedicated section
             allStudentsList.innerHTML = `
-                <div class="card mb-4 border-primary">
-                    <div class="card-header bg-primary text-white">
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i>
+                    <strong>Student Management:</strong> Use the "Historical Analysis" button above to analyze and classify existing students. 
+                    Complete student management interface is coming soon.
+                </div>
+                
+                <div class="card">
+                    <div class="card-header">
                         <h6 class="mb-0">
-                            <i class="fas fa-history me-2"></i>
-                            Historical Student Classification
+                            <i class="fas fa-users me-2"></i>
+                            Quick Student Analysis
                         </h6>
                     </div>
                     <div class="card-body">
-                        <div class="alert alert-info">
-                            <i class="fas fa-info-circle me-2"></i>
-                            <strong>One-Time Setup:</strong> Analyze all existing students and classify them based on their registration history. 
-                            Students who registered for crew practice will be suggested as crew members.
+                        <div class="row">
+                            <div class="col-md-6">
+                                <button class="btn btn-primary w-100" onclick="admin.showHistoricalAnalysis()">
+                                    <i class="fas fa-search me-2"></i>Run Historical Analysis
+                                </button>
+                            </div>
+                            <div class="col-md-6">
+                                <button class="btn btn-outline-info w-100" onclick="admin.showHistoricalHelp()">
+                                    <i class="fas fa-question-circle me-2"></i>How it Works
+                                </button>
+                            </div>
                         </div>
-                        <div class="d-grid gap-2 d-md-flex justify-content-md-start">
-                            <button class="btn btn-primary" onclick="admin.runHistoricalAnalysis()" id="historicalAnalysisBtn">
-                                <i class="fas fa-search me-2"></i>Run Historical Analysis
-                            </button>
-                            <button class="btn btn-outline-secondary" onclick="admin.showHistoricalHelp()">
-                                <i class="fas fa-question-circle me-2"></i>How it Works
-                            </button>
-                        </div>
-                        <div id="historicalAnalysisResults" class="mt-3" style="display: none;"></div>
                     </div>
-                </div>
-                
-                <div class="alert alert-info">
-                    <i class="fas fa-info-circle me-2"></i>
-                    Complete student management interface is coming soon. Focus on pending classifications and crew member analysis above for now.
                 </div>
             `;
         } catch (error) {
@@ -3292,13 +3299,25 @@ Questions? Reply to this message`;
     }
 
     async runHistoricalAnalysis() {
-        const analysisBtn = document.getElementById('historicalAnalysisBtn');
+        // First ensure the analysis section is visible
+        this.showHistoricalAnalysis();
+        
+        // Find the analysis button - it could be in different locations
+        const analysisBtn = document.getElementById('historicalAnalysisBtn') || 
+                           document.querySelector('button[onclick*="runHistoricalAnalysis"]');
         const resultsDiv = document.getElementById('historicalAnalysisResults');
         
         // Show loading state
         if (analysisBtn) {
             analysisBtn.disabled = true;
             analysisBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Analyzing...';
+        }
+
+        // Ensure results div exists
+        if (!resultsDiv) {
+            console.error('Historical analysis results container not found');
+            this.showError('Analysis interface not properly initialized. Please refresh the page.');
+            return;
         }
 
         try {
