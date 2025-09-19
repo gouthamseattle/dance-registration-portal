@@ -15,7 +15,7 @@
 ### Frontend Technologies
 - **Core**: Vanilla HTML5, CSS3, JavaScript (ES6+)
 - **Styling**: Custom CSS with mobile-first responsive design
-- **Payment**: PayPal JavaScript SDK
+- **Payment**: Venmo & Zelle (primary via deep links/QR), PayPal SDK (optional)
 - **No Framework**: Intentionally framework-free for simplicity
 
 ### Development Dependencies
@@ -226,6 +226,10 @@ curl -X GET http://localhost:3000/api/courses
 curl -X POST http://localhost:3000/api/admin/login \
   -H "Content-Type: application/json" \
   -d '{"username":"admin","password":"admin123"}'
+
+# Admin debug endpoints (capacity vs access)
+curl -X GET http://localhost:3000/api/admin/debug/course-capacity/123
+curl -X GET http://localhost:3000/api/admin/debug/course-access/123
 ```
 
 ## Integration Patterns
@@ -268,6 +272,10 @@ const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
   - If only start_date present: "(Starts 9/20/2025)"
 - Ensures consistent schedule rendering across all UIs including confirmation.
 - Boolean normalization for `is_active` across SQLite (1/0) and PostgreSQL (true/false) during updates.
+- Capacity check rewritten in POST /api/register using subqueries to avoid join ambiguities (with numeric coercion)
+- Added admin debug endpoints:
+  - GET /api/admin/debug/course-capacity/:courseId
+  - GET /api/admin/debug/course-access/:courseId
 
 ### Frontend
 - Course cards and Selected Course Info are built from `course.slots`:

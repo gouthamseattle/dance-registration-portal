@@ -231,6 +231,51 @@ Admin Dashboard (admin.html)
 
 ## New Architecture Additions (Sept 2025)
 
+### Email-First Registration System (2025-09-18)
+- **Pattern**: Email → Profile Recognition → Pre-populated Registration → Course Access Filtering
+- **Student Profile Integration**:
+  - `POST /api/check-student-profile` - Email-based student lookup
+  - `POST /api/create-student-profile` - New student profile creation  
+  - Automatic profile data injection into registration forms via hidden fields
+- **Field Consistency Pattern**:
+  - Unified field naming: `instagram_handle` across all systems (email-profile, registration, database)
+  - Data validation: Smart null/empty detection with helpful error messages
+  - Crew practice exception handling: Name field instead of Instagram, no experience required
+- **DOM Defensive Programming**:
+  - All DOM access wrapped in null checks to prevent TypeError crashes
+  - Cross-page compatibility: Registration.js works on both index.html and email-profile.html  
+  - Graceful degradation: UI setup errors don't block core navigation
+
+### Course Access Control & Debug System (2025-09-18)
+- **Access Control Pattern**:
+  - Course filtering by `required_student_type` vs student `student_type`
+  - Admin bypass: Admins can register for any course regardless of restrictions
+  - Student restrictions: `'general'` students blocked from `'crew_member'` courses
+- **Debug Endpoints**:
+  - `/api/admin/debug/course-capacity/:courseId` - Detailed capacity vs registration analysis
+  - `/api/admin/debug/course-access/:courseId` - Access control configuration diagnosis
+  - Root cause identification: Distinguish capacity issues from access control blocks
+- **Issue Resolution Pattern**:
+  - "Course Full" error often means access restricted, not capacity reached
+  - Debug tools provide actionable recommendations for fixing access configuration
+
+### Student Profile & Data Validation Patterns
+- **Profile Data Integration**:
+  ```javascript
+  // Hidden field population from existing profile
+  const studentId = document.getElementById('studentId')?.value;
+  const preFilledEmail = document.getElementById('studentEmail')?.value;
+  
+  // Smart validation with null/empty detection
+  const hasInstagram = this.registrationData.instagram_handle && 
+                        this.registrationData.instagram_handle !== 'null';
+  ```
+- **Field Name Consistency**:
+  - Registration form: `instagram_handle` field name
+  - Database: `instagram_handle` column
+  - Hidden fields: `studentInstagram` → `instagram_handle` mapping
+- **Error Handling**: Comprehensive validation with user-friendly messages for incomplete profiles
+
 ### Attendance Tracking
 - Goal: Track both per-session attendance and overall series completion; mobile-friendly marking during class; does not affect payments.
 - Tables:
