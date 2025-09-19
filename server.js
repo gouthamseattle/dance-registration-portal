@@ -2505,6 +2505,47 @@ app.get('/api/admin/debug/course-access/:courseId', requireAuth, asyncHandler(as
 }));
 
 /**
+ * Admin: Fix course access control
+ * POST /api/admin/fix-course-access
+ */
+app.post('/api/admin/fix-course-access', requireAuth, asyncHandler(async (req, res) => {
+    try {
+        // Update ALL crew_practice courses to be crew-member only
+        const crewPracticeResult = await dbConfig.run(`
+            UPDATE courses 
+            SET required_student_type = 'crew_member' 
+            WHERE course_type = 'crew_practice'
+        `);
+        
+        // Ensure drop-in and multi-week courses are available to all
+        const generalCoursesResult = await dbConfig.run(`
+            UPDATE courses 
+            SET required_student_type = 'any' 
+            WHERE course_type IN ('drop_in', 'multi-week')
+        `);
+        
+        // Verify the changes
+        const courses = await dbConfig.all('SELECT id, name, course_type, required_student_type FROM courses WHERE is_active = true ORDER BY id');
+        
+        console.log('🔧 Course access control updated by admin:', req.session.adminUsername);
+        
+        res.json({
+            success: true,
+            message: 'Course access control updated successfully',
+            courses: courses.map(c => ({
+                id: c.id,
+                name: c.name,
+                course_type: c.course_type,
+                access: c.required_student_type === 'any' ? 'ALL USERS' : 'CREW MEMBERS ONLY'
+            }))
+        });
+    } catch (err) {
+        console.error('❌ Fix course access error:', err);
+        res.status(500).json({ error: 'Failed to fix course access control' });
+    }
+}));
+
+/**
  * Admin debug: detailed capacity analysis for a course
  */
 app.get('/api/admin/debug/course-capacity/:courseId', requireAuth, asyncHandler(async (req, res) => {
