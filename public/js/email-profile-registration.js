@@ -146,15 +146,45 @@ class EmailProfileRegistrationApp {
         this.hideAllSections();
         document.getElementById('profileCreationSection').style.display = 'block';
         
-        // Clear form
+        // Clear form and pre-fill if existing student
         document.getElementById('profileCreationForm').reset();
-        document.getElementById('first_name').focus();
+        
+        // Pre-fill form with existing data if available
+        if (this.currentStudent) {
+            const form = document.getElementById('profileCreationForm');
+            if (this.currentStudent.first_name) {
+                form.querySelector('[name="first_name"]').value = this.currentStudent.first_name;
+            }
+            if (this.currentStudent.last_name) {
+                form.querySelector('[name="last_name"]').value = this.currentStudent.last_name;
+            }
+            if (this.currentStudent.instagram_handle) {
+                form.querySelector('[name="instagram_handle"]').value = this.currentStudent.instagram_handle;
+            }
+            if (this.currentStudent.dance_experience) {
+                form.querySelector('[name="dance_experience"]').value = this.currentStudent.dance_experience;
+            }
+            
+            // Focus on the first empty required field
+            if (!this.currentStudent.first_name) {
+                document.getElementById('first_name').focus();
+            } else if (!this.currentStudent.dance_experience) {
+                document.getElementById('dance_experience').focus();
+            } else if (!this.currentStudent.instagram_handle) {
+                document.getElementById('instagram_handle').focus();
+            } else {
+                document.getElementById('first_name').focus();
+            }
+        } else {
+            // New student - focus on first name
+            document.getElementById('first_name').focus();
+        }
         
         this.scrollToTop();
     }
 
     async handleProfileCreation() {
-        console.log('🔧 Profile creation form submitted');
+        console.log('🔧 Profile creation/update form submitted');
         
         const formData = new FormData(document.getElementById('profileCreationForm'));
         
@@ -179,7 +209,13 @@ class EmailProfileRegistrationApp {
         this.showLoading();
 
         try {
-            const response = await fetch('/api/create-student-profile', {
+            // Determine if this is creating a new profile or updating existing
+            const isExistingStudent = this.currentStudent !== null;
+            const endpoint = isExistingStudent ? '/api/update-student-profile' : '/api/create-student-profile';
+            
+            console.log(`🔧 Using endpoint: ${endpoint} (existing student: ${isExistingStudent})`);
+
+            const response = await fetch(endpoint, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -190,15 +226,16 @@ class EmailProfileRegistrationApp {
             const result = await response.json();
 
             if (!response.ok) {
-                throw new Error(result.error || 'Failed to create profile');
+                throw new Error(result.error || `Failed to ${isExistingStudent ? 'update' : 'create'} profile`);
             }
 
             this.hideLoading();
             this.currentStudent = result.student;
             this.eligibleCourses = result.eligible_courses || [];
 
-            console.log('✅ Profile created successfully:', result.student);
-            this.showSuccess('Profile created successfully! You can now view available classes.');
+            const actionText = isExistingStudent ? 'updated' : 'created';
+            console.log(`✅ Profile ${actionText} successfully:`, result.student);
+            this.showSuccess(`Profile ${actionText} successfully! You can now view available classes.`);
             
             // Show available courses directly
             setTimeout(() => {
@@ -207,8 +244,8 @@ class EmailProfileRegistrationApp {
 
         } catch (error) {
             this.hideLoading();
-            console.error('Error creating profile:', error);
-            this.showError(error.message || 'Failed to create profile. Please try again.');
+            console.error('Error with profile:', error);
+            this.showError(error.message || 'Failed to save profile. Please try again.');
         }
     }
 
