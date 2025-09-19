@@ -885,9 +885,108 @@ app.post('/api/check-student-profile', asyncHandler(async (req, res) => {
     const student = await dbConfig.get('SELECT * FROM students WHERE email = $1', [email]);
     
     if (!student) {
+        // Get courses available to new/general students
+        const newStudentCourseQuery = `
+            SELECT c.*, COUNT(DISTINCT r.id) as registration_count
+            FROM courses c
+            LEFT JOIN registrations r ON c.id = r.course_id AND r.payment_status = 'completed'
+            WHERE c.is_active = ${dbConfig.isProduction ? 'true' : '1'}
+            AND c.required_student_type = 'any'
+            GROUP BY c.id ORDER BY c.created_at DESC
+        `;
+        
+        const rawCourses = await dbConfig.all(newStudentCourseQuery);
+        
+        // Process courses with slots and pricing
+        const eligibleCourses = await Promise.all(rawCourses.map(async (course) => {
+            const slots = await dbConfig.all(`
+                SELECT cs.*, 
+                       COUNT(DISTINCT r.id) as slot_registration_count,
+                       (cs.capacity - COUNT(DISTINCT r.id)) as available_spots
+                FROM course_slots cs
+                LEFT JOIN registrations r ON cs.course_id = r.course_id AND r.payment_status = 'completed'
+                WHERE cs.course_id = $1
+                GROUP BY cs.id
+                ORDER BY cs.created_at ASC
+            `, [course.id]);
+            
+            // Get pricing for each slot
+            const slotsWithPricing = await Promise.all(slots.map(async (slot) => {
+                const pricing = await dbConfig.all(`
+                    SELECT pricing_type, price 
+                    FROM course_pricing 
+                    WHERE course_slot_id = $1
+                `, [slot.id]);
+                
+                const pricingObj = {};
+                pricing.forEach(p => {
+                    pricingObj[p.pricing_type] = parseFloat(p.price);
+                });
+                
+                return {
+                    ...slot,
+                    pricing: pricingObj
+                };
+            }));
+            
+            // Calculate totals and build schedule info
+            const totalCapacity = slots.reduce((sum, slot) => sum + (slot.capacity || 0), 0);
+            const totalAvailableSpots = slots.reduce((sum, slot) => sum + (Number(slot.available_spots) || 0), 0);
+            
+            // Build computed schedule_info
+            let computedScheduleInfo = '';
+            const scheduleItems = slotsWithPricing.map(s => {
+                const parts = [];
+                if (course.course_type === 'crew_practice' && s.practice_date) {
+                    const dateStr = formatLocalDate(s.practice_date);
+                    parts.push(dateStr);
+                } else if (s.day_of_week) {
+                    parts.push(`${s.day_of_week}s`);
+                }
+                const st = s.start_time;
+                const et = s.end_time;
+                if (st && et) {
+                    parts.push(`${st} - ${et}`);
+                } else if (st) {
+                    parts.push(st);
+                }
+                if (s.location) parts.push(`at ${s.location}`);
+                return parts.join(' ');
+            }).filter(Boolean);
+
+            if (scheduleItems.length > 0) {
+                let dateInfo = '';
+                const hasPracticeDates = slotsWithPricing.some(s => !!s.practice_date);
+                if (!hasPracticeDates) {
+                    if (course.start_date && course.end_date) {
+                        const startDate = formatLocalDate(course.start_date);
+                        const endDate = formatLocalDate(course.end_date);
+                        dateInfo = ` (${startDate} - ${endDate})`;
+                    } else if (course.start_date) {
+                        const startDate = formatLocalDate(course.start_date);
+                        dateInfo = ` (Starts ${startDate})`;
+                    }
+                }
+                computedScheduleInfo = scheduleItems.join(' | ') + dateInfo;
+            } else {
+                computedScheduleInfo = course.schedule_info || '';
+            }
+
+            return {
+                ...course,
+                slots: slotsWithPricing,
+                capacity: totalCapacity,
+                available_spots: totalAvailableSpots,
+                schedule_info: computedScheduleInfo,
+                full_course_price: slotsWithPricing[0]?.pricing?.full_package || 0,
+                per_class_price: slotsWithPricing[0]?.pricing?.drop_in || 0
+            };
+        }));
+        
         return res.json({ 
             exists: false,
-            new_student: true 
+            new_student: true,
+            eligible_courses: eligibleCourses
         });
     }
     
