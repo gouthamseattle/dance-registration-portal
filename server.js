@@ -1107,7 +1107,7 @@ app.post('/api/check-student-profile', asyncHandler(async (req, res) => {
     const profileComplete = dbConfig.isProduction ? student.profile_complete : Boolean(student.profile_complete);
     const hasInstagram = student.instagram_handle && student.instagram_handle.trim() !== '';
     const hasExperience = student.dance_experience && student.dance_experience.trim() !== '';
-    const requiresCompletion = !profileComplete || !hasInstagram || !hasExperience;
+    const requiresCompletion = !hasInstagram || !hasExperience;
 
     res.json({
         exists: true,
