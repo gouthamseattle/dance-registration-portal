@@ -310,10 +310,16 @@ class DanceRegistrationApp {
                                 <span>${dropIn.instructor}</span>
                             </div>
                         ` : ''}
+                        ${availableSpots <= 0 ? `
                         <div class="dropin-detail">
                             <i class="fas fa-users"></i>
-                            <span>${availableSpots > 0 ? `${availableSpots} spots left` : 'FULL'}</span>
-                        </div>
+                            <span>FULL</span>
+                        </div>` : 
+                        availableSpots < 10 ? `
+                        <div class="dropin-detail">
+                            <i class="fas fa-users"></i>
+                            <span>Last few spots!</span>
+                        </div>` : ''}
                     </div>
 
                     ${dropIn.description ? `<p class="text-muted small mb-3">${dropIn.description}</p>` : ''}
@@ -618,11 +624,8 @@ class DanceRegistrationApp {
             infoContainer.innerHTML = `
                 <h5><i class="fas fa-graduation-cap text-primary"></i> ${this.selectedCourse.name}</h5>
                 <div class="row">
-                    <div class="col-sm-6">
+                    <div class="col-sm-12">
                         <strong>Level:</strong> ${this.selectedCourse.level || 'All Levels'}
-                    </div>
-                    <div class="col-sm-6">
-                        <strong>Capacity:</strong> ${this.selectedCourse.capacity} students
                     </div>
                 </div>
                 ${scheduleHtml}

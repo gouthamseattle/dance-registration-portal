@@ -550,10 +550,16 @@ class EmailProfileRegistrationApp {
                                 <span>${course.instructor}</span>
                             </div>
                         ` : ''}
+                        ${availableSpots <= 0 ? `
                         <div class="dropin-detail">
                             <i class="fas fa-users"></i>
-                            <span>${availableSpots > 0 ? `${availableSpots} spots left` : 'FULL'}</span>
-                        </div>
+                            <span>FULL</span>
+                        </div>` : 
+                        availableSpots < 10 ? `
+                        <div class="dropin-detail">
+                            <i class="fas fa-users"></i>
+                            <span>Last few spots!</span>
+                        </div>` : ''}
                     </div>
 
                     ${course.description ? `<p class="text-muted small mb-3">${course.description}</p>` : ''}
