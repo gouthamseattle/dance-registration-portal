@@ -1040,6 +1040,28 @@ app.post('/api/check-student-profile', asyncHandler(async (req, res) => {
     
     const eligibleCourses = await dbConfig.all(courseQuery, params);
     
+    // Get student's registration status for each course
+    let studentRegistrations = {};
+    try {
+        const registrations = await dbConfig.all(`
+            SELECT course_id, id as registration_id, payment_status, registration_date
+            FROM registrations 
+            WHERE student_id = $1
+        `, [student.id]);
+        
+        registrations.forEach(reg => {
+            studentRegistrations[reg.course_id] = {
+                registration_id: reg.registration_id,
+                payment_status: reg.payment_status,
+                registration_date: reg.registration_date,
+                registration_status: reg.payment_status === 'completed' ? 'registered_completed' :
+                                   reg.payment_status === 'pending' ? 'registered_pending' : 'not_registered'
+            };
+        });
+    } catch (error) {
+        console.warn('Error fetching student registrations:', error);
+    }
+
     // Get courses with slots for each eligible course
     const coursesWithSlots = await Promise.all(eligibleCourses.map(async (course) => {
         const slots = await dbConfig.all(`
@@ -1118,6 +1140,9 @@ app.post('/api/check-student-profile', asyncHandler(async (req, res) => {
             computedScheduleInfo = course.schedule_info || '';
         }
 
+        // Add registration status to course
+        const registrationData = studentRegistrations[course.id] || null;
+
         return {
             ...course,
             slots: slotsWithPricing,
@@ -1125,7 +1150,11 @@ app.post('/api/check-student-profile', asyncHandler(async (req, res) => {
             available_spots: totalAvailableSpots,
             schedule_info: computedScheduleInfo,
             full_course_price: slotsWithPricing[0]?.pricing?.full_package || 0,
-            per_class_price: slotsWithPricing[0]?.pricing?.drop_in || 0
+            per_class_price: slotsWithPricing[0]?.pricing?.drop_in || 0,
+            // Add registration status data
+            registration_status: registrationData ? registrationData.registration_status : 'not_registered',
+            registration_id: registrationData ? registrationData.registration_id : null,
+            payment_status: registrationData ? registrationData.payment_status : null
         };
     }));
     
