@@ -287,6 +287,54 @@ main {
     border-color: rgba(0, 212, 255, 0.3);
 }
 
+/* Registration Status Badges */
+.registration-status-badge {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    padding: 0.5rem 1rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.85rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    z-index: 10;
+    animation: fadeIn 0.5s ease-out;
+}
+
+.registration-status-badge.registered {
+    background: var(--gradient-success);
+    color: white;
+    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+}
+
+.registration-status-badge.pending {
+    background: var(--gradient-accent);
+    color: white;
+    box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);
+}
+
+.registration-status-badge i {
+    margin-right: 0.5rem;
+}
+
+/* Course Card States */
+.course-card.registered-course {
+    border-color: rgba(16, 185, 129, 0.4);
+}
+
+.course-card.registered-course::before {
+    background: var(--gradient-success);
+}
+
+.course-card.pending-course {
+    border-color: rgba(245, 158, 11, 0.4);
+}
+
+.course-card.pending-course::before {
+    background: var(--gradient-accent);
+}
+
 .course-card .card-header {
     background: var(--gradient-primary);
     color: white;

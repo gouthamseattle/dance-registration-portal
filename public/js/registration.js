@@ -231,10 +231,19 @@ class DanceRegistrationApp {
         }
 
         col.innerHTML = `
-            <div class="card course-card fade-in">
+            <div class="card course-card fade-in ${isRegistered ? 'registered-course' : ''} ${isPending ? 'pending-course' : ''}">
                 <div class="card-header">
                     <h5 class="card-title">${course.name}</h5>
                     <p class="card-subtitle">${course.level || 'All Levels'} • ${course.duration_weeks || 0} weeks</p>
+                    ${isRegistered ? `
+                        <div class="registration-status-badge registered">
+                            <i class="fas fa-check-circle"></i> Registered
+                        </div>
+                    ` : isPending ? `
+                        <div class="registration-status-badge pending">
+                            <i class="fas fa-clock"></i> Payment Pending
+                        </div>
+                    ` : ''}
                 </div>
                 <div class="card-body">
                     ${course.description ? `<p class="text-muted mb-3">${course.description}</p>` : ''}
@@ -268,9 +277,9 @@ class DanceRegistrationApp {
 
                     <button class="btn register-btn" 
                             onclick="app.selectCourse(${course.id})"
-                            ${availableSpots <= 0 ? 'disabled' : ''}>
-                        <i class="fas fa-user-plus"></i>
-                        ${availableSpots > 0 ? 'Register Now' : 'Course Full'}
+                            ${availableSpots <= 0 || isRegistered ? 'disabled' : ''}>
+                        <i class="fas ${isRegistered ? 'fa-check' : isPending ? 'fa-clock' : 'fa-user-plus'}"></i>
+                        ${isRegistered ? 'Already Registered' : isPending ? 'Payment Pending' : availableSpots > 0 ? 'Register Now' : 'Course Full'}
                     </button>
                 </div>
             </div>
@@ -1844,28 +1853,36 @@ class DanceRegistrationApp {
         
         this.resetBranding();
         
+        // Get current student email to preserve session
+        const studentEmail = document.getElementById('studentEmail')?.value;
+        
         // Check if we're on a page that doesn't have the course selection section
         const courseSelection = document.getElementById('courseSelection');
         if (!courseSelection) {
-            // If no courseSelection element (e.g., on index-registration.html), 
-            // redirect to the appropriate starting page
-            if (document.getElementById('backToEmailProfile') || 
-                window.location.pathname.includes('index-registration')) {
-                // Email-based flow - redirect to email profile page
+            // Only redirect if we're clearly on the email-registration completion page
+            // AND there's no student email (meaning no active session)
+            if (window.location.pathname.includes('index-registration') && !studentEmail) {
+                // Email-based flow with no session - redirect to email profile page
                 window.location.href = '/email-profile.html';
+                return;
+            } else if (studentEmail) {
+                // We have a student session but no courseSelection element
+                // Redirect to main portal with student email to preserve session
+                window.location.href = `/?email=${encodeURIComponent(studentEmail)}`;
+                return;
             } else {
                 // Fallback - redirect to main portal
                 window.location.href = '/';
+                return;
             }
-            return;
         }
         
         // Normal flow for pages with courseSelection
         this.showCourseSelection();
         
-        // Reload courses with current student email if available
-        const studentEmail = document.getElementById('studentEmail')?.value;
+        // Reload courses with current student email if available to show registration status
         if (studentEmail) {
+            console.log('🔄 Reloading courses with student status for:', studentEmail);
             this.loadCoursesWithStatus(studentEmail);
         } else {
             this.loadCourses();
