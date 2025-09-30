@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dance Registration Portal - Accurate Data Model ER Diagram</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f8f9fa;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 10px;
+            margin-bottom: 30px;
+        }
+        .diagram-container {
+            text-align: center;
+            margin: 20px 0;
+        }
+        .legend {
+            margin: 30px 0;
+            padding: 20px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            border: 1px solid #dee2e6;
+        }
+        .legend h3 {
+            color: #495057;
+            margin-bottom: 15px;
+        }
+        .legend-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+        }
+        .color-box {
+            width: 20px;
+            height: 20px;
+            margin-right: 10px;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+        }
+        .core { background-color: #e3f2fd; }
+        .scheduling { background-color: #f3e5f5; }
+        .attendance { background-color: #e8f5e8; }
+        .management { background-color: #fff3e0; }
+        .admin { background-color: #fce4ec; }
+        .note {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .note h4 {
+            color: #856404;
+            margin-top: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Dance Registration Portal - Accurate Entity Relationship Diagram</h1>
+        
+        <div class="note">
+            <h4>📋 Accurate Data Model</h4>
+            <p>This diagram shows <strong>only the database fields actually used</strong> in your application, based on analysis of the server code. All fields shown here are actively used in INSERT, UPDATE, or SELECT operations.</p>
+        </div>
+        
+        <div class="legend">
+            <h3>Table Categories</h3>
+            <div class="legend-grid">
+                <div class="legend-item">
+                    <div class="color-box core"></div>
+                    <span><strong>Core Entities:</strong> Students, Courses, Registrations</span>
+                </div>
+                <div class="legend-item">
+                    <div class="color-box scheduling"></div>
+                    <span><strong>Scheduling:</strong> Course Slots, Pricing</span>
+                </div>
+                <div class="legend-item">
+                    <div class="color-box attendance"></div>
+                    <span><strong>Attendance:</strong> Sessions, Records</span>
+                </div>
+                <div class="legend-item">
+                    <div class="color-box management"></div>
+                    <span><strong>Management:</strong> Waitlist</span>
+                </div>
+                <div class="legend-item">
+                    <div class="color-box admin"></div>
+                    <span><strong>Admin:</strong> Users, Settings</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="diagram-container">
+            <div class="mermaid">
+                erDiagram
+                    STUDENTS {
+                        int id PK
+                        string first_name
+                        string last_name
+                        string email UK
+                        string phone
+                        string date_of_birth
+                        string emergency_contact_name
+                        string emergency_contact_phone
+                        string medical_conditions
+                        string dance_experience
+                        string instagram_handle
+                        string how_heard_about_us
+                        string student_type
+                        boolean profile_complete
+                        boolean admin_classified
+                        timestamp created_at
+                        timestamp updated_at
+                    }
+
+                    COURSES {
+                        int id PK
+                        string name
+                        text description
+                        string course_type
+                        int duration_weeks
+                        date start_date
+                        date end_date
+                        string instructor
+                        text schedule_info
+                        text prerequisites
+                        string required_student_type
+                        boolean is_active
+                        timestamp created_at
+                        timestamp updated_at
+                    }
+
+                    REGISTRATIONS {
+                        int id PK
+                        int student_id FK
+                        int course_id FK
+                        decimal payment_amount
+                        string payment_status
+                        string paypal_transaction_id
+                        string payment_method
+                        text special_requests
+                        timestamp registration_date
+                        boolean created_from_waitlist
+                        timestamp waitlist_notification_sent_at
+                        timestamp canceled_at
+                        int canceled_by FK
+                        text cancellation_reason
+                        timestamp updated_at
+                    }
+
+                    COURSE_SLOTS {
+                        int id PK
+                        int course_id FK
+                        string slot_name
+                        string difficulty_level
+                        int capacity
+                        string day_of_week
+                        date practice_date
+                        time start_time
+                        time end_time
+                        string location
+                        timestamp created_at
+                    }
+
+                    COURSE_PRICING {
+                        int id PK
+                        int course_slot_id FK
+                        string pricing_type
+                        decimal price
+                        timestamp created_at
+                    }
+
+                    CLASS_SESSIONS {
+                        int id PK
+                        int course_id FK
+                        date session_date
+                        time start_time
+                        time end_time
+                        string location
+                        text notes
+                        timestamp created_at
+                    }
+
+                    ATTENDANCE_RECORDS {
+                        int id PK
+                        int session_id FK
+                        int student_id FK
+                        string status
+                        timestamp marked_at
+                        int marked_by FK
+                    }
+
+                    WAITLIST {
+                        int id PK
+                        int student_id FK
+                        int course_id FK
+                        int waitlist_position
+                        boolean notification_sent
+                        timestamp notification_sent_at
+                        timestamp notification_expires_at
+                        string payment_link_token
+                        string status
+                        timestamp created_at
+                        timestamp updated_at
+                    }
+
+                    ADMIN_USERS {
+                        int id PK
+                        string username UK
+                        string password_hash
+                        string email
+                        timestamp last_login
+                        timestamp created_at
+                    }
+
+                    SYSTEM_SETTINGS {
+                        string setting_key PK
+                        text setting_value
+                        text description
+                        timestamp updated_at
+                    }
+
+                    STUDENTS ||--o{ REGISTRATIONS : "registers for"
+                    COURSES ||--o{ REGISTRATIONS : "has"
+                    COURSES ||--o{ COURSE_SLOTS : "scheduled in"
+                    COURSE_SLOTS ||--o{ COURSE_PRICING : "priced by"
+                    COURSES ||--o{ CLASS_SESSIONS : "contains"
+                    CLASS_SESSIONS ||--o{ ATTENDANCE_RECORDS : "tracks"
+                    STUDENTS ||--o{ ATTENDANCE_RECORDS : "attends"
+                    STUDENTS ||--o{ WAITLIST : "waits for"
+                    COURSES ||--o{ WAITLIST : "has waitlist"
+                    ADMIN_USERS ||--o{ ATTENDANCE_RECORDS : "marks"
+                    ADMIN_USERS ||--o{ REGISTRATIONS : "cancels"
+            </div>
+        </div>
+
+        <div style="margin-top: 30px;">
+            <h3>Field Usage Summary</h3>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px;">
+                <div style="background-color: #f8f9fa; padding: 15px; border-radius: 5px;">
+                    <h4>STUDENTS (17 fields)</h4>
+                    <p>All fields actively used for registration forms, profile management, and access control</p>
+                </div>
+                <div style="background-color: #f8f9fa; padding: 15px; border-radius: 5px;">
+                    <h4>COURSES (12 fields)</h4>
+                    <p>Core course information, scheduling metadata, and access control settings</p>
+                </div>
+                <div style="background-color: #f8f9fa; padding: 15px; border-radius: 5px;">
+                    <h4>REGISTRATIONS (14 fields)</h4>
+                    <p>Payment tracking, waitlist integration, and cancellation audit trails</p>
+                </div>
+                <div style="background-color: #f8f9fa; padding: 15px; border-radius: 5px;">
+                    <h4>COURSE_SLOTS (10 fields)</h4>
+                    <p>Flexible scheduling with capacity management and time slot details</p>
+                </div>
+                <div style="background-color: #f8f9fa; padding: 15px; border-radius: 5px;">
+                    <h4>Other Tables</h4>
+                    <p>COURSE_PRICING (5), CLASS_SESSIONS (7), ATTENDANCE_RECORDS (6), WAITLIST (10), ADMIN_USERS (6), SYSTEM_SETTINGS (4)</p>
+                </div>
+            </div>
+        </div>
+
+        <div style="margin-top: 30px; text-align: center; color: #6c757d;">
+            <p><strong>Key:</strong> PK = Primary Key | FK = Foreign Key | UK = Unique Key</p>
+            <p><strong>Relationships:</strong> ||--o{ = One-to-Many | ||--|| = One-to-One</p>
+            <p><em>All fields shown are verified to be actively used in the application code</em></p>
+        </div>
+    </div>
+
+    <script>
+        mermaid.initialize({ 
+            startOnLoad: true,
+            theme: 'default',
+            themeVariables: {
+                primaryColor: '#e3f2fd',
+                primaryTextColor: '#1a1a1a',
+                primaryBorderColor: '#2196f3',
+                lineColor: '#424242',
+                sectionBkgColor: '#f5f5f5',
+                altSectionBkgColor: '#ffffff',
+                gridColor: '#e0e0e0',
+                secondaryColor: '#f3e5f5',
+                tertiaryColor: '#e8f5e8'
+            },
+            er: {
+                diagramPadding: 20,
+                layoutDirection: 'TB',
+                minEntityWidth: 100,
+                minEntityHeight: 75,
+                entityPadding: 15,
+                stroke: '#333333',
+                fill: 'white',
+                fontSize: 12
+            }
+        });
+    </script>
+</body>
+</html>

@@ -79,6 +79,33 @@ class DanceRegistrationApp {
         }
     }
 
+    async loadCoursesWithStatus(studentEmail) {
+        try {
+            const [coursesResponse, dropInsResponse] = await Promise.all([
+                fetch(`/api/courses?active_only=true&student_email=${encodeURIComponent(studentEmail)}`),
+                fetch('/api/drop-in-classes?active_only=true&date_from=' + new Date().toISOString().split('T')[0])
+            ]);
+
+            const courses = await coursesResponse.json();
+            const dropIns = await dropInsResponse.json();
+
+            console.log('✅ Courses loaded with registration status:', courses.length);
+
+            // Check if crew practice mode should be enabled
+            this.checkAndApplyCrewPracticeMode(courses);
+
+            this.renderCourses(courses);
+            this.renderDropInClasses(dropIns);
+
+            if (courses.length === 0 && dropIns.length === 0) {
+                this.showNoCoursesMessage();
+            }
+        } catch (error) {
+            console.error('Error loading courses with status:', error);
+            this.showError('Failed to load available courses.');
+        }
+    }
+
     checkAndApplyCrewPracticeMode(courses) {
         // Check if any course is crew practice type
         const hasCrewPractice = courses.some(course => course.course_type === 'crew_practice');
@@ -137,6 +164,11 @@ class DanceRegistrationApp {
         const availableSpots = course.available_spots || 0;
         const hasFullCoursePrice = course.full_course_price && course.full_course_price > 0;
         const hasPerClassPrice = course.per_class_price && course.per_class_price > 0;
+        
+        // Check registration status (from backend API with student_email parameter)
+        const registrationStatus = course.registration_status || 'not_registered';
+        const isRegistered = registrationStatus === 'registered_completed';
+        const isPending = registrationStatus === 'registered_pending';
 
         // Build schedule from slots or fallback to schedule_info
         let scheduleHtml = '';
@@ -1790,13 +1822,30 @@ class DanceRegistrationApp {
     }
 
     resetRegistration() {
+        // Clear all state
         this.selectedCourse = null;
         this.selectedDropIn = null;
         this.registrationData = {};
-        document.getElementById('studentRegistrationForm').reset();
+        this.selectedPaymentMethod = null;
+        this.isSelecting = false;
+        this.isSelectingDropIn = false;
+        
+        // Reset form
+        const form = document.getElementById('studentRegistrationForm');
+        if (form) {
+            form.reset();
+        }
+        
         this.resetBranding();
         this.showCourseSelection();
-        this.loadCourses(); // Refresh course availability
+        
+        // Reload courses with current student email if available
+        const studentEmail = document.getElementById('studentEmail')?.value;
+        if (studentEmail) {
+            this.loadCoursesWithStatus(studentEmail);
+        } else {
+            this.loadCourses();
+        }
     }
 
     resetBranding() {

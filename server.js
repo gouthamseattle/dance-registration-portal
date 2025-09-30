@@ -395,7 +395,7 @@ app.put('/api/settings', requireAuth, asyncHandler(async (req, res) => {
 
 // Courses
 app.get('/api/courses', asyncHandler(async (req, res) => {
-    const { active_only } = req.query;
+    const { active_only, student_email } = req.query;
     
     let query = `
         SELECT c.*,
@@ -422,6 +422,33 @@ app.get('/api/courses', asyncHandler(async (req, res) => {
     query += ' GROUP BY c.id ORDER BY c.created_at DESC';
     
     const courses = await dbConfig.all(query, params);
+    
+    // If student_email is provided, get registration status for each course
+    let studentRegistrations = {};
+    if (student_email) {
+        try {
+            const student = await dbConfig.get('SELECT id FROM students WHERE email = $1', [student_email]);
+            if (student) {
+                const registrations = await dbConfig.all(`
+                    SELECT course_id, id as registration_id, payment_status, registration_date
+                    FROM registrations 
+                    WHERE student_id = $1
+                `, [student.id]);
+                
+                registrations.forEach(reg => {
+                    studentRegistrations[reg.course_id] = {
+                        registration_id: reg.registration_id,
+                        payment_status: reg.payment_status,
+                        registration_date: reg.registration_date,
+                        registration_status: reg.payment_status === 'completed' ? 'registered_completed' :
+                                           reg.payment_status === 'pending' ? 'registered_pending' : 'not_registered'
+                    };
+                });
+            }
+        } catch (error) {
+            console.warn('Error fetching student registrations:', error);
+        }
+    }
     
     // Get slots and pricing for each course
     const coursesWithSlots = await Promise.all(courses.map(async (course) => {
