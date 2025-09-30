@@ -1806,10 +1806,16 @@ class DanceRegistrationApp {
         this.selectedCourse = null;
         this.selectedDropIn = null;
 
-        document.getElementById('courseSelection').style.display = 'block';
-        document.getElementById('registrationForm').style.display = 'none';
-        document.getElementById('paymentSection').style.display = 'none';
-        document.getElementById('confirmationSection').style.display = 'none';
+        // Null-safe element manipulation
+        const courseSelection = document.getElementById('courseSelection');
+        const registrationForm = document.getElementById('registrationForm');
+        const paymentSection = document.getElementById('paymentSection');
+        const confirmationSection = document.getElementById('confirmationSection');
+        
+        if (courseSelection) courseSelection.style.display = 'block';
+        if (registrationForm) registrationForm.style.display = 'none';
+        if (paymentSection) paymentSection.style.display = 'none';
+        if (confirmationSection) confirmationSection.style.display = 'none';
         
         // Reset to regular branding when going back to course selection
         this.resetBranding();
@@ -1837,6 +1843,24 @@ class DanceRegistrationApp {
         }
         
         this.resetBranding();
+        
+        // Check if we're on a page that doesn't have the course selection section
+        const courseSelection = document.getElementById('courseSelection');
+        if (!courseSelection) {
+            // If no courseSelection element (e.g., on index-registration.html), 
+            // redirect to the appropriate starting page
+            if (document.getElementById('backToEmailProfile') || 
+                window.location.pathname.includes('index-registration')) {
+                // Email-based flow - redirect to email profile page
+                window.location.href = '/email-profile.html';
+            } else {
+                // Fallback - redirect to main portal
+                window.location.href = '/';
+            }
+            return;
+        }
+        
+        // Normal flow for pages with courseSelection
         this.showCourseSelection();
         
         // Reload courses with current student email if available
