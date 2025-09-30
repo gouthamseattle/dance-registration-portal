@@ -379,6 +379,11 @@ class EmailProfileRegistrationApp {
         const availableSpots = parseInt(course.available_spots) || 0;
         const hasFullCoursePrice = course.full_course_price && course.full_course_price > 0;
         const hasPerClassPrice = course.per_class_price && course.per_class_price > 0;
+        
+        // Check registration status
+        const registrationStatus = course.registration_status || 'not_registered';
+        const isRegistered = registrationStatus === 'registered_completed';
+        const isPending = registrationStatus === 'registered_pending';
 
         // Build schedule from slots or fallback to schedule_info
         let scheduleHtml = '';
@@ -446,11 +451,20 @@ class EmailProfileRegistrationApp {
         }
 
         col.innerHTML = `
-            <div class="card course-card fade-in">
+            <div class="card course-card fade-in ${isRegistered ? 'registered-course' : ''} ${isPending ? 'pending-course' : ''}">
                 <div class="card-header">
                     ${typeBadge}
                     <h5 class="card-title">${course.name}</h5>
                     <p class="card-subtitle">${course.level || 'All Levels'} • ${course.duration_weeks || 0} weeks</p>
+                    ${isRegistered ? `
+                        <div class="registration-status-badge registered">
+                            <i class="fas fa-check-circle"></i> Registered
+                        </div>
+                    ` : isPending ? `
+                        <div class="registration-status-badge pending">
+                            <i class="fas fa-clock"></i> Payment Pending
+                        </div>
+                    ` : ''}
                 </div>
                 <div class="card-body">
                     ${course.description ? `<p class="text-muted mb-3">${course.description}</p>` : ''}
@@ -482,11 +496,11 @@ class EmailProfileRegistrationApp {
                         </div>
                     ` : ''}
 
-                    <button class="btn register-btn ${availableSpots <= 0 ? 'waitlist-btn' : ''}" 
+                    <button class="btn register-btn ${availableSpots <= 0 && !isRegistered && !isPending ? 'waitlist-btn' : ''}" 
                             onclick="app.selectCourse(${course.id})"
-                            ${availableSpots <= 0 ? '' : ''}>
-                        <i class="fas ${availableSpots > 0 ? 'fa-user-plus' : 'fa-list-alt'}"></i>
-                        ${availableSpots > 0 ? 'Register Now' : 'Join Waitlist'}
+                            ${availableSpots <= 0 && !isRegistered && !isPending ? '' : isRegistered || isPending ? 'disabled' : ''}>
+                        <i class="fas ${isRegistered ? 'fa-check' : isPending ? 'fa-clock' : availableSpots > 0 ? 'fa-user-plus' : 'fa-list-alt'}"></i>
+                        ${isRegistered ? 'Already Registered' : isPending ? 'Payment Pending' : availableSpots > 0 ? 'Register Now' : 'Join Waitlist'}
                     </button>
                 </div>
             </div>
@@ -721,8 +735,8 @@ class EmailProfileRegistrationApp {
                                             <span class="confirmation-value">$${course.full_course_price || course.per_class_price || 0}</span>
                                         </div>
                                     </div>
-                                    <button class="btn btn-primary btn-lg" onclick="app.showEmailEntry()">
-                                        <i class="fas fa-arrow-left"></i> Register for Another Class
+                                    <button class="btn btn-primary btn-lg" onclick="app.showAvailableCourses()">
+                                        <i class="fas fa-plus"></i> Register for Another Class
                                     </button>
                                 </div>
                             </div>
