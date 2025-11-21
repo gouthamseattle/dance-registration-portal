@@ -91,6 +91,10 @@ class AdminDashboard {
             link.addEventListener('click', (e) => {
                 e.preventDefault();
                 const section = e.target.closest('[data-section]').dataset.section;
+                if (section === 'attendance') {
+                    this.openAttendance();
+                    return;
+                }
                 this.showSection(section);
             });
         });
@@ -211,9 +215,24 @@ class AdminDashboard {
             section.style.display = 'none';
         });
 
-        // Show selected section
-        document.getElementById(`${sectionName}Section`).style.display = 'block';
-        this.currentSection = sectionName;
+        // Show selected section with safety guard
+        const targetSection = document.getElementById(`${sectionName}Section`);
+        if (targetSection) {
+            targetSection.style.display = 'block';
+            this.currentSection = sectionName;
+        } else {
+            // Fallback to dashboard if section doesn't exist
+            const dashboardSection = document.getElementById('dashboardSection');
+            if (dashboardSection) {
+                dashboardSection.style.display = 'block';
+            }
+            this.currentSection = 'dashboard';
+            // Special case for attendance - open modal instead
+            if (sectionName === 'attendance') {
+                this.openAttendance();
+                return;
+            }
+        }
 
         // Load section-specific data
         switch (sectionName) {
