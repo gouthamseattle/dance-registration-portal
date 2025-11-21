@@ -1659,11 +1659,23 @@ h2 i {
 /* FINAL OVERRIDE: ensure student name column is always visible (both light and dark modes) */
 #attendanceStudents .table tbody td:first-child,
 #attendanceStudents .table tbody td:first-child *,
-#attendanceStudents .table tbody td:first-child strong {
+#attendanceStudents .table tbody td:first-child strong,
+#attendanceStudents .table tbody td:first-child div,
+#attendanceStudents .table tbody td:first-child div *,
+#attendanceStudents .table tbody td:first-child div strong {
     color: #000 !important;          /* pure black */
+    background-color: rgba(255, 255, 255, 0.95) !important; /* ensure white background behind text */
     text-shadow: none !important;     /* remove any glow */
     opacity: 1 !important;            /* prevent muted/opacity issues */
-    font-weight: 700;                 /* strengthen visibility */
+    font-weight: 700 !important;      /* strengthen visibility */
+    z-index: 10 !important;           /* bring to front */
+}
+
+/* Force high contrast for attendance student names */
+#attendanceStudents .table tbody td:first-child {
+    background-color: #ffffff !important;
+    border: 2px solid #000 !important;
+    padding: 12px !important;
 }
 
 @media (prefers-color-scheme: dark) {
