@@ -324,7 +324,84 @@ const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
   - `js/admin.js?v=19`
 - Pattern: bump version query params on CSS/JS changes to force production refresh.
 
-### Commits
+---
+
+## Student Portal Registration Status Implementation (Sept 2025)
+
+### Registration Status API Enhancements (2025-09-30)
+**Problem Solved**: Student portal showed inconsistent registration status between different API endpoints.
+
+**Technical Implementation**:
+- Enhanced `/api/check-student-profile` endpoint to include registration status data
+- Added JOIN queries to fetch registration status for each course when student email is provided
+- Standardized course object structure across all endpoints to include:
+  ```javascript
+  {
+    registration_status: 'registered_completed' | 'registered_pending' | 'not_registered',
+    registration_id: number | null,
+    payment_status: string | null
+  }
+  ```
+
+### Event Handler Architecture (2025-09-30)
+**Problem Solved**: "Register Another Class" button wasn't functional due to missing event handlers.
+
+**Implementation Pattern**:
+```javascript
+// Added to setupEventListeners() in email-profile-registration.js
+const registerAnother = document.getElementById('registerAnother');
+if (registerAnother) {
+    registerAnother.addEventListener('click', () => {
+        this.resetRegistration();
+    });
+}
+
+// Enhanced resetRegistration() to preserve student session
+resetRegistration() {
+    // Clear form state
+    this.selectedCourse = null;
+    this.selectedDropIn = null;
+    this.registrationData = {};
+    
+    // Preserve student session data
+    const studentEmail = this.studentData?.email;
+    if (studentEmail) {
+        this.checkStudentProfile(); // Reload with preserved session
+    }
+}
+```
+
+### API Data Consistency Pattern
+- Both `/api/courses` and `/api/check-student-profile` now return identical course data structure
+- Server-side JOIN queries ensure consistent registration status data
+- Eliminates client-side data inconsistencies and reduces API round-trips
+- Status badges render consistently across all UI components
+
+### Registration Status Visual Implementation
+```css
+/* Added registration status badges using existing styling */
+.registration-status-badge.registered {
+    background: rgba(40, 167, 69, 0.1);
+    color: #28a745;
+    border: 1px solid rgba(40, 167, 69, 0.3);
+}
+
+.registration-status-badge.pending {
+    background: rgba(255, 193, 7, 0.1);
+    color: #ffc107;
+    border: 1px solid rgba(255, 193, 7, 0.3);
+}
+```
+
+### Session State Management
+- Student session data preserved across multiple registrations
+- Email-profile workflow maintains context between course registrations
+- Prevents data re-entry for existing students
+- Seamless multi-course registration experience
+
+### Commits (Latest)
+- `4a7ca78` — Fix Register Another Class button and add registration status badges to email-profile system
+- `a55df10` — Add registration status data to check-student-profile API endpoint
 - `45ddfb5` — Show slot times on cards and form; add fallback to course-level times; fix duplicate variable declarations
 - `75511bb` — Compute schedule_info on server from slots (include start/end times and dates) and cache-bust registration.js
 - `0ab7057` — Fix re-selection bug: numeric ID matching, stale data guard, cache-bust registration.js to v=48

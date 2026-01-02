@@ -258,22 +258,7 @@ class DanceRegistrationApp {
                         ` : ''}
                     </div>
 
-                    ${(hasFullCoursePrice || hasPerClassPrice) ? `
-                        <div class="pricing-section">
-                            ${hasFullCoursePrice ? `
-                                <div class="price-option">
-                                    <span>Full Course</span>
-                                    <span class="price">$${course.full_course_price}</span>
-                                </div>
-                            ` : ''}
-                            ${hasPerClassPrice ? `
-                                <div class="price-option">
-                                    <span>Per Class</span>
-                                    <span class="price">$${course.per_class_price}</span>
-                                </div>
-                            ` : ''}
-                        </div>
-                    ` : ''}
+                    ${this.generateCoursePricingSection(course)}
 
                     <button class="btn register-btn" 
                             onclick="app.selectCourse(${course.id})"
@@ -286,6 +271,86 @@ class DanceRegistrationApp {
         `;
 
         return col;
+    }
+
+    generateCoursePricingSection(course) {
+        // Handle multi-slot courses with different pricing
+        if (course.slots && course.slots.length > 1) {
+            // Check if slots have different pricing
+            const uniquePricing = new Map();
+            course.slots.forEach(slot => {
+                if (slot.pricing && (slot.pricing.full_package || slot.pricing.drop_in)) {
+                    const key = `${slot.pricing.full_package || 0}-${slot.pricing.drop_in || 0}`;
+                    if (!uniquePricing.has(key)) {
+                        uniquePricing.set(key, {
+                            slot_name: slot.slot_name,
+                            difficulty_level: slot.difficulty_level,
+                            full_package: slot.pricing.full_package,
+                            drop_in: slot.pricing.drop_in
+                        });
+                    }
+                }
+            });
+
+            // If we have multiple unique pricing options, show them separately
+            if (uniquePricing.size > 1) {
+                let pricingHtml = '<div class="pricing-section multi-slot-pricing">';
+                pricingHtml += '<h6 class="pricing-title mb-3"><i class="fas fa-tag me-2"></i>Choose Your Level:</h6>';
+                
+                uniquePricing.forEach((pricing, key) => {
+                    pricingHtml += `
+                        <div class="slot-pricing-option mb-3">
+                            <div class="slot-header">
+                                <strong>${pricing.slot_name}</strong>
+                                ${pricing.difficulty_level ? `<span class="badge bg-secondary ms-2">${pricing.difficulty_level}</span>` : ''}
+                            </div>
+                            <div class="pricing-details mt-2">
+                                ${pricing.full_package ? `
+                                    <div class="price-option">
+                                        <span>Full Course</span>
+                                        <span class="price">$${pricing.full_package}</span>
+                                    </div>
+                                ` : ''}
+                                ${pricing.drop_in ? `
+                                    <div class="price-option">
+                                        <span>Per Class</span>
+                                        <span class="price">$${pricing.drop_in}</span>
+                                    </div>
+                                ` : ''}
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                pricingHtml += '</div>';
+                return pricingHtml;
+            }
+        }
+        
+        // Fallback to original single pricing display
+        const hasFullCoursePrice = course.full_course_price && course.full_course_price > 0;
+        const hasPerClassPrice = course.per_class_price && course.per_class_price > 0;
+        
+        if (hasFullCoursePrice || hasPerClassPrice) {
+            return `
+                <div class="pricing-section">
+                    ${hasFullCoursePrice ? `
+                        <div class="price-option">
+                            <span>Full Course</span>
+                            <span class="price">$${course.full_course_price}</span>
+                        </div>
+                    ` : ''}
+                    ${hasPerClassPrice ? `
+                        <div class="price-option">
+                            <span>Per Class</span>
+                            <span class="price">$${course.per_class_price}</span>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }
+        
+        return ''; // No pricing to display
     }
 
     renderDropInClasses(dropIns) {

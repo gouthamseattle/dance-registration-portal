@@ -1,6 +1,69 @@
 # Progress - Dance Registration Portal
 
-## Latest Updates (2025-09-18)
+## Latest Updates (2025-09-30)
+
+### ✅ Student Portal Registration Status Issues - COMPLETED & DEPLOYED
+**Date Completed**: 2025-09-30
+
+#### **Issue 1: "Register for Another Class" Button Not Working**
+- **Problem**: Button existed but didn't function, preventing students from registering for additional courses
+- **Root Cause**: Missing event handler in `email-profile-registration.js` for `registerAnother` button
+- **Solution Applied**: Added proper click handler that resets state and reloads courses with current student session
+- **Technical Implementation**:
+  ```javascript
+  // Added event listener for Register Another Class button
+  const registerAnother = document.getElementById('registerAnother');
+  if (registerAnother) {
+      registerAnother.addEventListener('click', () => {
+          this.resetRegistration();
+      });
+  }
+  
+  // Enhanced resetRegistration() to preserve student session
+  resetRegistration() {
+      // Clear state while preserving student email
+      const studentEmail = this.studentData?.email;
+      if (studentEmail) {
+          this.checkStudentProfile(); // Reload with preserved session
+      }
+  }
+  ```
+
+#### **Issue 2: Registration Status Not Showing on Return Visits**
+- **Problem**: When students returned to portal, course cards didn't show if they were already registered
+- **Root Cause**: Server API `/api/check-student-profile` didn't include registration status data like `/api/courses` endpoint did
+- **Solution Applied**: Enhanced server API to include complete registration status for each course
+- **Implementation Details**:
+  - Added registration status lookup in `/api/check-student-profile` endpoint
+  - Included `registration_status`, `registration_id`, `payment_status` fields in course objects
+  - Added visual status badges: "Registered" (green check) and "Payment Pending" (yellow clock)
+  - Course cards now show registration state visually with badges and disabled buttons
+  - Status badges use existing CSS styling already present in styles.css
+
+#### **End-to-End Workflow Verification**
+1. **Student enters email** → Profile lookup with course registration status included
+2. **Course cards display** → Visual badges show "Registered" or "Payment Pending" status correctly
+3. **Student completes new registration** → Payment confirmation page shown
+4. **"Register Another Class" clicked** → Returns to course list with updated status badges
+5. **Student returns later** → Status badges persist correctly from server API data
+6. **Complete workflow tested** → Both issues confirmed resolved in production
+
+#### **Files Modified & Deployed**
+- **✅ `public/js/email-profile-registration.js`** - Fixed "Register Another Class" button functionality and event handling
+- **✅ `server.js`** - Enhanced `/api/check-student-profile` API to include registration status data for each course
+- **✅ `public/css/styles.css`** - Registration status badge styling (already present from previous work)
+
+#### **Production Deployment Status**
+- **Git Commits**: 
+  - `4a7ca78` - Fix Register Another Class button and add registration status badges to email-profile system
+  - `a55df10` - Add registration status data to check-student-profile API endpoint
+- **Railway Deployment**: ✅ All changes successfully deployed to production
+- **System Status**: ✅ Both reported issues fully resolved and verified working
+- **End-to-End Testing**: ✅ Complete student portal workflow tested and confirmed operational
+
+---
+
+## Previous Updates (2025-09-18)
 
 ### ✅ Admin Registrations Management Enhancements - DEPLOYED
 - Admin can Cancel, Uncancel, and Edit registrations from the Registrations page
@@ -14,7 +77,7 @@
 - Emails:
   - Cancellation email sent via SendGrid when system setting email_notifications_enabled='true'
 - UI:
-  - New “Canceled” filter option; actions include Edit, Cancel/Uncancel, View
+  - New "Canceled" filter option; actions include Edit, Cancel/Uncancel, View
   - Cache-busting: admin-styles.css?v=10, admin.js?v=19
 - Files touched:
   - server.js (new endpoints, schema ensures audit columns)
@@ -170,9 +233,9 @@
   - Cards: slot-based details with date range appended
   - Selected Course Info: per-slot lines + separate Dates section
   - Confirmation: server-computed schedule_info ensures times/dates
-- Removed technical “saved with ID” messaging from payment UI
-- Hidden “Available spots” from student-facing UI
-- Crew Practice: Instagram ID field changes to “Full Name”; Dance Experience hidden
+- Removed technical "saved with ID" messaging from payment UI
+- Hidden "Available spots" from student-facing UI
+- Crew Practice: Instagram ID field changes to "Full Name"; Dance Experience hidden
 - Removed 💰 emoji from total amount; cleaner total display
 - Cache-busting for registration.js
 
@@ -224,302 +287,3 @@
   - Robust Instagram/Name field toggle for crew practice
   - Guard errors in showRegistrationForm UI prep (non-blocking)
   - Cache-busted registration.js to v=49
-
-### Repository
-- Repository reorganization: moved utility scripts to scripts/, docs/ to docs/, loose media to assets/media/.
-- Updated references: server now requires ./scripts/migrate-to-postgres; npm run setup points to scripts/setup.js.
-- Fixed SQLite path in scripts/migrate-to-postgres.js; aligned scripts/setup.js to use bcryptjs to match dependencies.
-
-### Commits Deployed
-- 45ddfb5 — Show slot times on cards and form; add fallback to course-level times; fix duplicate variable declarations
-- 75511bb — Compute schedule_info on server from slots (include start/end times and dates) and cache-bust registration.js
-- 43aeef1 — Admin UI: make loading overlay non-interactive; add click logging; bump cache-busters (admin.js v=5, admin-styles.css v=3). Update memory bank with email workflow and UI fixes.
-- 0ab7057 — Fix re-selection bug: numeric ID matching, stale data guard, cache-bust registration.js to v=48
-- 5e8f249 — Suppress spurious selection error toast; add in-progress guards; robust field toggling; cache-bust to v=49
-- 37e19a4 — Build fix: run DB migrations at app start; remove build script; lazy-load sqlite3; move sqlite3 to devDependencies
-
-## Post-First-Class Feedback (Admin Portal) — Sept 2025
-- Duplicate registrations observed for the same course with the same displayed ID
-- Status filter not working on registrations page
-- "Failed to export registrations" error when clicking Export All
-- Dance Series filter not working
-- Some registrations still show pending even after confirmation
-- Need registration ID shown prominently across Admin UI (tables, detail modals, confirmation dialogs, CSV export)
-
-## Clarified Requirements
-- Attendance tracking:
-  - Track both per-session attendance and overall series completion
-  - Attendance is for records only (does not affect payment status)
-  - Mobile-friendly interface for marking during class
-- Series cleanup:
-  - Move finished series to a "Completed Series" section (archive, do not delete)
-- Reporting dashboard:
-  - Refresh on navigation to the page (no real-time push needed)
-  - Checkbox-based selection for bulk operations
-
-## Implementation Plan (Phased)
-1) Phase 1: Critical Fixes
-   - Investigate duplicate registration issue (same ID display) and prevent duplicates
-   - Fix Status and Series filters in admin UI
-   - Repair CSV Export (server route + client trigger)
-   - Ensure payment confirmation clears stale "pending" in the UI/model
-   - Add Registration ID prominently across Admin UI and CSV
-
-2) Phase 2: Reporting & Bulk Operations
-   - APIs for analytics (counts/lists by series and status)
-   - Admin reporting dashboard with on-demand refresh
-   - Checkbox-based bulk edit/delete actions
-   - Series archival (move to Completed)
-
-3) Phase 3: Attendance Tracking
-   - Schema: class_sessions (per-date), attendance_records (per-student per-session)
-   - API endpoints for attendance CRUD
-   - Mobile-first attendance UI and summary reports (per-session and % series completion)
-
-4) Phase 4: Enhanced Admin Experience
-   - Completed Series management surface
-   - Bulk communications, additional quality-of-life improvements
-
-5) Phase 5: Testing & Validation
-   - Validate duplicate-prevention and filter/export fixes with real data
-   - Verify reporting accuracy and attendance workflow
-   - UAT in production deployment
-
-## Current Status Overview
-
-### 🟢 Fully Operational
-- Slot-based course creation and display
-- Student registration and Venmo payment initiation
-- Admin management and dashboard stats
-- Production deployment and auto-deploy flow
-- Time-aware schedule visible across UI
-- Transactional email on admin payment approval (with resend support and config debug endpoint)
-- Admin UI approval buttons responsive; overlay cannot block clicks
-
-### 🟡 Partially Implemented
-- CSV export surface in admin UI (core export exists; enhance per-course export UX)
-
-### 🔴 Not Started
-- Bulk email interface in Admin
-- Advanced analytics/reporting
-- Multi-instructor support
-- Student self-service dashboard
-- Waitlist management
-
-## Known Issues and Limitations
-
-### ⚠️ Current Considerations
-1. Email delivery depends on valid SMTP credentials and provider policies; use GET /api/admin/debug-email-config and set EMAIL_DEBUG=true for diagnostics.
-2. Drop-in classes endpoint currently returns an empty array (placeholder).
-
-### 🐛 Minor Issues
-1. Error UI copy could be improved in some flows
-2. Some admin features could be more mobile-friendly
-3. Loading indicators could be further enhanced in payment steps
-
-## Evolution of Project Decisions
-
-### Still Valid
-- Vanilla JS and Bootstrap for speed and simplicity
-- Dual DB abstraction for dev/prod parity
-- Railway as deployment target
-- Slot-based course as source of truth (schedule/pricing/capacity)
-
-### Evolved Decisions
-- Server-computed schedule_info replaces hand-authored schedule text for consistency
-- Student payment UX prioritizes Venmo deep link/QR flow
-- Cache-busting added to client asset URLs to ensure immediate rollout
-- Transactional emails sent on admin approval with resilient error handling and explicit resend
-
-## Success Metrics Achieved
-
-### ✅ Technical
-- Mobile load performance sustained
-- Reliable deployment pipeline via git push
-- Consistent, time-aware schedule rendering across views
-- Transactional emails integrated and configurable
-
-### ✅ UX
-- Clear schedule presentation
-- Cleaner payment UI without technical noise
-- Reliable admin approval actions with helpful toasts
-
-### ✅ Business
-- Professional student-facing presentation
-- Fewer schedule-related student questions
-- Post-payment confirmations emailed on approval
-
-## Next Development Priorities
-
-### High Priority (Next Sprint)
-1. CSV Export UX: Enhance admin export options (per-course, filtered)
-2. Admin diagnostics UI for email config (optional surface for /api/admin/debug-email-config)
-
-### Medium Priority
-1. Bulk Email Interface in Admin
-2. Enhanced Reporting: Basic analytics views
-3. Improve error and loading states further
-
-### Low Priority
-1. Multi-instructor support and roles
-2. Student dashboard and receipt downloads
-3. Calendar integrations
-
----
-
-## Phase 1 — Critical Fixes Implemented (Sept 2025)
-
-### Server
-- Added CSV export endpoint: GET /api/admin/registrations/export?course_id=&payment_status=
-  - Applies filters server-side (course_id, payment_status)
-  - Generates a properly escaped CSV (handles quotes, commas, newlines) with headers and ISO date-based filename
-- Added registration de-duplication guard in POST /api/register
-  - If a completed registration exists for (student, course) → block with a clear error
-  - If a pending registration exists → return that registration ID (idempotent behavior) instead of creating a duplicate
-
-### Admin UI
-- Registration ID displayed prominently:
-  - Added ID to Recent Registrations table
-  - Added ID as first column in Registrations table
-  - Registration Details modal shows Registration ID
-- Fixed “Dance Series” filter with type-safe comparison: Number(r.course_id) === Number(selected)
-- Export button now opens server CSV export and preserves current filters (course and status)
-
-### Deployment
-- Cache-busted admin script in public/admin.html to js/admin.js?v=12
-
-### Files Touched
-- public/js/admin.js (ID columns, filter fix, export wiring, modal details)
-- public/admin.html (cache-bust to v=12)
-- server.js (CSV export route, registration de-duplication)
-
-### Validation Plan (Post-Deploy)
-1. Hard refresh admin; verify js/admin.js?v=12 is loaded (Network tab).
-2. Registrations:
-   - Set Course and Status filters; click “Export All” → CSV downloads with matching rows.
-   - Approve a pending registration → row updates to completed after data reload.
-3. Attempt duplicate registration for same email and course:
-   - If completed exists → receive error.
-   - If pending exists → receive existing registrationId with deduped: true.
-
----
-
-## Phase 3 — Attendance Workflow & Visibility (Sept 2025)
-
-### Frontend (Admin UI)
-- Paid-only roster in Manage Attendance:
-  - Roster loads via `GET /api/admin/registrations?course_id={id}&payment_status=completed`
-  - Ensures only paid (completed) students appear for marking
-- Individual Present/Late/Absent controls:
-  - Auto-selects first available session post-load so the Students panel always renders radios
-  - Bulk actions retained: All Present/Late/Absent/Clear
-- Visibility hardening on light/dark themes:
-  - Stronger gridlines and explicit header backgrounds
-  - Subtle column tint for radio columns to make radios pop
-  - Larger radios (20px) with thick borders and visible inner dot on checked
-  - Zebra striping for improved readability, high-contrast text for names/headers
-  - Dark mode overrides for borders and checked dot color
-- Suggested dates panel:
-  - Derived from course metadata (duration_weeks/start_date or slot.day_of_week/practice_date)
-  - One-click create persisted `class_session`, auto-select, render roster
-- Persisted sessions prioritized:
-  - Persisted sessions listed; suggested dates shown beneath (filtered to non-persisted)
-- Cache-busting:
-  - `admin-styles.css?v=7`, `admin.js?v=17` to avoid stale production assets
-
-### Backend (APIs/Data)
-- Attendance tables:
-  - `class_sessions`, `attendance_records` with `UNIQUE(session_id, student_id)`
-- Endpoints:
-  - `GET /api/admin/courses/:courseId/sessions`
-  - `POST /api/admin/courses/:courseId/sessions`
-  - `GET /api/admin/sessions/:sessionId/attendance`
-  - `POST /api/admin/sessions/:sessionId/attendance`
-  - Roster source: `GET /api/admin/registrations?course_id=&payment_status=completed`
-
-### Deployment
-- Commit `a450d07` — Attendance UI visibility: strengthen contrast for student names and radio columns; add gridlines and column tint; increase radio size; cache-bust admin-styles.css to v=7
-
-### Acceptance Criteria (Met)
-- Opening Manage Attendance with a course filter loads only paid registrations once a session is selected
-- Individual radios visible and functional per student; bulk actions work; Save persists to DB
-- Suggested date → creates session → auto-selects → renders paid roster
-- Persisted sessions remain listed above suggested dates
-
-### Next Follow-ups
-- Attendance summary (per-session counts and series completion %)
-- Attendance export (CSV) for session/series
-- Auto-select heuristic improvement (nearest upcoming or most recent)
-- Mobile ergonomics (sticky bulk bar, larger tap targets)
-
----
-
-## NEW: Drop-in Class & Student Access Control Planning (2025-09-17 Evening)
-
-### Planning Session Completed
-- ✅ **Comprehensive System Design for Drop-in Classes & Student Access Control**
-  - **Problem**: Need to schedule drop-in classes open to all students while maintaining crew practice access control
-  - **Solution**: Email-based recognition system with admin-controlled student classification
-  - **Planning Status**: Complete - ready for implementation across 4 phases
-
-### Key Planned Features
-
-#### Student Access Control System
-- **Email-based Recognition**: Students enter email first → system recognizes and filters available courses
-- **Student Classification**: `'general'` (drop-in only) vs `'crew_member'` (all access)  
-- **Admin Control**: Built-in interface to classify students, review existing crew members
-- **Automatic Migration**: Existing crew practice registrants auto-identified for admin approval
-
-#### Enhanced Student Profile System
-- **First-time Students**: Email → Profile Creation (Name, Instagram, Dance Experience) → Admin Classification
-- **Returning Students**: Email → Auto-recognition → Pre-filled Registration Forms
-- **Admin Notifications**: New students automatically appear in "Pending Classification" panel
-
-#### Drop-in Class Specifications  
-- **Course Type**: New `'drop_in'` type alongside existing `'crew_practice'` and series
-- **Scheduling**: Single `class_date` (reusing existing `practice_date` field)
-- **Slots**: Single slot only (like crew practice)
-- **Pricing**: Per-class only (no full course option)
-- **Branding**: Custom drop-in branding (distinct from DDC and regular GouMo)
-- **Access**: Open to all students (`required_student_type = 'any'`)
-
-#### Course Type Feature Matrix
-| Feature | Multi-Week Series | Crew Practice | Drop-In Class (NEW) |
-|---------|------------------|---------------|---------------------|
-| **Access** | Open to All | Crew Members Only | Open to All |
-| **Scheduling** | Weekly recurring | Single `practice_date` | Single `class_date` |
-| **Slots** | Multiple allowed | Single slot only | Single slot only |
-| **Pricing** | Full + Per-class | Full + Per-class | Per-class only |
-| **Branding** | GouMo | DDC logos | Custom drop-in |
-
-### Implementation Roadmap (4 Phases)
-
-**Phase 1: Student Profile System**
-- Database schema updates (`student_type`, `profile_complete`, `admin_classified`)
-- Email-based profile lookup API
-- Profile creation flow for new students
-- Admin student management interface
-
-**Phase 2: Access Control System**  
-- Student classification system
-- Course access filtering by `student_type`
-- Admin interface for student classification and review
-- Migration tools for existing crew members
-
-**Phase 3: Drop-In Class Support**
-- New `'drop_in'` course type
-- Single date scheduling system
-- Per-class pricing constraints
-- Custom branding system
-- Admin course creation updates
-
-**Phase 4: Enhanced Registration Flow**
-- Auto-populated forms for returning students
-- Course filtering by student eligibility  
-- Streamlined UX for all scenarios
-- Testing and refinement
-
-### Next Priority
-Ready to begin Phase 1 implementation: Student Profile System and Database Schema Updates.
-
-Last updated: 2025-09-17

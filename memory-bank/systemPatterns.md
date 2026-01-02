@@ -368,3 +368,296 @@ Admin Dashboard (admin.html)
   - `css/admin-styles.css?v=10`
   - `js/admin.js?v=19`
 - Pattern: bump version query params when making CSS/JS changes that affect production UI to ensure immediate rollout.
+
+---
+
+## Student Portal Registration Status Patterns (Sept 2025)
+
+### API Data Consistency Pattern (2025-09-30)
+**Problem**: Different API endpoints (`/api/courses` vs `/api/check-student-profile`) returned inconsistent data structures, causing UI inconsistencies where registration status wasn't shown consistently.
+
+**Solution Pattern**: Standardize registration status data across all course-related API endpoints.
+```javascript
+// Pattern: Consistent course object structure across all endpoints
+const courseWithStatus = {
+    id: course.id,
+    name: course.name,
+    // ... other course fields
+    registration_status: 'registered_completed' | 'registered_pending' | 'not_registered',
+    registration_id: registrationId || null,
+    payment_status: paymentStatus || null
+};
+```
+
+**Implementation**:
+- Both `/api/courses` and `/api/check-student-profile` now include identical registration status data
+- Status lookup performed server-side via JOIN queries for data consistency
+- Prevents client-side data inconsistencies and reduces API calls
+
+### Registration Status Visual State Pattern
+**Pattern**: Visual indicators that reflect backend registration state without requiring additional API calls.
+
+```css
+.registration-status-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.registration-status-badge.registered {
+    background: rgba(40, 167, 69, 0.1);
+    color: #28a745;
+    border: 1px solid rgba(40, 167, 69, 0.3);
+}
+```
+
+**Implementation**:
+- Course cards show registration status badges based on server-provided data
+- Button states (disabled/enabled) reflect registration status
+- Status badges persist across navigation and page refreshes
+
+### Student Session Preservation Pattern (2025-09-30)
+**Problem**: "Register Another Class" button didn't preserve student session data, forcing users to re-enter profile information.
+
+**Solution Pattern**: Event handler management with session state preservation.
+```javascript
+// Pattern: Session-preserving navigation
+resetRegistration() {
+    // Clear form state
+    this.selectedCourse = null;
+    this.selectedDropIn = null;
+    this.registrationData = {};
+    
+    // Preserve student session data
+    const studentEmail = this.studentData?.email;
+    
+    // Reload with preserved session
+    if (studentEmail) {
+        this.checkStudentProfile(); // Maintain student context
+    } else {
+        this.loadCourses(); // Guest flow
+    }
+}
+```
+
+**Key Benefits**:
+- Maintains student context across multiple registrations
+- Prevents data re-entry for existing students
+- Seamless multi-course registration experience
+
+### Event Handler Lifecycle Management
+**Pattern**: Proper event listener attachment and cleanup for dynamic UI elements.
+
+```javascript
+setupEventListeners() {
+    // Clear any existing listeners before adding new ones
+    const registerAnother = document.getElementById('registerAnother');
+    if (registerAnother) {
+        registerAnother.addEventListener('click', () => {
+            this.resetRegistration();
+        });
+    }
+}
+```
+
+**Implementation Guidelines**:
+- Always check for element existence before attaching listeners
+- Use named functions for easier debugging
+- Consider cleanup for dynamic elements to prevent memory leaks
+- Attach listeners after DOM elements are confirmed to exist
+
+### Progressive Data Enrichment Pattern
+**Pattern**: Server-side API responses progressively include more context based on request parameters.
+
+```javascript
+// Pattern: Context-aware API responses
+if (studentEmail) {
+    // Include registration status when student context is available
+    const registrationQuery = `
+        SELECT r.id as registration_id, r.payment_status 
+        FROM registrations r 
+        WHERE r.student_id = ? AND r.course_id = ?
+    `;
+    course.registration_status = registrationData ? 
+        (registrationData.payment_status === 'completed' ? 'registered_completed' : 'registered_pending') :
+        'not_registered';
+}
+```
+
+**Benefits**:
+- Single API call provides all necessary context
+- Reduces frontend complexity and API round-trips
+- Enables consistent UI state across different entry points
+
+### Registration Status State Management
+**Implementation Pattern**: Server-driven state with client-side rendering based on status flags.
+
+```javascript
+// Pattern: Status-driven UI rendering
+const isRegistered = registrationStatus === 'registered_completed';
+const isPending = registrationStatus === 'registered_pending';
+
+// Render based on status
+button.disabled = availableSpots <= 0 || isRegistered;
+button.textContent = isRegistered ? 'Already Registered' : 
+                    isPending ? 'Payment Pending' : 
+                    availableSpots > 0 ? 'Register Now' : 'Course Full';
+```
+
+**Key Principles**:
+- Server provides authoritative status data
+- Client renders UI based on status flags
+- Status changes trigger immediate visual updates
+- Consistent status representation across all UI components
+### Cache Busting and Staleness Prevention
+- `public/admin.html` references:
+  - `css/admin-styles.css?v=10`
+  - `js/admin.js?v=19`
+- Pattern: bump version query params when making CSS/JS changes that affect production UI to ensure immediate rollout.
+
+---
+
+## Student Portal Registration Status Patterns (Sept 2025)
+
+### API Data Consistency Pattern (2025-09-30)
+**Problem**: Different API endpoints (`/api/courses` vs `/api/check-student-profile`) returned inconsistent data structures, causing UI inconsistencies where registration status wasn't shown consistently.
+
+**Solution Pattern**: Standardize registration status data across all course-related API endpoints.
+```javascript
+// Pattern: Consistent course object structure across all endpoints
+const courseWithStatus = {
+    id: course.id,
+    name: course.name,
+    // ... other course fields
+    registration_status: 'registered_completed' | 'registered_pending' | 'not_registered',
+    registration_id: registrationId || null,
+    payment_status: paymentStatus || null
+};
+```
+
+**Implementation**:
+- Both `/api/courses` and `/api/check-student-profile` now include identical registration status data
+- Status lookup performed server-side via JOIN queries for data consistency
+- Prevents client-side data inconsistencies and reduces API calls
+
+### Registration Status Visual State Pattern
+**Pattern**: Visual indicators that reflect backend registration state without requiring additional API calls.
+
+```css
+.registration-status-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.registration-status-badge.registered {
+    background: rgba(40, 167, 69, 0.1);
+    color: #28a745;
+    border: 1px solid rgba(40, 167, 69, 0.3);
+}
+```
+
+**Implementation**:
+- Course cards show registration status badges based on server-provided data
+- Button states (disabled/enabled) reflect registration status
+- Status badges persist across navigation and page refreshes
+
+### Student Session Preservation Pattern (2025-09-30)
+**Problem**: "Register Another Class" button didn't preserve student session data, forcing users to re-enter profile information.
+
+**Solution Pattern**: Event handler management with session state preservation.
+```javascript
+// Pattern: Session-preserving navigation
+resetRegistration() {
+    // Clear form state
+    this.selectedCourse = null;
+    this.selectedDropIn = null;
+    this.registrationData = {};
+    
+    // Preserve student session data
+    const studentEmail = this.studentData?.email;
+    
+    // Reload with preserved session
+    if (studentEmail) {
+        this.checkStudentProfile(); // Maintain student context
+    } else {
+        this.loadCourses(); // Guest flow
+    }
+}
+```
+
+**Key Benefits**:
+- Maintains student context across multiple registrations
+- Prevents data re-entry for existing students
+- Seamless multi-course registration experience
+
+### Event Handler Lifecycle Management
+**Pattern**: Proper event listener attachment and cleanup for dynamic UI elements.
+
+```javascript
+setupEventListeners() {
+    // Clear any existing listeners before adding new ones
+    const registerAnother = document.getElementById('registerAnother');
+    if (registerAnother) {
+        registerAnother.addEventListener('click', () => {
+            this.resetRegistration();
+        });
+    }
+}
+```
+
+**Implementation Guidelines**:
+- Always check for element existence before attaching listeners
+- Use named functions for easier debugging
+- Consider cleanup for dynamic elements to prevent memory leaks
+- Attach listeners after DOM elements are confirmed to exist
+
+### Progressive Data Enrichment Pattern
+**Pattern**: Server-side API responses progressively include more context based on request parameters.
+
+```javascript
+// Pattern: Context-aware API responses
+if (studentEmail) {
+    // Include registration status when student context is available
+    const registrationQuery = `
+        SELECT r.id as registration_id, r.payment_status 
+        FROM registrations r 
+        WHERE r.student_id = ? AND r.course_id = ?
+    `;
+    course.registration_status = registrationData ? 
+        (registrationData.payment_status === 'completed' ? 'registered_completed' : 'registered_pending') :
+        'not_registered';
+}
+```
+
+**Benefits**:
+- Single API call provides all necessary context
+- Reduces frontend complexity and API round-trips
+- Enables consistent UI state across different entry points
+
+### Registration Status State Management
+**Implementation Pattern**: Server-driven state with client-side rendering based on status flags.
+
+```javascript
+// Pattern: Status-driven UI rendering
+const isRegistered = registrationStatus === 'registered_completed';
+const isPending = registrationStatus === 'registered_pending';
+
+// Render based on status
+button.disabled = availableSpots <= 0 || isRegistered;
+button.textContent = isRegistered ? 'Already Registered' : 
+                    isPending ? 'Payment Pending' : 
+                    availableSpots > 0 ? 'Register Now' : 'Course Full';
+```
+
+**Key Principles**:
+- Server provides authoritative status data
+- Client renders UI based on status flags
+- Status changes trigger immediate visual updates
+- Consistent status representation across all UI components

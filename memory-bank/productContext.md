@@ -22,9 +22,14 @@ Dance instructors face significant challenges managing class registrations:
 ### Student Experience
 1. **Discovery**: Receive WhatsApp link or QR code from instructor
 2. **Browse**: View available courses with clear descriptions and pricing
+   - **Registration Status**: Visual badges show if already registered or payment pending
+   - **Smart Filtering**: Course cards clearly indicate registration status to prevent duplicate registrations
 3. **Register**: Complete mobile-optimized registration form
 4. **Pay**: Secure payment via PayPal or Venmo (link/QR handoff)
 5. **Confirm**: Receive immediate email confirmation with class details
+6. **Multi-Course Registration**: Easy "Register Another Class" flow with preserved student data
+   - Student profile data automatically carried forward for additional registrations
+   - Registration status badges persist across sessions for informed course selection
 
 ### Instructor Experience
 1. **Setup**: Create courses with flexible scheduling and pricing (slot-based schedule, per-slot pricing)
