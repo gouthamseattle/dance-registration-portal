@@ -4629,13 +4629,13 @@ app.post('/api/admin/setup-january-2026', async (req, res) => {
         
         // 1. Create Level 1 House series
         console.log('🏠 Creating Level 1 House series...');
-        const level1Result = await dbConfig.query(`
+        const level1Result = await dbConfig.run(`
             INSERT INTO courses (
                 name, description, course_type, duration_weeks,
                 start_date, end_date, instructor, schedule_info,
                 is_active, required_student_type
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-            RETURNING id
+            ${dbConfig.isProduction ? 'RETURNING id' : ''}
         `, [
             'Level 1 House - January 2026',
             'Level 1 House classes with beginner-friendly choreography and technique. Includes special combined class in week 4.',
@@ -4649,7 +4649,7 @@ app.post('/api/admin/setup-january-2026', async (req, res) => {
             'any'
         ]);
         
-        const level1Id = level1Result.rows[0].id;
+        const level1Id = dbConfig.isProduction ? level1Result[0]?.id : level1Result.lastID;
         console.log(`✅ Created Level 1 course (ID: ${level1Id})`);
         
         // Create Level 1 slots (weeks 1-3 regular, week 4 extended)
@@ -4659,27 +4659,27 @@ app.post('/api/admin/setup-january-2026', async (req, res) => {
             const endTime = isWeek4 ? '9:00 PM' : '7:30 PM';
             const slotName = isWeek4 ? 'Level 1 & 2 Combined Session' : `Week ${i + 1}`;
             
-            const slotResult = await dbConfig.query(`
+            const slotResult = await dbConfig.run(`
                 INSERT INTO course_slots (
                     course_id, slot_name, difficulty_level, capacity,
                     day_of_week, start_time, end_time, location
                 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-                RETURNING id
+                ${dbConfig.isProduction ? 'RETURNING id' : ''}
             `, [
                 level1Id, slotName, 'Level 1', capacity,
                 'Tuesday', startTime, endTime, location
             ]);
             
-            const slotId = slotResult.rows[0].id;
+            const slotId = dbConfig.isProduction ? slotResult[0]?.id : slotResult.lastID;
             
             // Add pricing
-            await dbConfig.query(`
+            await dbConfig.run(`
                 INSERT INTO course_pricing (course_slot_id, pricing_type, price)
                 VALUES ($1, 'full_package', $2)
             `, [slotId, 80]);
             
             if (!isWeek4) {
-                await dbConfig.query(`
+                await dbConfig.run(`
                     INSERT INTO course_pricing (course_slot_id, pricing_type, price)
                     VALUES ($1, 'drop_in', $2)
                 `, [slotId, 25]);
@@ -4688,13 +4688,13 @@ app.post('/api/admin/setup-january-2026', async (req, res) => {
         
         // 2. Create Level 2 House series  
         console.log('🏠 Creating Level 2 House series...');
-        const level2Result = await dbConfig.query(`
+        const level2Result = await dbConfig.run(`
             INSERT INTO courses (
                 name, description, course_type, duration_weeks,
                 start_date, end_date, instructor, schedule_info,
                 is_active, required_student_type
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-            RETURNING id
+            ${dbConfig.isProduction ? 'RETURNING id' : ''}
         `, [
             'Level 2 House - January 2026',
             'Level 2 House classes with intermediate choreography and technique. Includes special combined class in week 4.',
@@ -4708,7 +4708,7 @@ app.post('/api/admin/setup-january-2026', async (req, res) => {
             'any'
         ]);
         
-        const level2Id = level2Result.rows[0].id;
+        const level2Id = dbConfig.isProduction ? level2Result[0]?.id : level2Result.lastID;
         console.log(`✅ Created Level 2 course (ID: ${level2Id})`);
         
         // Create Level 2 slots (weeks 1-3 regular, week 4 extended)
