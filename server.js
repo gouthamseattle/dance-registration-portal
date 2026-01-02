@@ -556,11 +556,589 @@ app.get('/api/courses', asyncHandler(async (req, res) => {
     res.json(coursesWithSlots);
 }));
 
-// Drop-in classes endpoint (returns empty array for now)
+// Drop-in classes endpoint (returns courses marked as drop_in with week filtering)
 app.get('/api/drop-in-classes', asyncHandler(async (req, res) => {
-    // For now, return empty array since drop-in classes aren't implemented yet
-    // This prevents the 404 error on the frontend
-    res.json([]);
+    const { student_email } = req.query;
+    
+    // Get drop-in courses that are active
+    let query = `
+        SELECT c.*,
+               COUNT(DISTINCT r.id) as registration_count
+        FROM courses c
+        LEFT JOIN registrations r ON c.id = r.course_id AND r.payment_status = 'completed'
+        WHERE c.is_active = ${dbConfig.isProduction ? 'true' : '1'}
+        AND c.course_type = 'drop_in'
+    `;
+    
+    // If student_email is provided, check access permissions
+    let studentType = 'general';
+    if (student_email) {
+        try {
+            const student = await dbConfig.get('SELECT student_type FROM students WHERE email = $1', [student_email]);
+            if (student) {
+                studentType = student.student_type || 'general';
+            }
+        } catch (error) {
+            console.warn('Error fetching student type for drop-in access:', error);
+        }
+    }
+    
+    // Filter by student access level
+    if (studentType === 'crew_member') {
+        query += ' AND (c.required_student_type = \'any\' OR c.required_student_type = \'crew_member\')';
+    } else {
+        query += ' AND c.required_student_type = \'any\'';
+    }
+    
+    query += ' GROUP BY c.id ORDER BY c.created_at ASC';
+    
+    const courses = await dbConfig.all(query);
+    
+    // Get slots and pricing for each course, filtering out week 4
+    const coursesWithSlots = await Promise.all(courses.map(async (course) => {
+        const slots = await dbConfig.all(`
+            SELECT cs.*, 
+                   COUNT(DISTINCT r.id) as slot_registration_count,
+                   (cs.capacity - COUNT(DISTINCT r.id)) as available_spots
+            FROM course_slots cs
+            LEFT JOIN registrations r ON cs.course_id = r.course_id AND r.payment_status = 'completed'
+            WHERE cs.course_id = $1
+            GROUP BY cs.id
+            ORDER BY cs.created_at ASC
+        `, [course.id]);
+        
+        // Filter out week 4 by checking practice_date (should be weeks 1-3 only)
+        // Assuming week 4 starts on 2026-01-27, filter out that date and later
+        const week4Date = '2026-01-27';
+        const filteredSlots = slots.filter(slot => {
+            if (!slot.practice_date) return true; // Include if no practice_date
+            return slot.practice_date < week4Date; // Only weeks 1-3
+        });
+        
+        // Get pricing for filtered slots
+        const slotsWithPricing = await Promise.all(filteredSlots.map(async (slot) => {
+            const pricing = await dbConfig.all(`
+                SELECT pricing_type, price 
+                FROM course_pricing 
+                WHERE course_slot_id = $1
+            `, [slot.id]);
+            
+            const pricingObj = {};
+            pricing.forEach(p => {
+                pricingObj[p.pricing_type] = parseFloat(p.price);
+            });
+            
+            return {
+                ...slot,
+                pricing: pricingObj
+            };
+        }));
+        
+        // Only return courses that have valid weeks 1-3 slots
+        if (slotsWithPricing.length === 0) return null;
+        
+        // Calculate totals
+        const totalCapacity = slotsWithPricing.reduce((sum, slot) => sum + (slot.capacity || 0), 0);
+        const totalAvailableSpots = slotsWithPricing.reduce((sum, slot) => sum + (Number(slot.available_spots) || 0), 0);
+        
+        // Build computed schedule_info
+        let computedScheduleInfo = '';
+        const scheduleItems = slotsWithPricing.map(s => {
+            const parts = [];
+            if (s.practice_date) {
+                const dateStr = formatLocalDate(s.practice_date);
+                parts.push(dateStr);
+            } else if (s.day_of_week) {
+                parts.push(`${s.day_of_week}s`);
+            }
+            const st = s.start_time;
+            const et = s.end_time;
+            if (st && et) {
+                parts.push(`${st} - ${et}`);
+            } else if (st) {
+                parts.push(st);
+            }
+            if (s.location) parts.push(`at ${s.location}`);
+            return parts.join(' ');
+        }).filter(Boolean);
+
+        if (scheduleItems.length > 0) {
+            computedScheduleInfo = scheduleItems.join(' | ');
+        } else {
+            computedScheduleInfo = course.schedule_info || '';
+        }
+
+        return {
+            ...course,
+            slots: slotsWithPricing,
+            capacity: totalCapacity,
+            available_spots: totalAvailableSpots,
+            schedule_info: computedScheduleInfo,
+            // Backward compatibility fields
+            full_course_price: slotsWithPricing[0]?.pricing?.full_package || 0,
+            per_class_price: slotsWithPricing[0]?.pricing?.drop_in || 30 // Default $30 for drop-ins
+        };
+    }));
+    
+    // Filter out null courses (no valid slots)
+    const validCourses = coursesWithSlots.filter(course => course !== null);
+    
+    res.json(validCourses);
+}));
+
+// Register drop-in bundle endpoint
+app.post('/api/register-dropin-bundle', asyncHandler(async (req, res) => {
+    const {
+        first_name, last_name, email, phone, date_of_birth,
+        emergency_contact_name, emergency_contact_phone, medical_conditions,
+        dance_experience, instagram_handle, instagram_id, how_heard_about_us,
+        course_ids, // Array of course IDs for the bundle
+        total_amount, special_requests
+    } = req.body;
+    
+    // Handle both instagram_handle and instagram_id field names
+    const instagram = instagram_handle || instagram_id;
+
+    // Derive names from student_name if provided
+    let effectiveFirstName = first_name;
+    let effectiveLastName = last_name;
+    if ((!effectiveFirstName && !effectiveLastName) && req.body.student_name) {
+        const parts = String(req.body.student_name).trim().split(/\s+/);
+        effectiveFirstName = parts.shift() || 'Student';
+        effectiveLastName = parts.join(' ') || '';
+    }
+    
+    if (!email || !course_ids || !Array.isArray(course_ids) || course_ids.length === 0 || !total_amount) {
+        return res.status(400).json({ error: 'Required fields missing: email, course_ids array, and total_amount are required' });
+    }
+    
+    // Validate course_ids array (1-3 classes)
+    if (course_ids.length > 3) {
+        return res.status(400).json({ error: 'Maximum 3 classes allowed in drop-in bundle' });
+    }
+    
+    // Check if registration is open
+    const settings = await dbConfig.get('SELECT setting_value FROM system_settings WHERE setting_key = $1', ['registration_open']);
+    if (settings && settings.setting_value !== 'true') {
+        return res.status(400).json({ error: 'Registration is currently closed' });
+    }
+    
+    // Verify all courses exist, are active drop-in courses, and enforce week 4 gating
+    const week4Date = '2026-01-27';
+    for (const courseId of course_ids) {
+        const courseCheck = await dbConfig.get(`
+            SELECT c.id, c.name, c.course_type
+            FROM courses c
+            WHERE c.id = $1 AND c.is_active = ${dbConfig.isProduction ? 'true' : '1'}
+            AND c.course_type = 'drop_in'
+        `, [courseId]);
+
+        if (!courseCheck) {
+            return res.status(400).json({ error: `Course ${courseId} not found, inactive, or not a drop-in course` });
+        }
+        
+        // Check for week 4 violation (hard block)
+        const slot = await dbConfig.get(`
+            SELECT practice_date FROM course_slots 
+            WHERE course_id = $1 AND practice_date >= $2 
+            LIMIT 1
+        `, [courseId, week4Date]);
+        
+        if (slot) {
+            return res.status(400).json({ 
+                error: 'Week 4 drop-ins are not available. Please select from weeks 1-3 only.',
+                week_4_blocked: true
+            });
+        }
+    }
+    
+    // Validate single track constraint (all courses should have same time block)
+    // Get the first course's time block to use as reference
+    const firstCourse = await dbConfig.get(`
+        SELECT cs.start_time, cs.end_time
+        FROM course_slots cs
+        WHERE cs.course_id = $1
+        ORDER BY cs.created_at ASC
+        LIMIT 1
+    `, [course_ids[0]]);
+    
+    if (firstCourse && course_ids.length > 1) {
+        // Check that all other courses have the same time block
+        for (let i = 1; i < course_ids.length; i++) {
+            const otherCourse = await dbConfig.get(`
+                SELECT cs.start_time, cs.end_time
+                FROM course_slots cs
+                WHERE cs.course_id = $1
+                ORDER BY cs.created_at ASC
+                LIMIT 1
+            `, [course_ids[i]]);
+            
+            if (!otherCourse || 
+                otherCourse.start_time !== firstCourse.start_time || 
+                otherCourse.end_time !== firstCourse.end_time) {
+                return res.status(400).json({ 
+                    error: 'All selected classes must be from the same level (same time block). Choose either Level 1 OR Level 2 classes.',
+                    mixed_levels_not_allowed: true
+                });
+            }
+        }
+    }
+    
+    // Check capacity for all courses
+    for (const courseId of course_ids) {
+        const capacityCheck = await dbConfig.get(`
+            SELECT
+              c.id,
+              c.name,
+              (
+                SELECT COALESCE(SUM(cs.capacity), 0)
+                FROM course_slots cs
+                WHERE cs.course_id = c.id
+              ) AS total_capacity,
+              (
+                SELECT COUNT(*)
+                FROM registrations r
+                WHERE r.course_id = c.id
+                  AND r.payment_status = 'completed'
+              ) AS current_registrations
+            FROM courses c
+            WHERE c.id = $1
+        `, [courseId]);
+
+        const totalCapacityNum = Number(capacityCheck?.total_capacity) || 0;
+        const currentRegistrationsNum = Number(capacityCheck?.current_registrations) || 0;
+        
+        if (currentRegistrationsNum >= totalCapacityNum) {
+            return res.status(400).json({ 
+                error: `Class "${capacityCheck?.name}" is full`,
+                course_full: true,
+                course_name: capacityCheck?.name,
+                course_id: courseId
+            });
+        }
+    }
+    
+    // Create or update student
+    let student = await dbConfig.get('SELECT * FROM students WHERE email = $1', [email]);
+    
+    if (student) {
+        await dbConfig.run(`
+            UPDATE students SET 
+                first_name = $1, last_name = $2, phone = $3, date_of_birth = $4,
+                emergency_contact_name = $5, emergency_contact_phone = $6, 
+                medical_conditions = $7, dance_experience = $8, instagram_handle = $9,
+                how_heard_about_us = $10, updated_at = CURRENT_TIMESTAMP 
+            WHERE id = $11
+        `, [
+            effectiveFirstName || 'Student', effectiveLastName || '', phone, date_of_birth,
+            emergency_contact_name, emergency_contact_phone, medical_conditions,
+            dance_experience, instagram, how_heard_about_us, student.id
+        ]);
+    } else {
+        const result = await dbConfig.run(`
+            INSERT INTO students (
+                first_name, last_name, email, phone, date_of_birth,
+                emergency_contact_name, emergency_contact_phone, medical_conditions,
+                dance_experience, instagram_handle, how_heard_about_us
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            ${dbConfig.isProduction ? 'RETURNING id' : ''}
+        `, [
+            effectiveFirstName || 'Student', effectiveLastName || '', email, phone, date_of_birth,
+            emergency_contact_name, emergency_contact_phone, medical_conditions,
+            dance_experience, instagram, how_heard_about_us
+        ]);
+        let newStudentId;
+        if (dbConfig.isProduction) {
+            newStudentId = result[0]?.id;
+        } else {
+            newStudentId = result.lastID;
+        }
+        student = { id: newStudentId, email, first_name: effectiveFirstName || 'Student', last_name: effectiveLastName || '' };
+    }
+    
+    // Create registrations for each course in the bundle
+    const registrationIds = [];
+    const perClassAmount = Math.round((total_amount / course_ids.length) * 100) / 100; // Round to 2 decimals
+    
+    for (const courseId of course_ids) {
+        // Check for existing registrations to avoid duplicates
+        const existingCompleted = await dbConfig.get(
+            'SELECT id FROM registrations WHERE student_id = $1 AND course_id = $2 AND payment_status = \'completed\' LIMIT 1',
+            [student.id, courseId]
+        );
+        if (existingCompleted) {
+            return res.status(400).json({ 
+                error: `You are already registered for one of the selected classes`,
+                duplicate_registration: true
+            });
+        }
+        
+        const existingPending = await dbConfig.get(
+            'SELECT id FROM registrations WHERE student_id = $1 AND course_id = $2 AND payment_status = \'pending\' ORDER BY registration_date DESC LIMIT 1',
+            [student.id, courseId]
+        );
+        
+        if (existingPending) {
+            registrationIds.push(existingPending.id);
+            continue; // Skip creating duplicate pending registration
+        }
+
+        // Create registration for this course
+        const registrationResult = await dbConfig.run(`
+            INSERT INTO registrations (
+                student_id, course_id, payment_amount, payment_status, special_requests, registration_type
+            ) VALUES ($1, $2, $3, 'pending', $4, 'drop_in_bundle')
+            ${dbConfig.isProduction ? 'RETURNING id' : ''}
+        `, [student.id, courseId, perClassAmount, special_requests]);
+        
+        let registrationId;
+        if (dbConfig.isProduction) {
+            registrationId = registrationResult[0]?.id;
+        } else {
+            registrationId = registrationResult.lastID;
+        }
+        
+        registrationIds.push(registrationId);
+    }
+    
+    console.log('📝 Drop-in bundle registrations created', { 
+        student_id: student.id, 
+        email, 
+        course_ids, 
+        registration_ids: registrationIds,
+        total_amount 
+    });
+    
+    res.json({ 
+        success: true, 
+        registrationIds: registrationIds,
+        studentId: student.id,
+        bundle_size: course_ids.length,
+        total_amount: total_amount,
+        per_class_amount: perClassAmount
+    });
+}));
+
+// Crew + House combo registration endpoint (crew members only)
+app.post('/api/register-crew-house-combo', asyncHandler(async (req, res) => {
+    const {
+        first_name, last_name, email, phone, date_of_birth,
+        emergency_contact_name, emergency_contact_phone, medical_conditions,
+        dance_experience, instagram_handle, instagram_id, how_heard_about_us,
+        house_course_ids, // Array of house course IDs (Level 1, Level 2, or both)
+        special_requests
+    } = req.body;
+    
+    // Handle both instagram_handle and instagram_id field names
+    const instagram = instagram_handle || instagram_id;
+
+    // Derive names from student_name if provided
+    let effectiveFirstName = first_name;
+    let effectiveLastName = last_name;
+    if ((!effectiveFirstName && !effectiveLastName) && req.body.student_name) {
+        const parts = String(req.body.student_name).trim().split(/\s+/);
+        effectiveFirstName = parts.shift() || 'Student';
+        effectiveLastName = parts.join(' ') || '';
+    }
+    
+    if (!email || !house_course_ids || !Array.isArray(house_course_ids) || house_course_ids.length === 0) {
+        return res.status(400).json({ error: 'Required fields missing: email and house_course_ids array are required' });
+    }
+    
+    // Check if registration is open
+    const settings = await dbConfig.get('SELECT setting_value FROM system_settings WHERE setting_key = $1', ['registration_open']);
+    if (settings && settings.setting_value !== 'true') {
+        return res.status(400).json({ error: 'Registration is currently closed' });
+    }
+    
+    // Verify student exists and is a crew member
+    let student = await dbConfig.get('SELECT * FROM students WHERE email = $1', [email]);
+    if (!student) {
+        return res.status(400).json({ 
+            error: 'Student profile not found. Crew + House combo is only available to existing crew members.',
+            requires_profile: true
+        });
+    }
+    
+    if (student.student_type !== 'crew_member') {
+        return res.status(400).json({ 
+            error: 'Crew + House combo is only available to crew members.',
+            access_denied: true,
+            current_student_type: student.student_type
+        });
+    }
+    
+    // Verify all house courses exist, are active, and are multi-week courses
+    for (const courseId of house_course_ids) {
+        const courseCheck = await dbConfig.get(`
+            SELECT c.id, c.name, c.course_type
+            FROM courses c
+            WHERE c.id = $1 AND c.is_active = ${dbConfig.isProduction ? 'true' : '1'}
+            AND c.course_type = 'multi-week'
+        `, [courseId]);
+
+        if (!courseCheck) {
+            return res.status(400).json({ error: `Course ${courseId} not found, inactive, or not a multi-week house course` });
+        }
+    }
+    
+    // Check capacity for all house courses
+    for (const courseId of house_course_ids) {
+        const capacityCheck = await dbConfig.get(`
+            SELECT
+              c.id,
+              c.name,
+              (
+                SELECT COALESCE(SUM(cs.capacity), 0)
+                FROM course_slots cs
+                WHERE cs.course_id = c.id
+              ) AS total_capacity,
+              (
+                SELECT COUNT(*)
+                FROM registrations r
+                WHERE r.course_id = c.id
+                  AND r.payment_status = 'completed'
+              ) AS current_registrations
+            FROM courses c
+            WHERE c.id = $1
+        `, [courseId]);
+
+        const totalCapacityNum = Number(capacityCheck?.total_capacity) || 0;
+        const currentRegistrationsNum = Number(capacityCheck?.current_registrations) || 0;
+        
+        if (currentRegistrationsNum >= totalCapacityNum) {
+            return res.status(400).json({ 
+                error: `House class "${capacityCheck?.name}" is full`,
+                course_full: true,
+                course_name: capacityCheck?.name,
+                course_id: courseId
+            });
+        }
+    }
+    
+    // Update student information
+    await dbConfig.run(`
+        UPDATE students SET 
+            first_name = $1, last_name = $2, phone = $3, date_of_birth = $4,
+            emergency_contact_name = $5, emergency_contact_phone = $6, 
+            medical_conditions = $7, dance_experience = $8, instagram_handle = $9,
+            how_heard_about_us = $10, updated_at = CURRENT_TIMESTAMP 
+        WHERE id = $11
+    `, [
+        effectiveFirstName || 'Student', effectiveLastName || '', phone, date_of_birth,
+        emergency_contact_name, emergency_contact_phone, medical_conditions,
+        dance_experience, instagram, how_heard_about_us, student.id
+    ]);
+    
+    // Create house course registrations
+    const registrationIds = [];
+    const totalAmount = 200; // Fixed price for crew+house combo
+    const perCourseAmount = Math.round((totalAmount / house_course_ids.length) * 100) / 100;
+    
+    for (const courseId of house_course_ids) {
+        // Check for existing registrations to avoid duplicates
+        const existingCompleted = await dbConfig.get(
+            'SELECT id FROM registrations WHERE student_id = $1 AND course_id = $2 AND payment_status = \'completed\' LIMIT 1',
+            [student.id, courseId]
+        );
+        if (existingCompleted) {
+            return res.status(400).json({ 
+                error: `You are already registered for one of the selected house classes`,
+                duplicate_registration: true
+            });
+        }
+        
+        const existingPending = await dbConfig.get(
+            'SELECT id FROM registrations WHERE student_id = $1 AND course_id = $2 AND payment_status = \'pending\' ORDER BY registration_date DESC LIMIT 1',
+            [student.id, courseId]
+        );
+        
+        if (existingPending) {
+            registrationIds.push(existingPending.id);
+            continue; // Skip creating duplicate pending registration
+        }
+
+        // Create house course registration
+        const registrationResult = await dbConfig.run(`
+            INSERT INTO registrations (
+                student_id, course_id, payment_amount, payment_status, special_requests, registration_type
+            ) VALUES ($1, $2, $3, 'pending', $4, 'crew_house_combo')
+            ${dbConfig.isProduction ? 'RETURNING id' : ''}
+        `, [student.id, courseId, perCourseAmount, special_requests]);
+        
+        let registrationId;
+        if (dbConfig.isProduction) {
+            registrationId = registrationResult[0]?.id;
+        } else {
+            registrationId = registrationResult.lastID;
+        }
+        
+        registrationIds.push(registrationId);
+    }
+    
+    // Create unlimited crew practice registrations for the 4-week window
+    // Get all active crew practice courses within the window (2026-01-06 to 2026-01-30)
+    const windowStart = '2026-01-06';
+    const windowEnd = '2026-01-30';
+    
+    const crewPracticeCourses = await dbConfig.all(`
+        SELECT c.id, c.name, cs.practice_date
+        FROM courses c
+        JOIN course_slots cs ON c.id = cs.course_id
+        WHERE c.is_active = ${dbConfig.isProduction ? 'true' : '1'}
+        AND c.course_type = 'crew_practice'
+        AND cs.practice_date >= $1 AND cs.practice_date <= $2
+        ORDER BY cs.practice_date ASC
+    `, [windowStart, windowEnd]);
+    
+    const crewRegistrationIds = [];
+    for (const crewCourse of crewPracticeCourses) {
+        // Check if already registered for this crew practice
+        const existingCrewReg = await dbConfig.get(
+            'SELECT id FROM registrations WHERE student_id = $1 AND course_id = $2 LIMIT 1',
+            [student.id, crewCourse.id]
+        );
+        
+        if (!existingCrewReg) {
+            // Create zero-dollar crew practice registration
+            const crewRegResult = await dbConfig.run(`
+                INSERT INTO registrations (
+                    student_id, course_id, payment_amount, payment_status, special_requests, registration_type
+                ) VALUES ($1, $2, 0, 'completed', $3, 'crew_unlimited')
+                ${dbConfig.isProduction ? 'RETURNING id' : ''}
+            `, [student.id, crewCourse.id, 'Unlimited crew practice via Crew+House combo']);
+            
+            let crewRegId;
+            if (dbConfig.isProduction) {
+                crewRegId = crewRegResult[0]?.id;
+            } else {
+                crewRegId = crewRegResult.lastID;
+            }
+            
+            crewRegistrationIds.push(crewRegId);
+        }
+    }
+    
+    console.log('📝 Crew + House combo registrations created', { 
+        student_id: student.id, 
+        email, 
+        house_course_ids, 
+        house_registration_ids: registrationIds,
+        crew_registration_ids: crewRegistrationIds,
+        total_amount: totalAmount,
+        crew_practices_included: crewPracticeCourses.length
+    });
+    
+    res.json({ 
+        success: true, 
+        registrationIds: registrationIds,
+        crewRegistrationIds: crewRegistrationIds,
+        studentId: student.id,
+        house_courses_count: house_course_ids.length,
+        crew_practices_count: crewPracticeCourses.length,
+        total_amount: totalAmount,
+        per_house_course_amount: perCourseAmount
+    });
 }));
 
 app.post('/api/courses', requireAuth, asyncHandler(async (req, res) => {
