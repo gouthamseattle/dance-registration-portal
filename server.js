@@ -4614,7 +4614,7 @@ app.post('/api/test/make-course-available', asyncHandler(async (req, res) => {
 }));
 
 // Production setup endpoints for January 2026 session
-app.post('/admin/setup-january-2026', async (req, res) => {
+app.post('/api/admin/setup-january-2026', async (req, res) => {
     try {
         console.log('🎭 Setting up January 2026 Dance Session in production...');
         
@@ -4910,7 +4910,7 @@ app.post('/admin/setup-january-2026', async (req, res) => {
 });
 
 // Create the test profiles endpoint
-app.post('/admin/create-test-profiles', async (req, res) => {
+app.post('/api/admin/create-test-profiles', async (req, res) => {
     try {
         // Test profile 1: Crew Member
         const crewMemberEmail = 'crew.test@example.com';
