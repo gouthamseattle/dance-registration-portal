@@ -4718,27 +4718,27 @@ app.post('/api/admin/setup-january-2026', async (req, res) => {
             const endTime = isWeek4 ? '9:00 PM' : '9:00 PM';
             const slotName = isWeek4 ? 'Level 1 & 2 Combined Session' : `Week ${i + 1}`;
             
-            const slotResult = await dbConfig.query(`
+            const slotResult = await dbConfig.run(`
                 INSERT INTO course_slots (
                     course_id, slot_name, difficulty_level, capacity,
                     day_of_week, start_time, end_time, location
                 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-                RETURNING id
+                ${dbConfig.isProduction ? 'RETURNING id' : ''}
             `, [
                 level2Id, slotName, 'Level 2', capacity,
                 'Tuesday', startTime, endTime, location
             ]);
             
-            const slotId = slotResult.rows[0].id;
+            const slotId = dbConfig.isProduction ? slotResult[0]?.id : slotResult.lastID;
             
             // Add pricing
-            await dbConfig.query(`
+            await dbConfig.run(`
                 INSERT INTO course_pricing (course_slot_id, pricing_type, price)
                 VALUES ($1, 'full_package', $2)
             `, [slotId, 100]);
             
             if (!isWeek4) {
-                await dbConfig.query(`
+                await dbConfig.run(`
                     INSERT INTO course_pricing (course_slot_id, pricing_type, price)
                     VALUES ($1, 'drop_in', $2)
                 `, [slotId, 30]);
@@ -4750,13 +4750,13 @@ app.post('/api/admin/setup-january-2026', async (req, res) => {
         for (let i = 0; i < fridays.length; i++) {
             const practiceDate = fridays[i];
             
-            const crewResult = await dbConfig.query(`
+            const crewResult = await dbConfig.run(`
                 INSERT INTO courses (
                     name, description, course_type, duration_weeks,
                     start_date, end_date, instructor, schedule_info,
                     is_active, required_student_type
                 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-                RETURNING id
+                ${dbConfig.isProduction ? 'RETURNING id' : ''}
             `, [
                 `Crew Practice - ${practiceDate}`,
                 'Crew practice session for advanced dancers and crew members.',
@@ -4770,24 +4770,24 @@ app.post('/api/admin/setup-january-2026', async (req, res) => {
                 'crew_member'
             ]);
             
-            const crewId = crewResult.rows[0].id;
+            const crewId = dbConfig.isProduction ? crewResult[0]?.id : crewResult.lastID;
             
             // Create crew practice slot
-            const crewSlotResult = await dbConfig.query(`
+            const crewSlotResult = await dbConfig.run(`
                 INSERT INTO course_slots (
                     course_id, slot_name, difficulty_level, capacity,
                     practice_date, start_time, end_time, location
                 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-                RETURNING id
+                ${dbConfig.isProduction ? 'RETURNING id' : ''}
             `, [
                 crewId, 'Crew Practice', 'Advanced', capacity,
                 practiceDate, '6:30 PM', '10:30 PM', location
             ]);
             
-            const crewSlotId = crewSlotResult.rows[0].id;
+            const crewSlotId = dbConfig.isProduction ? crewSlotResult[0]?.id : crewSlotResult.lastID;
             
             // Add crew practice pricing
-            await dbConfig.query(`
+            await dbConfig.run(`
                 INSERT INTO course_pricing (course_slot_id, pricing_type, price)
                 VALUES ($1, 'drop_in', $2)
             `, [crewSlotId, 30]);
@@ -4804,13 +4804,13 @@ app.post('/api/admin/setup-january-2026', async (req, res) => {
             const weekNum = i + 1;
             
             // Level 1 Drop-in
-            const l1DropResult = await dbConfig.query(`
+            const l1DropResult = await dbConfig.run(`
                 INSERT INTO courses (
                     name, description, course_type, duration_weeks,
                     start_date, end_date, instructor, schedule_info,
                     is_active, required_student_type
                 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-                RETURNING id
+                ${dbConfig.isProduction ? 'RETURNING id' : ''}
             `, [
                 `Level 1 Drop-in - Week ${weekNum} (${date})`,
                 `Single drop-in class for Level 1 House, Week ${weekNum}.`,
@@ -4824,34 +4824,34 @@ app.post('/api/admin/setup-january-2026', async (req, res) => {
                 'any'
             ]);
             
-            const l1DropId = l1DropResult.rows[0].id;
+            const l1DropId = dbConfig.isProduction ? l1DropResult[0]?.id : l1DropResult.lastID;
             
-            const l1DropSlotResult = await dbConfig.query(`
+            const l1DropSlotResult = await dbConfig.run(`
                 INSERT INTO course_slots (
                     course_id, slot_name, difficulty_level, capacity,
                     practice_date, start_time, end_time, location
                 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-                RETURNING id
+                ${dbConfig.isProduction ? 'RETURNING id' : ''}
             `, [
                 l1DropId, `Week ${weekNum}`, 'Level 1', capacity,
                 date, '6:15 PM', '7:30 PM', location
             ]);
             
-            const l1DropSlotId = l1DropSlotResult.rows[0].id;
+            const l1DropSlotId = dbConfig.isProduction ? l1DropSlotResult[0]?.id : l1DropSlotResult.lastID;
             
-            await dbConfig.query(`
+            await dbConfig.run(`
                 INSERT INTO course_pricing (course_slot_id, pricing_type, price)
                 VALUES ($1, 'drop_in', $2)
             `, [l1DropSlotId, 30]);
             
             // Level 2 Drop-in
-            const l2DropResult = await dbConfig.query(`
+            const l2DropResult = await dbConfig.run(`
                 INSERT INTO courses (
                     name, description, course_type, duration_weeks,
                     start_date, end_date, instructor, schedule_info,
                     is_active, required_student_type
                 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-                RETURNING id
+                ${dbConfig.isProduction ? 'RETURNING id' : ''}
             `, [
                 `Level 2 Drop-in - Week ${weekNum} (${date})`,
                 `Single drop-in class for Level 2 House, Week ${weekNum}.`,
@@ -4865,22 +4865,22 @@ app.post('/api/admin/setup-january-2026', async (req, res) => {
                 'any'
             ]);
             
-            const l2DropId = l2DropResult.rows[0].id;
+            const l2DropId = dbConfig.isProduction ? l2DropResult[0]?.id : l2DropResult.lastID;
             
-            const l2DropSlotResult = await dbConfig.query(`
+            const l2DropSlotResult = await dbConfig.run(`
                 INSERT INTO course_slots (
                     course_id, slot_name, difficulty_level, capacity,
                     practice_date, start_time, end_time, location
                 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-                RETURNING id
+                ${dbConfig.isProduction ? 'RETURNING id' : ''}
             `, [
                 l2DropId, `Week ${weekNum}`, 'Level 2', capacity,
                 date, '7:30 PM', '9:00 PM', location
             ]);
             
-            const l2DropSlotId = l2DropSlotResult.rows[0].id;
+            const l2DropSlotId = dbConfig.isProduction ? l2DropSlotResult[0]?.id : l2DropSlotResult.lastID;
             
-            await dbConfig.query(`
+            await dbConfig.run(`
                 INSERT INTO course_pricing (course_slot_id, pricing_type, price)
                 VALUES ($1, 'drop_in', $2)
             `, [l2DropSlotId, 30]);
@@ -4915,10 +4915,10 @@ app.post('/api/admin/create-test-profiles', async (req, res) => {
         // Test profile 1: Crew Member
         const crewMemberEmail = 'crew.test@example.com';
         
-        const existingCrew = await dbConfig.query('SELECT * FROM students WHERE email = $1', [crewMemberEmail]);
+        const existingCrew = await dbConfig.get('SELECT * FROM students WHERE email = $1', [crewMemberEmail]);
         
-        if (existingCrew.rows.length > 0) {
-            await dbConfig.query(`
+        if (existingCrew) {
+            await dbConfig.run(`
                 UPDATE students SET
                     first_name = $1,
                     last_name = $2,
@@ -4930,12 +4930,12 @@ app.post('/api/admin/create-test-profiles', async (req, res) => {
                     updated_at = CURRENT_TIMESTAMP
                 WHERE email = $8
             `, [
-                'Crew', 'TestUser', 'crew_member', true, true,
+                'Crew', 'TestUser', 'crew_member', dbConfig.isProduction ? true : 1, dbConfig.isProduction ? true : 1,
                 '@crewtest', 'Experienced dancer and crew member',
                 crewMemberEmail
             ]);
         } else {
-            await dbConfig.query(`
+            await dbConfig.run(`
                 INSERT INTO students (
                     first_name, last_name, email, student_type,
                     profile_complete, admin_classified, instagram_handle,
@@ -4943,17 +4943,17 @@ app.post('/api/admin/create-test-profiles', async (req, res) => {
                 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             `, [
                 'Crew', 'TestUser', crewMemberEmail, 'crew_member',
-                true, true, '@crewtest', 'Experienced dancer and crew member'
+                dbConfig.isProduction ? true : 1, dbConfig.isProduction ? true : 1, '@crewtest', 'Experienced dancer and crew member'
             ]);
         }
         
         // Test profile 2: General Student  
         const generalStudentEmail = 'general.test@example.com';
         
-        const existingGeneral = await dbConfig.query('SELECT * FROM students WHERE email = $1', [generalStudentEmail]);
+        const existingGeneral = await dbConfig.get('SELECT * FROM students WHERE email = $1', [generalStudentEmail]);
         
-        if (existingGeneral.rows.length > 0) {
-            await dbConfig.query(`
+        if (existingGeneral) {
+            await dbConfig.run(`
                 UPDATE students SET
                     first_name = $1,
                     last_name = $2,
@@ -4965,12 +4965,12 @@ app.post('/api/admin/create-test-profiles', async (req, res) => {
                     updated_at = CURRENT_TIMESTAMP
                 WHERE email = $8
             `, [
-                'General', 'TestUser', 'general', true, true,
+                'General', 'TestUser', 'general', dbConfig.isProduction ? true : 1, dbConfig.isProduction ? true : 1,
                 '@generaltest', 'New to house dancing',
                 generalStudentEmail
             ]);
         } else {
-            await dbConfig.query(`
+            await dbConfig.run(`
                 INSERT INTO students (
                     first_name, last_name, email, student_type,
                     profile_complete, admin_classified, instagram_handle,
@@ -4978,7 +4978,7 @@ app.post('/api/admin/create-test-profiles', async (req, res) => {
                 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             `, [
                 'General', 'TestUser', generalStudentEmail, 'general',
-                true, true, '@generaltest', 'New to house dancing'
+                dbConfig.isProduction ? true : 1, dbConfig.isProduction ? true : 1, '@generaltest', 'New to house dancing'
             ]);
         }
         
