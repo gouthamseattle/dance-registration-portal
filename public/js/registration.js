@@ -913,8 +913,33 @@ class DanceRegistrationApp {
         };
         
         packageRadios.forEach(radio => {
-            radio.addEventListener('change', updatePrice);
+            radio.addEventListener('change', () => {
+                updatePrice();
+                updatePackageSelection();
+            });
         });
+        
+        // Function to update visual selection state
+        const updatePackageSelection = () => {
+            const allCards = document.querySelectorAll('.package-option-card');
+            const selectedRadio = document.querySelector('input[name="package_selection"]:checked');
+            
+            // Remove selected class from all cards
+            allCards.forEach(card => {
+                card.classList.remove('selected');
+            });
+            
+            // Add selected class to the card containing the checked radio
+            if (selectedRadio) {
+                const selectedCard = selectedRadio.closest('.package-option-card');
+                if (selectedCard) {
+                    selectedCard.classList.add('selected');
+                }
+            }
+        };
+        
+        // Set initial selection state
+        updatePackageSelection();
         
         // Add CSS for package selection styling
         if (!document.getElementById('package-selection-styles')) {
@@ -935,6 +960,7 @@ class DanceRegistrationApp {
                     margin-bottom: 0;
                     background: #f8f9fa;
                     transition: all 0.3s ease;
+                    position: relative;
                 }
                 
                 .package-option-card:hover {
@@ -943,13 +969,65 @@ class DanceRegistrationApp {
                     box-shadow: 0 4px 12px rgba(0,123,255,0.15);
                 }
                 
-                .package-option-card input[type="radio"]:checked + label {
-                    color: #007bff;
+                /* STRONG SELECTED STATE */
+                .package-option-card:has(input[type="radio"]:checked) {
+                    border-color: #007bff !important;
+                    background: linear-gradient(135deg, #e3f2fd 0%, #ffffff 100%) !important;
+                    box-shadow: 0 6px 20px rgba(0,123,255,0.25) !important;
+                    transform: scale(1.02);
                 }
                 
-                .package-option-card input[type="radio"]:checked {
-                    border: 2px solid #007bff;
-                    background: #ffffff;
+                .package-option-card:has(input[type="radio"]:checked)::before {
+                    content: "✓ SELECTED";
+                    position: absolute;
+                    top: 10px;
+                    right: 15px;
+                    background: #007bff;
+                    color: white;
+                    font-size: 0.7rem;
+                    font-weight: bold;
+                    padding: 4px 8px;
+                    border-radius: 12px;
+                    letter-spacing: 0.5px;
+                }
+                
+                .package-option-card:has(input[type="radio"]:checked) .package-header {
+                    color: #007bff !important;
+                }
+                
+                .package-option-card:has(input[type="radio"]:checked) .package-header strong {
+                    color: #007bff !important;
+                }
+                
+                .package-option-card:has(input[type="radio"]:checked) .package-price .h5 {
+                    color: #007bff !important;
+                    font-weight: 900 !important;
+                }
+                
+                /* Fallback for browsers without :has() support */
+                .package-option-card input[type="radio"]:checked + label {
+                    color: #007bff !important;
+                }
+                
+                .package-option-card.selected {
+                    border-color: #007bff !important;
+                    background: linear-gradient(135deg, #e3f2fd 0%, #ffffff 100%) !important;
+                    box-shadow: 0 6px 20px rgba(0,123,255,0.25) !important;
+                    transform: scale(1.02);
+                }
+                
+                .package-option-card.selected::before {
+                    content: "✓ SELECTED";
+                    position: absolute;
+                    top: 10px;
+                    right: 15px;
+                    background: #007bff;
+                    color: white;
+                    font-size: 0.7rem;
+                    font-weight: bold;
+                    padding: 4px 8px;
+                    border-radius: 12px;
+                    letter-spacing: 0.5px;
                 }
                 
                 .package-content {
