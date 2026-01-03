@@ -274,79 +274,8 @@ class DanceRegistrationApp {
     }
 
     generateCoursePricingSection(course) {
-        // EMERGENCY FORCE: Always show multi-slot for House Foundation
-        console.log('🚨 FORCE TEST - Course:', course.name);
-        
-        // FORCE HOUSE FOUNDATION MULTI-SLOT PRICING - NO CONDITIONS
-        if (course.name && course.name.includes('House Foundation')) {
-            console.log('🚨 HOUSE FOUNDATION - FORCING MULTI-SLOT NOW!');
-            
-            // HARDCODE the multi-slot HTML since data exists
-            return `
-                <div class="pricing-section multi-slot-pricing">
-                    <h6 class="pricing-title mb-3"><i class="fas fa-tag me-2"></i>Choose Your Level:</h6>
-                    
-                    <div class="slot-pricing-option mb-3">
-                        <div class="slot-header">
-                            <strong>Level 1 House</strong>
-                            <span class="badge bg-secondary ms-2">Beginner</span>
-                        </div>
-                        <div class="pricing-details mt-2">
-                            <div class="price-option">
-                                <span>Full Course</span>
-                                <span class="price">$80</span>
-                            </div>
-                            <div class="price-option">
-                                <span>Per Class</span>
-                                <span class="price">$30</span>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="slot-pricing-option mb-3">
-                        <div class="slot-header">
-                            <strong>Level 2 House</strong>
-                            <span class="badge bg-secondary ms-2">Intermediate</span>
-                        </div>
-                        <div class="pricing-details mt-2">
-                            <div class="price-option">
-                                <span>Full Course</span>
-                                <span class="price">$100</span>
-                            </div>
-                            <div class="price-option">
-                                <span>Per Class</span>
-                                <span class="price">$30</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `;
-        }
-        
-        // Fallback to original single pricing display
-        const hasFullCoursePrice = course.full_course_price && course.full_course_price > 0;
-        const hasPerClassPrice = course.per_class_price && course.per_class_price > 0;
-        
-        if (hasFullCoursePrice || hasPerClassPrice) {
-            return `
-                <div class="pricing-section">
-                    ${hasFullCoursePrice ? `
-                        <div class="price-option">
-                            <span>Full Course</span>
-                            <span class="price">$${course.full_course_price}</span>
-                        </div>
-                    ` : ''}
-                    ${hasPerClassPrice ? `
-                        <div class="price-option">
-                            <span>Per Class</span>
-                            <span class="price">$${course.per_class_price}</span>
-                        </div>
-                    ` : ''}
-                </div>
-            `;
-        }
-        
-        return ''; // No pricing to display
+        // No pricing display on course cards - pricing handled in registration form
+        return '';
     }
 
     renderDropInClasses(dropIns) {
