@@ -279,7 +279,7 @@ class DanceRegistrationApp {
             // Check if slots have different pricing
             const uniquePricing = new Map();
             course.slots.forEach(slot => {
-                if (slot.pricing && (slot.pricing.full_package || slot.pricing.drop_in)) {
+                if (slot.pricing) {
                     const key = `${slot.pricing.full_package || 0}-${slot.pricing.drop_in || 0}`;
                     if (!uniquePricing.has(key)) {
                         uniquePricing.set(key, {
@@ -292,16 +292,18 @@ class DanceRegistrationApp {
                 }
             });
 
-            // Debug logging
-            console.log('Course slots with pricing:', course.slots.map(s => ({
+            console.log('🎯 Multi-slot course detected:', course.name);
+            console.log('📊 Slots with pricing:', course.slots.map(s => ({
                 name: s.slot_name,
                 pricing: s.pricing,
                 key: `${s.pricing?.full_package || 0}-${s.pricing?.drop_in || 0}`
             })));
-            console.log('Unique pricing combinations:', uniquePricing.size);
+            console.log('🔢 Unique pricing combinations:', uniquePricing.size);
+            console.log('🗂️ Pricing map:', Array.from(uniquePricing.entries()));
 
             // If we have multiple unique pricing options, show them separately  
             if (uniquePricing.size > 1) {
+                console.log('✅ Triggering multi-slot pricing display');
                 let pricingHtml = '<div class="pricing-section multi-slot-pricing">';
                 pricingHtml += '<h6 class="pricing-title mb-3"><i class="fas fa-tag me-2"></i>Choose Your Level:</h6>';
                 
