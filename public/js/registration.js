@@ -274,57 +274,55 @@ class DanceRegistrationApp {
     }
 
     generateCoursePricingSection(course) {
-        // DIRECT FIX: Force multi-slot display for House Foundation Series OR courses with multiple slots + pricing
-        const isHouseFoundation = course.name && course.name.includes('House Foundation');
-        const hasMultipleSlots = course.slots && course.slots.length > 1;
-        const hasSlotPricing = course.slots && course.slots.some(slot => slot.pricing && (slot.pricing.full_package || slot.pricing.drop_in));
+        // BULLETPROOF FIX: Absolute priority for House Foundation Series
+        console.log('🎯 PRICING ANALYSIS:', course.name, course.slots?.length);
         
-        console.log('🎯 Course analysis:', {
-            name: course.name,
-            isHouseFoundation,
-            hasMultipleSlots,
-            hasSlotPricing,
-            slotsCount: course.slots?.length,
-            slots: course.slots?.map(s => ({name: s.slot_name, pricing: s.pricing}))
-        });
-        
-        // Force multi-slot display for House Foundation OR any multi-slot course with pricing
-        if (hasMultipleSlots && (isHouseFoundation || hasSlotPricing)) {
-            console.log('✅ FORCING multi-slot pricing display for:', course.name);
+        // Force multi-slot for House Foundation regardless of other conditions
+        if (course.name && course.name.includes('House Foundation')) {
+            console.log('🏠 HOUSE FOUNDATION DETECTED - FORCING MULTI-SLOT');
             
-            let pricingHtml = '<div class="pricing-section multi-slot-pricing">';
-            pricingHtml += '<h6 class="pricing-title mb-3"><i class="fas fa-tag me-2"></i>Choose Your Level:</h6>';
-            
-            // Generate pricing for each slot
-            course.slots.forEach(slot => {
-                if (slot.pricing) {
-                    pricingHtml += `
-                        <div class="slot-pricing-option mb-3">
-                            <div class="slot-header">
-                                <strong>${slot.slot_name}</strong>
-                                ${slot.difficulty_level ? `<span class="badge bg-secondary ms-2">${slot.difficulty_level}</span>` : ''}
-                            </div>
-                            <div class="pricing-details mt-2">
-                                ${slot.pricing.full_package ? `
-                                    <div class="price-option">
-                                        <span>Full Course</span>
-                                        <span class="price">$${slot.pricing.full_package}</span>
-                                    </div>
-                                ` : ''}
-                                ${slot.pricing.drop_in ? `
-                                    <div class="price-option">
-                                        <span>Per Class</span>
-                                        <span class="price">$${slot.pricing.drop_in}</span>
-                                    </div>
-                                ` : ''}
-                            </div>
-                        </div>
-                    `;
-                }
-            });
-            
-            pricingHtml += '</div>';
-            return pricingHtml;
+            if (course.slots && course.slots.length > 1) {
+                console.log('✅ MULTIPLE SLOTS CONFIRMED, GENERATING MULTI-SLOT PRICING');
+                
+                let html = '<div class="pricing-section multi-slot-pricing">';
+                html += '<h6 class="pricing-title mb-3"><i class="fas fa-tag me-2"></i>Choose Your Level:</h6>';
+                
+                course.slots.forEach((slot, index) => {
+                    console.log(`🎯 Processing slot ${index + 1}:`, slot.slot_name, slot.pricing);
+                    
+                    if (slot.pricing) {
+                        html += '<div class="slot-pricing-option mb-3">';
+                        html += '<div class="slot-header">';
+                        html += `<strong>${slot.slot_name}</strong>`;
+                        if (slot.difficulty_level) {
+                            html += ` <span class="badge bg-secondary ms-2">${slot.difficulty_level}</span>`;
+                        }
+                        html += '</div>';
+                        html += '<div class="pricing-details mt-2">';
+                        
+                        if (slot.pricing.full_package) {
+                            html += '<div class="price-option">';
+                            html += '<span>Full Course</span>';
+                            html += `<span class="price">$${slot.pricing.full_package}</span>`;
+                            html += '</div>';
+                        }
+                        
+                        if (slot.pricing.drop_in) {
+                            html += '<div class="price-option">';
+                            html += '<span>Per Class</span>';
+                            html += `<span class="price">$${slot.pricing.drop_in}</span>`;
+                            html += '</div>';
+                        }
+                        
+                        html += '</div>';
+                        html += '</div>';
+                    }
+                });
+                
+                html += '</div>';
+                console.log('📤 RETURNING MULTI-SLOT HTML FOR HOUSE FOUNDATION');
+                return html;
+            }
         }
         
         // Fallback to original single pricing display
