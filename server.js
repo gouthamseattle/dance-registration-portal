@@ -415,6 +415,28 @@ app.get('/api/courses', asyncHandler(async (req, res) => {
         }
     }
     
+    // Add access control filtering based on student type
+    let studentType = 'general'; // Default to general access
+    if (student_email) {
+        try {
+            const student = await dbConfig.get('SELECT student_type FROM students WHERE email = $1', [student_email]);
+            if (student) {
+                studentType = student.student_type || 'general';
+            }
+        } catch (error) {
+            console.warn('Error fetching student type for course access:', error);
+        }
+    }
+    
+    // Filter courses based on student access level
+    if (studentType === 'crew_member') {
+        // Crew members can access all courses
+        conditions.push('(c.required_student_type = \'any\' OR c.required_student_type = \'crew_member\')');
+    } else {
+        // General students can only access courses open to all
+        conditions.push('c.required_student_type = \'any\'');
+    }
+    
     if (conditions.length > 0) {
         query += ' WHERE ' + conditions.join(' AND ');
     }
