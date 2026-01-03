@@ -262,6 +262,39 @@ const requireAuth = (req, res, next) => {
     }
 };
 
+// Course availability helper - fixes slot counting logic
+const getCourseAvailability = async (courseId) => {
+    try {
+        // Get minimum slot capacity (treats multi-week series as single seat per student)
+        const capacityResult = await dbConfig.get(`
+            SELECT MIN(cs.capacity) as course_capacity
+            FROM course_slots cs
+            WHERE cs.course_id = $1
+        `, [courseId]);
+        
+        const capacity = Number(capacityResult?.course_capacity) || 0;
+        
+        // Count only completed registrations
+        const registrationResult = await dbConfig.get(`
+            SELECT COUNT(*) as registered_count
+            FROM registrations r
+            WHERE r.course_id = $1 AND r.payment_status = 'completed'
+        `, [courseId]);
+        
+        const registeredCount = Number(registrationResult?.registered_count) || 0;
+        const available = Math.max(0, capacity - registeredCount);
+        
+        return {
+            capacity,
+            registeredCount,
+            available
+        };
+    } catch (error) {
+        console.error('❌ getCourseAvailability error for course', courseId, error);
+        return { capacity: 0, registeredCount: 0, available: 0 };
+    }
+};
+
 // Local date helpers to avoid timezone shifts when formatting YYYY-MM-DD
 function formatLocalDate(dateStr) {
     // Accept both 'YYYY-MM-DD' and 'YYYY-MM-DDTHH:mm:ssZ' without timezone shift
@@ -472,8 +505,11 @@ app.get('/api/courses', asyncHandler(async (req, res) => {
         }
     }
     
-    // Get slots and pricing for each course
+    // Get slots and pricing for each course with corrected availability
     const coursesWithSlots = await Promise.all(courses.map(async (course) => {
+        // Use the corrected availability helper
+        const availability = await getCourseAvailability(course.id);
+        
         const slots = await dbConfig.all(`
             SELECT cs.*, 
                    COUNT(DISTINCT r.id) as slot_registration_count,
@@ -504,9 +540,9 @@ app.get('/api/courses', asyncHandler(async (req, res) => {
             };
         }));
         
-        // Calculate total capacity and available spots across all slots
-        const totalCapacity = slots.reduce((sum, slot) => sum + (slot.capacity || 0), 0);
-        const totalAvailableSpots = slots.reduce((sum, slot) => sum + (Number(slot.available_spots) || 0), 0);
+        // Use corrected availability calculation
+        const totalCapacity = availability.capacity;
+        const totalAvailableSpots = availability.available;
         
         // Debug: log slots for crew_practice to verify practice_date coming from DB
         if (course.course_type === 'crew_practice') {
@@ -806,35 +842,20 @@ app.post('/api/register-dropin-bundle', asyncHandler(async (req, res) => {
         }
     }
     
-    // Check capacity for all courses
+    // Check capacity for all courses using corrected availability logic
     for (const courseId of course_ids) {
-        const capacityCheck = await dbConfig.get(`
-            SELECT
-              c.id,
-              c.name,
-              (
-                SELECT COALESCE(SUM(cs.capacity), 0)
-                FROM course_slots cs
-                WHERE cs.course_id = c.id
-              ) AS total_capacity,
-              (
-                SELECT COUNT(*)
-                FROM registrations r
-                WHERE r.course_id = c.id
-                  AND r.payment_status = 'completed'
-              ) AS current_registrations
-            FROM courses c
-            WHERE c.id = $1
-        `, [courseId]);
+        const courseCheck = await dbConfig.get('SELECT id, name FROM courses WHERE id = $1', [courseId]);
+        if (!courseCheck) {
+            return res.status(400).json({ error: `Course ${courseId} not found` });
+        }
 
-        const totalCapacityNum = Number(capacityCheck?.total_capacity) || 0;
-        const currentRegistrationsNum = Number(capacityCheck?.current_registrations) || 0;
+        const availability = await getCourseAvailability(courseId);
         
-        if (currentRegistrationsNum >= totalCapacityNum) {
+        if (availability.available <= 0) {
             return res.status(400).json({ 
-                error: `Class "${capacityCheck?.name}" is full`,
+                error: `Class "${courseCheck.name}" is full`,
                 course_full: true,
-                course_name: capacityCheck?.name,
+                course_name: courseCheck.name,
                 course_id: courseId
             });
         }
@@ -3142,47 +3163,32 @@ app.post('/api/register', asyncHandler(async (req, res) => {
         return res.status(400).json({ error: 'Registration is currently closed' });
     }
     
-    // Check capacity using slot-based calculation
-    // Capacity check rewritten to avoid join ambiguities: use subqueries for totals
+    // Verify course exists and check availability using corrected capacity logic
     const courseCheck = await dbConfig.get(`
-        SELECT
-          c.id,
-          c.name,
-          c.course_type,
-          (
-            SELECT COALESCE(SUM(cs.capacity), 0)
-            FROM course_slots cs
-            WHERE cs.course_id = c.id
-          ) AS total_capacity,
-          (
-            SELECT COUNT(*)
-            FROM registrations r
-            WHERE r.course_id = c.id
-              AND r.payment_status = 'completed'
-          ) AS current_registrations
+        SELECT c.id, c.name, c.course_type
         FROM courses c
-        WHERE c.id = $1
-          AND c.is_active = ${dbConfig.isProduction ? 'true' : '1'}
+        WHERE c.id = $1 AND c.is_active = ${dbConfig.isProduction ? 'true' : '1'}
     `, [course_id]);
 
     if (!courseCheck) {
         return res.status(400).json({ error: 'Course not found or inactive' });
     }
 
-    const totalCapacityNum = Number(courseCheck.total_capacity) || 0;
-    const currentRegistrationsNum = Number(courseCheck.current_registrations) || 0;
+    // Use the corrected availability helper
+    const availability = await getCourseAvailability(course_id);
 
-    console.log('🔎 Capacity check', {
+    console.log('🔎 Capacity check (corrected logic)', {
         courseId: course_id,
-        total_capacity: totalCapacityNum,
-        current_registrations: currentRegistrationsNum
+        capacity: availability.capacity,
+        registered: availability.registeredCount,
+        available: availability.available
     });
     
-    if (totalCapacityNum === 0) {
+    if (availability.capacity === 0) {
         return res.status(400).json({ error: 'Course has no available slots configured' });
     }
     
-    if (currentRegistrationsNum >= totalCapacityNum) {
+    if (availability.available <= 0) {
         return res.status(400).json({ 
             error: 'Course is full',
             course_full: true,
