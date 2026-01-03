@@ -479,22 +479,6 @@ class EmailProfileRegistrationApp {
                         ` : ''}
                     </div>
 
-                    ${(hasFullCoursePrice || hasPerClassPrice) ? `
-                        <div class="pricing-section">
-                            ${hasFullCoursePrice ? `
-                                <div class="price-option">
-                                    <span>Full Course</span>
-                                    <span class="price">$${course.full_course_price}</span>
-                                </div>
-                            ` : ''}
-                            ${hasPerClassPrice ? `
-                                <div class="price-option">
-                                    <span>Per Class</span>
-                                    <span class="price">$${course.per_class_price}</span>
-                                </div>
-                            ` : ''}
-                        </div>
-                    ` : ''}
 
                     <button class="btn register-btn ${availableSpots <= 0 && !isRegistered && !isPending ? 'waitlist-btn' : ''}" 
                             onclick="app.selectCourse(${course.id})"
