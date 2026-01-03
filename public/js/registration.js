@@ -292,7 +292,15 @@ class DanceRegistrationApp {
                 }
             });
 
-            // If we have multiple unique pricing options, show them separately
+            // Debug logging
+            console.log('Course slots with pricing:', course.slots.map(s => ({
+                name: s.slot_name,
+                pricing: s.pricing,
+                key: `${s.pricing?.full_package || 0}-${s.pricing?.drop_in || 0}`
+            })));
+            console.log('Unique pricing combinations:', uniquePricing.size);
+
+            // If we have multiple unique pricing options, show them separately  
             if (uniquePricing.size > 1) {
                 let pricingHtml = '<div class="pricing-section multi-slot-pricing">';
                 pricingHtml += '<h6 class="pricing-title mb-3"><i class="fas fa-tag me-2"></i>Choose Your Level:</h6>';
