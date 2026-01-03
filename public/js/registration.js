@@ -755,6 +755,14 @@ class DanceRegistrationApp {
         const totalAmountSpan = document.getElementById('totalAmount');
 
         if (this.selectedCourse) {
+            // SPECIAL HANDLING: House Foundation Series with multi-slot selection
+            if (this.selectedCourse.name && this.selectedCourse.name.includes('House Foundation')) {
+                console.log('🏠 Setting up slot selection for House Foundation');
+                this.setupHouseFoundationSlotSelection();
+                return;
+            }
+            
+            // Regular course payment options
             const hasFullCourse = this.selectedCourse.full_course_price && this.selectedCourse.full_course_price > 0;
             const hasPerClass = this.selectedCourse.per_class_price && this.selectedCourse.per_class_price > 0;
 
@@ -785,6 +793,139 @@ class DanceRegistrationApp {
                 this.updateTotalAmount();
             });
         });
+    }
+
+    setupHouseFoundationSlotSelection() {
+        const paymentOptionsDiv = document.getElementById('paymentOptions');
+        const totalAmountSpan = document.getElementById('totalAmount');
+        
+        // Replace the payment options with slot selection
+        paymentOptionsDiv.innerHTML = `
+            <label class="form-label">
+                <i class="fas fa-users text-primary"></i>
+                Choose Your Level *
+            </label>
+            <div class="payment-options">
+                <div class="form-check payment-option-card">
+                    <input class="form-check-input" type="radio" name="slot_selection" id="level1House" value="level1" data-full-price="80" data-per-class="30">
+                    <label class="form-check-label" for="level1House">
+                        <div class="payment-option-content">
+                            <strong>Level 1 House</strong>
+                            <span class="badge bg-secondary ms-2">Beginner</span>
+                            <div class="pricing-details mt-2">
+                                <div class="price-row">
+                                    <span>Full Course: <strong>$80</strong></span>
+                                    <span class="ms-3">Per Class: <strong>$30</strong></span>
+                                </div>
+                            </div>
+                        </div>
+                    </label>
+                </div>
+                <div class="form-check payment-option-card">
+                    <input class="form-check-input" type="radio" name="slot_selection" id="level2House" value="level2" data-full-price="100" data-per-class="30">
+                    <label class="form-check-label" for="level2House">
+                        <div class="payment-option-content">
+                            <strong>Level 2 House</strong>
+                            <span class="badge bg-secondary ms-2">Intermediate</span>
+                            <div class="pricing-details mt-2">
+                                <div class="price-row">
+                                    <span>Full Course: <strong>$100</strong></span>
+                                    <span class="ms-3">Per Class: <strong>$30</strong></span>
+                                </div>
+                            </div>
+                        </div>
+                    </label>
+                </div>
+            </div>
+            
+            <div class="mt-3">
+                <label class="form-label">
+                    <i class="fas fa-credit-card text-primary"></i>
+                    Payment Option *
+                </label>
+                <div class="payment-type-options">
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="payment_type" id="fullPackage" value="full">
+                        <label class="form-check-label" for="fullPackage">
+                            <strong>Full Course</strong> - Pay once for all classes
+                        </label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="payment_type" id="perClass" value="per-class">
+                        <label class="form-check-label" for="perClass">
+                            <strong>Per Class</strong> - Pay for each class individually
+                        </label>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        paymentOptionsDiv.style.display = 'block';
+        
+        // Set default selections
+        document.getElementById('level1House').checked = true;
+        document.getElementById('fullPackage').checked = true;
+        totalAmountSpan.textContent = '$80';
+        
+        // Add event listeners for slot and payment type changes
+        const slotRadios = document.querySelectorAll('input[name="slot_selection"]');
+        const paymentTypeRadios = document.querySelectorAll('input[name="payment_type"]');
+        
+        const updatePrice = () => {
+            const selectedSlot = document.querySelector('input[name="slot_selection"]:checked');
+            const selectedPaymentType = document.querySelector('input[name="payment_type"]:checked');
+            
+            if (selectedSlot && selectedPaymentType) {
+                let price;
+                if (selectedPaymentType.value === 'full') {
+                    price = selectedSlot.dataset.fullPrice;
+                } else {
+                    price = selectedSlot.dataset.perClass;
+                }
+                totalAmountSpan.textContent = `$${price}`;
+            }
+        };
+        
+        slotRadios.forEach(radio => {
+            radio.addEventListener('change', updatePrice);
+        });
+        
+        paymentTypeRadios.forEach(radio => {
+            radio.addEventListener('change', updatePrice);
+        });
+        
+        // Add some CSS for the new layout
+        if (!document.getElementById('slot-selection-styles')) {
+            const style = document.createElement('style');
+            style.id = 'slot-selection-styles';
+            style.textContent = `
+                .pricing-details {
+                    margin-top: 0.5rem;
+                }
+                .price-row {
+                    font-size: 0.9rem;
+                    color: var(--text-secondary);
+                }
+                .payment-type-options {
+                    margin-top: 0.5rem;
+                }
+                .payment-type-options .form-check {
+                    padding: 0.5rem;
+                    margin-bottom: 0.5rem;
+                    border: 1px solid var(--border-color);
+                    border-radius: 8px;
+                    background: var(--bg-card);
+                }
+                .payment-type-options .form-check:hover {
+                    background: var(--bg-hover);
+                }
+                .payment-type-options .form-check-input:checked + .form-check-label {
+                    color: var(--accent-primary);
+                    font-weight: 600;
+                }
+            `;
+            document.head.appendChild(style);
+        }
     }
 
     updateTotalAmount() {
@@ -1055,21 +1196,63 @@ class DanceRegistrationApp {
             this.registrationData.course_id = this.selectedCourse.id;
             this.registrationData.drop_in_class_id = null;
             
-            const paymentOption = formData.get('payment_option');
-            if (paymentOption === 'full-course') {
-                this.registrationData.registration_type = 'full-course';
-                this.registrationData.payment_amount = this.selectedCourse.full_course_price;
-            } else if (paymentOption === 'per-class') {
-                this.registrationData.registration_type = 'per-class';
-                this.registrationData.payment_amount = this.selectedCourse.per_class_price;
-            } else {
-                // Default to full course if only one option available
-                if (this.selectedCourse.full_course_price > 0) {
+            // SPECIAL HANDLING: House Foundation Series with slot selection
+            if (this.selectedCourse.name && this.selectedCourse.name.includes('House Foundation')) {
+                console.log('🏠 Processing House Foundation slot selection');
+                
+                const selectedSlot = document.querySelector('input[name="slot_selection"]:checked');
+                const selectedPaymentType = document.querySelector('input[name="payment_type"]:checked');
+                
+                if (!selectedSlot) {
+                    this.showError('Please select a level (Level 1 or Level 2) to continue.');
+                    return;
+                }
+                
+                if (!selectedPaymentType) {
+                    this.showError('Please select a payment option (Full Course or Per Class) to continue.');
+                    return;
+                }
+                
+                // Store slot selection data
+                this.registrationData.selected_slot = selectedSlot.value;
+                this.registrationData.selected_slot_name = selectedSlot.value === 'level1' ? 'Level 1 House' : 'Level 2 House';
+                this.registrationData.selected_difficulty = selectedSlot.value === 'level1' ? 'Beginner' : 'Intermediate';
+                
+                // Set registration type and amount based on selections
+                if (selectedPaymentType.value === 'full') {
                     this.registrationData.registration_type = 'full-course';
-                    this.registrationData.payment_amount = this.selectedCourse.full_course_price;
+                    this.registrationData.payment_amount = selectedSlot.dataset.fullPrice;
                 } else {
                     this.registrationData.registration_type = 'per-class';
+                    this.registrationData.payment_amount = selectedSlot.dataset.perClass;
+                }
+                
+                console.log('✅ House Foundation selection processed:', {
+                    slot: this.registrationData.selected_slot,
+                    slotName: this.registrationData.selected_slot_name,
+                    difficulty: this.registrationData.selected_difficulty,
+                    type: this.registrationData.registration_type,
+                    amount: this.registrationData.payment_amount
+                });
+                
+            } else {
+                // Regular course payment options
+                const paymentOption = formData.get('payment_option');
+                if (paymentOption === 'full-course') {
+                    this.registrationData.registration_type = 'full-course';
+                    this.registrationData.payment_amount = this.selectedCourse.full_course_price;
+                } else if (paymentOption === 'per-class') {
+                    this.registrationData.registration_type = 'per-class';
                     this.registrationData.payment_amount = this.selectedCourse.per_class_price;
+                } else {
+                    // Default to full course if only one option available
+                    if (this.selectedCourse.full_course_price > 0) {
+                        this.registrationData.registration_type = 'full-course';
+                        this.registrationData.payment_amount = this.selectedCourse.full_course_price;
+                    } else {
+                        this.registrationData.registration_type = 'per-class';
+                        this.registrationData.payment_amount = this.selectedCourse.per_class_price;
+                    }
                 }
             }
         } else if (this.selectedDropIn) {
