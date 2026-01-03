@@ -799,98 +799,116 @@ class DanceRegistrationApp {
         const paymentOptionsDiv = document.getElementById('paymentOptions');
         const totalAmountSpan = document.getElementById('totalAmount');
         
-        // Replace the payment options with slot selection
+        // Check if student is crew member (if student data is available)
+        const studentType = document.getElementById('studentType')?.value || 'general';
+        const isCrewMember = studentType === 'crew_member';
+        
+        // Replace the payment options with comprehensive course options
         paymentOptionsDiv.innerHTML = `
             <label class="form-label">
-                <i class="fas fa-users text-primary"></i>
-                Choose Your Level *
+                <i class="fas fa-graduation-cap text-primary"></i>
+                Choose Your Package *
             </label>
-            <div class="payment-options">
-                <div class="form-check payment-option-card">
-                    <input class="form-check-input" type="radio" name="slot_selection" id="level1House" value="level1" data-full-price="80" data-per-class="30">
-                    <label class="form-check-label" for="level1House">
-                        <div class="payment-option-content">
-                            <strong>Level 1 House</strong>
-                            <span class="badge bg-secondary ms-2">Beginner</span>
-                            <div class="pricing-details mt-2">
-                                <div class="price-row">
-                                    <span>Full Course: <strong>$80</strong></span>
-                                    <span class="ms-3">Per Class: <strong>$30</strong></span>
-                                </div>
+            <div class="course-package-options">
+                <div class="form-check package-option-card">
+                    <input class="form-check-input" type="radio" name="package_selection" id="level1Only" value="level1" data-price="80">
+                    <label class="form-check-label" for="level1Only">
+                        <div class="package-content">
+                            <div class="package-header">
+                                <strong>Level 1 House</strong>
+                                <span class="badge bg-secondary ms-2">Beginner</span>
+                            </div>
+                            <div class="package-description">
+                                <small class="text-muted">4-week series • Tuesdays 6:15-7:30 PM</small>
+                            </div>
+                            <div class="package-price">
+                                <span class="h5 text-primary mb-0">$80</span>
+                                <small class="text-muted ms-2">($30 per class drop-in)</small>
                             </div>
                         </div>
                     </label>
                 </div>
-                <div class="form-check payment-option-card">
-                    <input class="form-check-input" type="radio" name="slot_selection" id="level2House" value="level2" data-full-price="100" data-per-class="30">
-                    <label class="form-check-label" for="level2House">
-                        <div class="payment-option-content">
-                            <strong>Level 2 House</strong>
-                            <span class="badge bg-secondary ms-2">Intermediate</span>
-                            <div class="pricing-details mt-2">
-                                <div class="price-row">
-                                    <span>Full Course: <strong>$100</strong></span>
-                                    <span class="ms-3">Per Class: <strong>$30</strong></span>
-                                </div>
+                
+                <div class="form-check package-option-card">
+                    <input class="form-check-input" type="radio" name="package_selection" id="level2Only" value="level2" data-price="100">
+                    <label class="form-check-label" for="level2Only">
+                        <div class="package-content">
+                            <div class="package-header">
+                                <strong>Level 2 House</strong>
+                                <span class="badge bg-warning ms-2">Intermediate</span>
+                            </div>
+                            <div class="package-description">
+                                <small class="text-muted">4-week series • Tuesdays 7:30-9:00 PM</small>
+                            </div>
+                            <div class="package-price">
+                                <span class="h5 text-primary mb-0">$100</span>
+                                <small class="text-muted ms-2">($30 per class drop-in)</small>
                             </div>
                         </div>
                     </label>
                 </div>
-            </div>
-            
-            <div class="mt-3">
-                <label class="form-label">
-                    <i class="fas fa-credit-card text-primary"></i>
-                    Payment Option *
-                </label>
-                <div class="payment-type-options">
-                    <div class="form-check">
-                        <input class="form-check-input" type="radio" name="payment_type" id="fullPackage" value="full">
-                        <label class="form-check-label" for="fullPackage">
-                            <strong>Full Course</strong> - Pay once for all classes
-                        </label>
-                    </div>
-                    <div class="form-check">
-                        <input class="form-check-input" type="radio" name="payment_type" id="perClass" value="per-class">
-                        <label class="form-check-label" for="perClass">
-                            <strong>Per Class</strong> - Pay for each class individually
-                        </label>
-                    </div>
+                
+                <div class="form-check package-option-card combo-package">
+                    <input class="form-check-input" type="radio" name="package_selection" id="level1Plus2" value="combo" data-price="150">
+                    <label class="form-check-label" for="level1Plus2">
+                        <div class="package-content">
+                            <div class="package-header">
+                                <strong>Level 1 + 2 House Combo</strong>
+                                <span class="badge bg-success ms-2">BEST VALUE</span>
+                            </div>
+                            <div class="package-description">
+                                <small class="text-muted">Access to BOTH levels • All Tuesday classes • Week 4 combined session</small>
+                            </div>
+                            <div class="package-price">
+                                <span class="h5 text-success mb-0">$150</span>
+                                <small class="text-muted ms-2">(Save $30!)</small>
+                            </div>
+                        </div>
+                    </label>
                 </div>
+                
+                ${isCrewMember ? `
+                <div class="form-check package-option-card crew-package">
+                    <input class="form-check-input" type="radio" name="package_selection" id="crewHouseUnlimited" value="crew-house" data-price="200">
+                    <label class="form-check-label" for="crewHouseUnlimited">
+                        <div class="package-content">
+                            <div class="package-header">
+                                <strong>Crew + House Unlimited</strong>
+                                <span class="badge bg-danger ms-2">CREW ONLY</span>
+                            </div>
+                            <div class="package-description">
+                                <small class="text-muted">ALL House classes + Unlimited Crew Practice • Tuesdays & Fridays</small>
+                            </div>
+                            <div class="package-price">
+                                <span class="h5 text-danger mb-0">$200</span>
+                                <small class="text-muted ms-2">(Ultimate package)</small>
+                            </div>
+                        </div>
+                    </label>
+                </div>
+                ` : ''}
             </div>
         `;
         
         paymentOptionsDiv.style.display = 'block';
         
-        // Set default selections
-        document.getElementById('level1House').checked = true;
-        document.getElementById('fullPackage').checked = true;
+        // Set default selection - Level 1 House
+        document.getElementById('level1Only').checked = true;
         totalAmountSpan.textContent = '$80';
         
-        // Add event listeners for slot and payment type changes
-        const slotRadios = document.querySelectorAll('input[name="slot_selection"]');
-        const paymentTypeRadios = document.querySelectorAll('input[name="payment_type"]');
+        // Add event listeners for package selection changes
+        const packageRadios = document.querySelectorAll('input[name="package_selection"]');
         
         const updatePrice = () => {
-            const selectedSlot = document.querySelector('input[name="slot_selection"]:checked');
-            const selectedPaymentType = document.querySelector('input[name="payment_type"]:checked');
+            const selectedPackage = document.querySelector('input[name="package_selection"]:checked');
             
-            if (selectedSlot && selectedPaymentType) {
-                let price;
-                if (selectedPaymentType.value === 'full') {
-                    price = selectedSlot.dataset.fullPrice;
-                } else {
-                    price = selectedSlot.dataset.perClass;
-                }
+            if (selectedPackage) {
+                const price = selectedPackage.dataset.price;
                 totalAmountSpan.textContent = `$${price}`;
             }
         };
         
-        slotRadios.forEach(radio => {
-            radio.addEventListener('change', updatePrice);
-        });
-        
-        paymentTypeRadios.forEach(radio => {
+        packageRadios.forEach(radio => {
             radio.addEventListener('change', updatePrice);
         });
         
@@ -1196,41 +1214,53 @@ class DanceRegistrationApp {
             this.registrationData.course_id = this.selectedCourse.id;
             this.registrationData.drop_in_class_id = null;
             
-            // SPECIAL HANDLING: House Foundation Series with slot selection
+            // SPECIAL HANDLING: House Foundation Series with package selection
             if (this.selectedCourse.name && this.selectedCourse.name.includes('House Foundation')) {
-                console.log('🏠 Processing House Foundation slot selection');
+                console.log('🏠 Processing House Foundation package selection');
                 
-                const selectedSlot = document.querySelector('input[name="slot_selection"]:checked');
-                const selectedPaymentType = document.querySelector('input[name="payment_type"]:checked');
+                const selectedPackage = document.querySelector('input[name="package_selection"]:checked');
                 
-                if (!selectedSlot) {
-                    this.showError('Please select a level (Level 1 or Level 2) to continue.');
+                if (!selectedPackage) {
+                    this.showError('Please select a package option to continue.');
                     return;
                 }
                 
-                if (!selectedPaymentType) {
-                    this.showError('Please select a payment option (Full Course or Per Class) to continue.');
-                    return;
+                // Store package selection data
+                const packageValue = selectedPackage.value;
+                this.registrationData.selected_package = packageValue;
+                this.registrationData.payment_amount = selectedPackage.dataset.price;
+                
+                // Set registration type and metadata based on package selection
+                switch (packageValue) {
+                    case 'level1':
+                        this.registrationData.registration_type = 'level1-house';
+                        this.registrationData.package_name = 'Level 1 House';
+                        this.registrationData.package_description = '4-week series • Tuesdays 6:15-7:30 PM';
+                        break;
+                    case 'level2':
+                        this.registrationData.registration_type = 'level2-house';
+                        this.registrationData.package_name = 'Level 2 House';
+                        this.registrationData.package_description = '4-week series • Tuesdays 7:30-9:00 PM';
+                        break;
+                    case 'combo':
+                        this.registrationData.registration_type = 'level1-2-combo';
+                        this.registrationData.package_name = 'Level 1 + 2 House Combo';
+                        this.registrationData.package_description = 'Access to BOTH levels • All Tuesday classes • Week 4 combined session';
+                        break;
+                    case 'crew-house':
+                        this.registrationData.registration_type = 'crew-house-unlimited';
+                        this.registrationData.package_name = 'Crew + House Unlimited';
+                        this.registrationData.package_description = 'ALL House classes + Unlimited Crew Practice • Tuesdays & Fridays';
+                        break;
+                    default:
+                        this.registrationData.registration_type = 'package-selection';
+                        this.registrationData.package_name = 'Custom Package';
+                        break;
                 }
                 
-                // Store slot selection data
-                this.registrationData.selected_slot = selectedSlot.value;
-                this.registrationData.selected_slot_name = selectedSlot.value === 'level1' ? 'Level 1 House' : 'Level 2 House';
-                this.registrationData.selected_difficulty = selectedSlot.value === 'level1' ? 'Beginner' : 'Intermediate';
-                
-                // Set registration type and amount based on selections
-                if (selectedPaymentType.value === 'full') {
-                    this.registrationData.registration_type = 'full-course';
-                    this.registrationData.payment_amount = selectedSlot.dataset.fullPrice;
-                } else {
-                    this.registrationData.registration_type = 'per-class';
-                    this.registrationData.payment_amount = selectedSlot.dataset.perClass;
-                }
-                
-                console.log('✅ House Foundation selection processed:', {
-                    slot: this.registrationData.selected_slot,
-                    slotName: this.registrationData.selected_slot_name,
-                    difficulty: this.registrationData.selected_difficulty,
+                console.log('✅ House Foundation package processed:', {
+                    package: this.registrationData.selected_package,
+                    packageName: this.registrationData.package_name,
                     type: this.registrationData.registration_type,
                     amount: this.registrationData.payment_amount
                 });
