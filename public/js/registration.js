@@ -274,67 +274,57 @@ class DanceRegistrationApp {
     }
 
     generateCoursePricingSection(course) {
-        // Handle multi-slot courses with different pricing
-        if (course.slots && course.slots.length > 1) {
-            // Check if slots have different pricing
-            const uniquePricing = new Map();
+        // DIRECT FIX: Force multi-slot display for House Foundation Series OR courses with multiple slots + pricing
+        const isHouseFoundation = course.name && course.name.includes('House Foundation');
+        const hasMultipleSlots = course.slots && course.slots.length > 1;
+        const hasSlotPricing = course.slots && course.slots.some(slot => slot.pricing && (slot.pricing.full_package || slot.pricing.drop_in));
+        
+        console.log('🎯 Course analysis:', {
+            name: course.name,
+            isHouseFoundation,
+            hasMultipleSlots,
+            hasSlotPricing,
+            slotsCount: course.slots?.length,
+            slots: course.slots?.map(s => ({name: s.slot_name, pricing: s.pricing}))
+        });
+        
+        // Force multi-slot display for House Foundation OR any multi-slot course with pricing
+        if (hasMultipleSlots && (isHouseFoundation || hasSlotPricing)) {
+            console.log('✅ FORCING multi-slot pricing display for:', course.name);
+            
+            let pricingHtml = '<div class="pricing-section multi-slot-pricing">';
+            pricingHtml += '<h6 class="pricing-title mb-3"><i class="fas fa-tag me-2"></i>Choose Your Level:</h6>';
+            
+            // Generate pricing for each slot
             course.slots.forEach(slot => {
                 if (slot.pricing) {
-                    const key = `${slot.pricing.full_package || 0}-${slot.pricing.drop_in || 0}`;
-                    if (!uniquePricing.has(key)) {
-                        uniquePricing.set(key, {
-                            slot_name: slot.slot_name,
-                            difficulty_level: slot.difficulty_level,
-                            full_package: slot.pricing.full_package,
-                            drop_in: slot.pricing.drop_in
-                        });
-                    }
-                }
-            });
-
-            console.log('🎯 Multi-slot course detected:', course.name);
-            console.log('📊 Slots with pricing:', course.slots.map(s => ({
-                name: s.slot_name,
-                pricing: s.pricing,
-                key: `${s.pricing?.full_package || 0}-${s.pricing?.drop_in || 0}`
-            })));
-            console.log('🔢 Unique pricing combinations:', uniquePricing.size);
-            console.log('🗂️ Pricing map:', Array.from(uniquePricing.entries()));
-
-            // If we have multiple unique pricing options, show them separately  
-            if (uniquePricing.size > 1) {
-                console.log('✅ Triggering multi-slot pricing display');
-                let pricingHtml = '<div class="pricing-section multi-slot-pricing">';
-                pricingHtml += '<h6 class="pricing-title mb-3"><i class="fas fa-tag me-2"></i>Choose Your Level:</h6>';
-                
-                uniquePricing.forEach((pricing, key) => {
                     pricingHtml += `
                         <div class="slot-pricing-option mb-3">
                             <div class="slot-header">
-                                <strong>${pricing.slot_name}</strong>
-                                ${pricing.difficulty_level ? `<span class="badge bg-secondary ms-2">${pricing.difficulty_level}</span>` : ''}
+                                <strong>${slot.slot_name}</strong>
+                                ${slot.difficulty_level ? `<span class="badge bg-secondary ms-2">${slot.difficulty_level}</span>` : ''}
                             </div>
                             <div class="pricing-details mt-2">
-                                ${pricing.full_package ? `
+                                ${slot.pricing.full_package ? `
                                     <div class="price-option">
                                         <span>Full Course</span>
-                                        <span class="price">$${pricing.full_package}</span>
+                                        <span class="price">$${slot.pricing.full_package}</span>
                                     </div>
                                 ` : ''}
-                                ${pricing.drop_in ? `
+                                ${slot.pricing.drop_in ? `
                                     <div class="price-option">
                                         <span>Per Class</span>
-                                        <span class="price">$${pricing.drop_in}</span>
+                                        <span class="price">$${slot.pricing.drop_in}</span>
                                     </div>
                                 ` : ''}
                             </div>
                         </div>
                     `;
-                });
-                
-                pricingHtml += '</div>';
-                return pricingHtml;
-            }
+                }
+            });
+            
+            pricingHtml += '</div>';
+            return pricingHtml;
         }
         
         // Fallback to original single pricing display
