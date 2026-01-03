@@ -799,9 +799,13 @@ class DanceRegistrationApp {
         const paymentOptionsDiv = document.getElementById('paymentOptions');
         const totalAmountSpan = document.getElementById('totalAmount');
         
-        // Check if student is crew member (if student data is available)
+        // Check if student is crew member - check multiple sources
         const studentType = document.getElementById('studentType')?.value || 'general';
-        const isCrewMember = studentType === 'crew_member';
+        const studentExperience = document.getElementById('studentExperience')?.value || '';
+        const isCrewMember = studentType === 'crew_member' || 
+                            studentExperience.toLowerCase().includes('professional') ||
+                            studentExperience.toLowerCase().includes('advanced') ||
+                            studentExperience.toLowerCase().includes('crew');
         
         // Replace the payment options with comprehensive course options
         paymentOptionsDiv.innerHTML = `
@@ -912,34 +916,123 @@ class DanceRegistrationApp {
             radio.addEventListener('change', updatePrice);
         });
         
-        // Add some CSS for the new layout
-        if (!document.getElementById('slot-selection-styles')) {
+        // Add CSS for package selection styling
+        if (!document.getElementById('package-selection-styles')) {
             const style = document.createElement('style');
-            style.id = 'slot-selection-styles';
+            style.id = 'package-selection-styles';
             style.textContent = `
-                .pricing-details {
-                    margin-top: 0.5rem;
+                .course-package-options {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 1rem;
+                    margin-top: 1rem;
                 }
-                .price-row {
-                    font-size: 0.9rem;
-                    color: var(--text-secondary);
+                
+                .package-option-card {
+                    border: 2px solid #e9ecef;
+                    border-radius: 12px;
+                    padding: 1rem;
+                    margin-bottom: 0;
+                    background: #f8f9fa;
+                    transition: all 0.3s ease;
                 }
-                .payment-type-options {
-                    margin-top: 0.5rem;
+                
+                .package-option-card:hover {
+                    border-color: #007bff;
+                    background: #ffffff;
+                    box-shadow: 0 4px 12px rgba(0,123,255,0.15);
                 }
-                .payment-type-options .form-check {
-                    padding: 0.5rem;
+                
+                .package-option-card input[type="radio"]:checked + label {
+                    color: #007bff;
+                }
+                
+                .package-option-card input[type="radio"]:checked {
+                    border: 2px solid #007bff;
+                    background: #ffffff;
+                }
+                
+                .package-content {
+                    width: 100%;
+                    display: block;
+                }
+                
+                .package-header {
+                    display: flex;
+                    align-items: center;
+                    gap: 0.5rem;
                     margin-bottom: 0.5rem;
-                    border: 1px solid var(--border-color);
-                    border-radius: 8px;
-                    background: var(--bg-card);
+                    font-weight: bold;
+                    font-size: 1.1rem;
+                    color: #212529;
                 }
-                .payment-type-options .form-check:hover {
-                    background: var(--bg-hover);
+                
+                .package-description {
+                    margin-bottom: 0.75rem;
+                    color: #6c757d;
+                    font-size: 0.9rem;
+                    line-height: 1.4;
                 }
-                .payment-type-options .form-check-input:checked + .form-check-label {
-                    color: var(--accent-primary);
+                
+                .package-price {
+                    display: flex;
+                    align-items: baseline;
+                    gap: 0.5rem;
                     font-weight: 600;
+                }
+                
+                .package-price .h5 {
+                    margin: 0;
+                    font-size: 1.5rem;
+                    font-weight: bold;
+                }
+                
+                .package-price small {
+                    color: #6c757d;
+                    font-size: 0.85rem;
+                }
+                
+                .combo-package {
+                    border-color: #28a745;
+                    background: linear-gradient(135deg, #f8fff9 0%, #e8f5e8 100%);
+                }
+                
+                .combo-package:hover {
+                    border-color: #28a745;
+                    box-shadow: 0 4px 12px rgba(40,167,69,0.15);
+                }
+                
+                .crew-package {
+                    border-color: #dc3545;
+                    background: linear-gradient(135deg, #fff8f8 0%, #fde8e8 100%);
+                }
+                
+                .crew-package:hover {
+                    border-color: #dc3545;
+                    box-shadow: 0 4px 12px rgba(220,53,69,0.15);
+                }
+                
+                /* Force text visibility */
+                .package-content * {
+                    color: inherit !important;
+                }
+                
+                .package-header strong {
+                    color: #212529 !important;
+                    font-weight: bold !important;
+                    display: block !important;
+                }
+                
+                .package-description small {
+                    color: #6c757d !important;
+                    display: block !important;
+                }
+                
+                /* Debug - force visibility */
+                .form-check-label {
+                    cursor: pointer;
+                    display: block !important;
+                    width: 100% !important;
                 }
             `;
             document.head.appendChild(style);
