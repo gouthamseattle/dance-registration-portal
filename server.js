@@ -3329,7 +3329,7 @@ app.get('/api/admin/registrations/export', requireAuth, asyncHandler(async (req,
         const { course_id, payment_status } = req.query;
 
         let query = `
-            SELECT r.*, s.first_name, s.last_name, s.email, s.phone, s.dance_experience, s.instagram_handle AS instagram_id,
+            SELECT r.*, s.first_name, s.last_name, s.email, s.phone, s.dance_experience, s.instagram_handle AS student_instagram_handle,
                    c.name as course_name
             FROM registrations r
             LEFT JOIN students s ON r.student_id = s.id
@@ -3368,12 +3368,16 @@ app.get('/api/admin/registrations/export', requireAuth, asyncHandler(async (req,
             const amountStr = (typeof r.payment_amount === 'number')
                 ? r.payment_amount.toFixed(2)
                 : (r.payment_amount || '');
+            
+            // Robust Instagram handle extraction with fallback chain
+            const instagram = (r.student_instagram_handle || r.instagram_id || r.instagram_handle || '').replace(/^@/, '');
+            
             const line = [
                 esc(`#${r.id}`),
                 esc(name),
                 esc(r.email || ''),
                 esc(r.phone || ''),
-                esc(r.instagram_id || ''),
+                esc(instagram),
                 esc(r.dance_experience || ''),
                 esc(r.course_name || 'Drop-in Class'),
                 esc(r.registration_type || ''),
