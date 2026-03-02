@@ -6,13 +6,12 @@ const DatabaseConfig = require('../database-config');
 
 /**
  * Initialize database connection and ensure schema is up to date
- * @returns {Promise<DatabaseConfig>} - Connected database configuration instance
+ * @param {DatabaseConfig} dbConfig - Database configuration instance
+ * @returns {Promise<object>} - Connected database instance
  */
-async function initializeDatabase() {
-    const dbConfig = new DatabaseConfig();
-    
+async function initializeDatabase(dbConfig) {
     try {
-        await dbConfig.connect();
+        const db = await dbConfig.connect();
         console.log('✅ Database initialized successfully');
 
         // Ensure all schema updates are applied
@@ -26,7 +25,7 @@ async function initializeDatabase() {
                 .catch((err) => console.error('❌ Background migration failed:', err));
         }
         
-        return dbConfig;
+        return db;
     } catch (error) {
         console.error('❌ Database initialization failed:', error);
         process.exit(1);
