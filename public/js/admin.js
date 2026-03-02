@@ -4093,6 +4093,379 @@ Questions? Reply to this message`;
         }
     }
 
+    // =========================
+    // Choreography Package Management
+    // =========================
+
+    showCreatePackage() {
+        document.getElementById('packageModalTitle').textContent = 'Create Choreography Package';
+        document.getElementById('packageForm').reset();
+        document.getElementById('packageId').value = '';
+        
+        // Clear choreography selection
+        document.getElementById('choreographySelection').innerHTML = '<div class="text-muted">Select a slot number first...</div>';
+        
+        // Set up slot change listener
+        this.setupPackageSlotListener();
+        
+        const modal = new bootstrap.Modal(document.getElementById('packageModal'));
+        modal.show();
+    }
+
+    setupPackageSlotListener() {
+        const slotField = document.getElementById('packageSlot');
+        
+        slotField.addEventListener('change', async () => {
+            const slot = slotField.value;
+            if (!slot) {
+                document.getElementById('choreographySelection').innerHTML = '<div class="text-muted">Select a slot number first...</div>';
+                return;
+            }
+            
+            await this.loadChoreographiesForSlot(slot);
+        });
+    }
+
+    async loadChoreographiesForSlot(slotNumber) {
+        const container = document.getElementById('choreographySelection');
+        container.innerHTML = '<div class="text-center"><div class="spinner-border spinner-border-sm"></div> Loading...</div>';
+        
+        try {
+            const response = await this.apiFetch(`/api/admin/choreography-courses?series_slot=${slotNumber}`);
+            const choreographies = await response.json();
+            
+            if (choreographies.length === 0) {
+                container.innerHTML = `
+                    <div class="text-muted">
+                        No choreographies found for Slot ${slotNumber}. 
+                        Create choreography courses first and assign them to this slot.
+                    </div>
+                `;
+                return;
+            }
+            
+            const checkboxesHtml = choreographies.map(choreo => `
+                <div class="form-check mb-2">
+                    <input class="form-check-input choreography-checkbox" type="checkbox" 
+                           value="${choreo.id}" id="choreo_${choreo.id}">
+                    <label class="form-check-label" for="choreo_${choreo.id}">
+                        <strong>${choreo.name}</strong>
+                        ${choreo.song_name ? `<br><small class="text-muted">Song: ${choreo.song_name}</small>` : ''}
+                        ${choreo.movie_name ? `<br><small class="text-muted">Movie: ${choreo.movie_name}</small>` : ''}
+                        ${choreo.language ? `<br><small class="text-muted">Language: ${choreo.language}</small>` : ''}
+                    </label>
+                </div>
+            `).join('');
+            
+            container.innerHTML = checkboxesHtml;
+            
+            // Add max 3 selection limit
+            const checkboxes = container.querySelectorAll('.choreography-checkbox');
+            checkboxes.forEach(cb => {
+                cb.addEventListener('change', () => {
+                    const checked = container.querySelectorAll('.choreography-checkbox:checked');
+                    if (checked.length > 3) {
+                        cb.checked = false;
+                        this.showError('Maximum 3 choreographies per package');
+                    }
+                });
+            });
+            
+        } catch (error) {
+            console.error('Error loading choreographies:', error);
+            container.innerHTML = '<div class="text-danger">Failed to load choreographies</div>';
+        }
+    }
+
+    async savePackage() {
+        const packageId = document.getElementById('packageId').value;
+        const name = document.getElementById('packageName').value.trim();
+        const description = document.getElementById('packageDescription').value.trim();
+        const slotNumber = document.getElementById('packageSlot').value;
+        const packagePrice = document.getElementById('packagePrice').value;
+        
+        // Collect selected choreographies
+        const selectedCheckboxes = document.querySelectorAll('.choreography-checkbox:checked');
+        const courseIds = Array.from(selectedCheckboxes).map(cb => parseInt(cb.value));
+        
+        // Validation
+        if (!name || !slotNumber || courseIds.length === 0) {
+            this.showError('Please fill in all required fields and select at least one choreography');
+            return;
+        }
+        
+        if (courseIds.length > 3) {
+            this.showError('Maximum 3 choreographies per package');
+            return;
+        }
+        
+        const packageData = {
+            name,
+            description: description || null,
+            slot_number: parseInt(slotNumber),
+            course_ids: courseIds,
+            pricing: {
+                package_price: packagePrice ? parseFloat(packagePrice) : null
+            }
+        };
+        
+        try {
+            const url = packageId ? `/api/admin/series/${packageId}` : '/api/admin/series';
+            const method = packageId ? 'PUT' : 'POST';
+            
+            const response = await this.apiFetch(url, {
+                method,
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(packageData)
+            });
+            
+            if (response.ok) {
+                const modal = bootstrap.Modal.getInstance(document.getElementById('packageModal'));
+                modal.hide();
+                
+                this.showSuccess(`Package ${packageId ? 'updated' : 'created'} successfully`);
+                
+                // Reload packages section if we're on it
+                if (this.currentSection === 'packages') {
+                    this.loadPackagesSection();
+                }
+            } else {
+                const error = await response.json();
+                this.showError(error.error || 'Failed to save package');
+            }
+        } catch (error) {
+            console.error('Error saving package:', error);
+            this.showError('Failed to save package');
+        }
+    }
+
+    async loadPackagesSection() {
+        // Load packages for each slot
+        await Promise.all([
+            this.loadSlotPackages(1),
+            this.loadSlotPackages(2),
+            this.loadStandaloneChoreographies()
+        ]);
+    }
+
+    async loadSlotPackages(slotNumber) {
+        const containerId = `slot${slotNumber}Packages`;
+        const container = document.getElementById(containerId);
+        
+        if (!container) return;
+        
+        container.innerHTML = '<div class="text-center py-4"><div class="spinner-border"></div></div>';
+        
+        try {
+            const response = await this.apiFetch('/api/admin/series');
+            const allSeries = await response.json();
+            
+            const slotSeries = allSeries.filter(s => s.slot_number === slotNumber);
+            
+            if (slotSeries.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-5">
+                        <i class="fas fa-box fa-3x text-muted mb-3"></i>
+                        <h5>No Packages for Slot ${slotNumber}</h5>
+                        <p class="text-muted">Create a package to bundle choreographies for this slot.</p>
+                        <button class="btn btn-primary" onclick="admin.showCreatePackage()">
+                            <i class="fas fa-plus"></i> Create Package
+                        </button>
+                    </div>
+                `;
+                return;
+            }
+            
+            const packagesHtml = slotSeries.map(series => `
+                <div class="col-md-6 mb-3">
+                    <div class="card">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h6 class="mb-0">${series.name}</h6>
+                            <span class="badge bg-${series.is_active ? 'success' : 'secondary'}">
+                                ${series.is_active ? 'Active' : 'Inactive'}
+                            </span>
+                        </div>
+                        <div class="card-body">
+                            ${series.description ? `<p class="text-muted small">${series.description}</p>` : ''}
+                            
+                            <div class="mb-3">
+                                <strong>Choreographies (${series.course_count}):</strong>
+                                <ul class="small mt-2">
+                                    ${(series.courses || []).map(c => `
+                                        <li>
+                                            ${c.name}
+                                            ${c.song_name ? `<br><small class="text-muted">♪ ${c.song_name}</small>` : ''}
+                                        </li>
+                                    `).join('')}
+                                </ul>
+                            </div>
+                            
+                            ${series.package_price ? `
+                                <div class="mb-3">
+                                    <strong>Package Price:</strong> $${parseFloat(series.package_price).toFixed(2)}
+                                </div>
+                            ` : ''}
+                            
+                            <div class="btn-group w-100">
+                                <button class="btn btn-outline-primary btn-sm" onclick="admin.editPackage(${series.id})">
+                                    <i class="fas fa-edit"></i> Edit
+                                </button>
+                                <button class="btn btn-outline-${series.is_active ? 'warning' : 'success'} btn-sm" 
+                                        onclick="admin.togglePackageStatus(${series.id}, ${!series.is_active})">
+                                    <i class="fas fa-${series.is_active ? 'pause' : 'play'}"></i>
+                                    ${series.is_active ? 'Deactivate' : 'Activate'}
+                                </button>
+                                <button class="btn btn-outline-danger btn-sm" onclick="admin.deletePackage(${series.id})">
+                                    <i class="fas fa-trash"></i> Delete
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+            
+            container.innerHTML = `<div class="row">${packagesHtml}</div>`;
+            
+        } catch (error) {
+            console.error(`Error loading slot ${slotNumber} packages:`, error);
+            container.innerHTML = '<div class="alert alert-danger">Failed to load packages</div>';
+        }
+    }
+
+    async loadStandaloneChoreographies() {
+        const container = document.getElementById('standaloneChoreographies');
+        if (!container) return;
+        
+        container.innerHTML = '<div class="text-center py-4"><div class="spinner-border"></div></div>';
+        
+        try {
+            const response = await this.apiFetch('/api/admin/choreography-courses');
+            const choreographies = await response.json();
+            
+            // Filter for standalone (no series_slot assigned)
+            const standalone = choreographies.filter(c => !c.series_slot);
+            
+            if (standalone.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-5">
+                        <i class="fas fa-music fa-3x text-muted mb-3"></i>
+                        <h5>No Standalone Choreographies</h5>
+                        <p class="text-muted">All choreographies are assigned to slot packages.</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            const choreoHtml = standalone.map(choreo => `
+                <div class="col-md-6 col-lg-4 mb-3">
+                    <div class="card">
+                        <div class="card-body">
+                            <h6>${choreo.name}</h6>
+                            ${choreo.song_name ? `<p class="mb-1"><small><strong>Song:</strong> ${choreo.song_name}</small></p>` : ''}
+                            ${choreo.movie_name ? `<p class="mb-1"><small><strong>Movie:</strong> ${choreo.movie_name}</small></p>` : ''}
+                            ${choreo.language ? `<p class="mb-1"><small><strong>Language:</strong> ${choreo.language}</small></p>` : ''}
+                            <span class="badge bg-${choreo.is_active ? 'success' : 'secondary'}">
+                                ${choreo.is_active ? 'Active' : 'Inactive'}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+            
+            container.innerHTML = `<div class="row">${choreoHtml}</div>`;
+            
+        } catch (error) {
+            console.error('Error loading standalone choreographies:', error);
+            container.innerHTML = '<div class="alert alert-danger">Failed to load choreographies</div>';
+        }
+    }
+
+    async editPackage(packageId) {
+        try {
+            const response = await this.apiFetch('/api/admin/series');
+            const allSeries = await response.json();
+            const series = allSeries.find(s => s.id === packageId);
+            
+            if (!series) {
+                this.showError('Package not found');
+                return;
+            }
+            
+            // Populate form
+            document.getElementById('packageModalTitle').textContent = 'Edit Choreography Package';
+            document.getElementById('packageId').value = series.id;
+            document.getElementById('packageName').value = series.name;
+            document.getElementById('packageDescription').value = series.description || '';
+            document.getElementById('packageSlot').value = series.slot_number;
+            document.getElementById('packagePrice').value = series.package_price || '';
+            
+            // Load choreographies for the slot
+            await this.loadChoreographiesForSlot(series.slot_number);
+            
+            // Pre-select the choreographies in this package
+            const courseIds = (series.courses || []).map(c => c.course_id);
+            courseIds.forEach(id => {
+                const checkbox = document.getElementById(`choreo_${id}`);
+                if (checkbox) checkbox.checked = true;
+            });
+            
+            const modal = new bootstrap.Modal(document.getElementById('packageModal'));
+            modal.show();
+            
+        } catch (error) {
+            console.error('Error loading package for edit:', error);
+            this.showError('Failed to load package');
+        }
+    }
+
+    async togglePackageStatus(packageId, newStatus) {
+        try {
+            const response = await this.apiFetch(`/api/admin/series/${packageId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ is_active: newStatus })
+            });
+            
+            if (response.ok) {
+                this.showSuccess(`Package ${newStatus ? 'activated' : 'deactivated'} successfully`);
+                this.loadPackagesSection();
+            } else {
+                const error = await response.json();
+                this.showError(error.error || 'Failed to update package status');
+            }
+        } catch (error) {
+            console.error('Error toggling package status:', error);
+            this.showError('Failed to update package status');
+        }
+    }
+
+    async deletePackage(packageId) {
+        if (!confirm('Delete this choreography package? This cannot be undone.')) {
+            return;
+        }
+        
+        try {
+            const response = await this.apiFetch(`/api/admin/series/${packageId}`, {
+                method: 'DELETE'
+            });
+            
+            if (response.ok) {
+                this.showSuccess('Package deleted successfully');
+                this.loadPackagesSection();
+            } else {
+                const error = await response.json();
+                this.showError(error.error || 'Failed to delete package');
+            }
+        } catch (error) {
+            console.error('Error deleting package:', error);
+            this.showError('Failed to delete package');
+        }
+    }
+
     showHistoricalHelp() {
         const modalHtml = `
             <div class="modal fade" id="historicalHelpModal" tabindex="-1">

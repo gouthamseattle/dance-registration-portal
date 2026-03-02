@@ -84,6 +84,12 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a class="nav-link" href="#" data-section="packages">
+                            <i class="fas fa-box"></i>
+                            Choreography Packages
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a class="nav-link" href="#" data-section="registrations">
                             <i class="fas fa-users"></i>
                             Registrations
@@ -628,6 +634,80 @@
             </div>
         </div>
 
+        <!-- Choreography Packages Section -->
+        <div id="packagesSection" class="content-section" style="display: none;">
+            <div class="row">
+                <div class="col-12">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h2><i class="fas fa-box text-primary"></i> Choreography Packages</h2>
+                        <button class="btn btn-primary" onclick="admin.showCreatePackage()">
+                            <i class="fas fa-plus"></i>
+                            Create New Package
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle"></i>
+                <strong>Series Packages:</strong> Bundle up to 3 choreography batches into Slot 1 or Slot 2 packages. Students can register for individual batches or purchase the complete slot package.
+            </div>
+
+            <!-- Slot Tabs -->
+            <ul class="nav nav-tabs mb-3" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="slot1-tab" data-bs-toggle="tab" data-bs-target="#slot1-pane" type="button">
+                        <i class="fas fa-box"></i> Slot 1 Packages
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="slot2-tab" data-bs-toggle="tab" data-bs-target="#slot2-pane" type="button">
+                        <i class="fas fa-box"></i> Slot 2 Packages
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="standalone-tab" data-bs-toggle="tab" data-bs-target="#standalone-pane" type="button">
+                        <i class="fas fa-music"></i> Standalone Choreographies
+                    </button>
+                </li>
+            </ul>
+
+            <div class="tab-content">
+                <!-- Slot 1 Packages -->
+                <div class="tab-pane fade show active" id="slot1-pane" role="tabpanel">
+                    <div id="slot1Packages">
+                        <div class="text-center py-4">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading packages...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Slot 2 Packages -->
+                <div class="tab-pane fade" id="slot2-pane" role="tabpanel">
+                    <div id="slot2Packages">
+                        <div class="text-center py-4">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading packages...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Standalone Choreographies -->
+                <div class="tab-pane fade" id="standalone-pane" role="tabpanel">
+                    <div id="standaloneChoreographies">
+                        <div class="text-center py-4">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading choreographies...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Settings Section -->
         <div id="settingsSection" class="content-section" style="display: none;">
             <div class="row">
@@ -841,6 +921,71 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                     <button type="button" class="btn btn-primary" onclick="admin.saveCourse()">Save Course</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Package Modal -->
+    <div class="modal fade" id="packageModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="packageModalTitle">Create Choreography Package</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="packageForm">
+                        <input type="hidden" id="packageId" name="id">
+                        
+                        <div class="mb-3">
+                            <label for="packageName" class="form-label">Package Name *</label>
+                            <input type="text" class="form-control" id="packageName" name="name" placeholder="e.g., Slot 1 - Bollywood Favorites" required>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="packageDescription" class="form-label">Description</label>
+                            <textarea class="form-control" id="packageDescription" name="description" rows="2" placeholder="Brief description of this package"></textarea>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="packageSlot" class="form-label">Slot Number *</label>
+                                <select class="form-select" id="packageSlot" name="slot_number" required>
+                                    <option value="">Select Slot</option>
+                                    <option value="1">Slot 1</option>
+                                    <option value="2">Slot 2</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="packagePrice" class="form-label">Package Price</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">$</span>
+                                    <input type="number" class="form-control" id="packagePrice" name="package_price" placeholder="120" step="0.01" min="0">
+                                </div>
+                                <div class="form-text">Total price for all choreographies in this package</div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Select Choreographies (max 3) *</label>
+                            <div id="choreographySelection" class="border rounded p-3" style="max-height: 300px; overflow-y: auto;">
+                                <div class="text-muted">Select a slot number first...</div>
+                            </div>
+                        </div>
+
+                        <div class="alert alert-info small">
+                            <i class="fas fa-info-circle"></i>
+                            Select up to 3 choreography batches to bundle into this package. Only choreographies assigned to the selected slot will be shown.
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="admin.savePackage()">
+                        <i class="fas fa-save"></i>
+                        Save Package
+                    </button>
                 </div>
             </div>
         </div>
