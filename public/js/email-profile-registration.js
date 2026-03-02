@@ -629,14 +629,62 @@ class EmailProfileRegistrationApp {
         this.selectedPackage = pkg;
         console.log('Package selected:', pkg.series_name);
 
-        // For now, show info that package registration will be implemented
-        this.showError('Package registration will be available soon! Please register for individual choreography batches for now.');
-        
-        // TODO: Implement package registration flow
-        // This would involve:
-        // 1. Creating registrations for all choreographies in the package
-        // 2. Applying the package price
-        // 3. Handling payment for the entire package
+        this.showLoading();
+
+        try {
+            // Register for the series package
+            const response = await fetch('/api/register-series-package', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    email: this.currentEmail,
+                    student_id: this.currentStudent.id,
+                    series_id: packageId,
+                    payment_amount: pkg.package_price || 0,
+                    special_requests: `Series package: ${pkg.series_name}`
+                })
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.error || 'Failed to register for package');
+            }
+
+            this.hideLoading();
+
+            console.log('✅ Package registration successful:', result);
+
+            // Redirect to payment page with the first registration ID
+            if (result.registrationIds && result.registrationIds.length > 0) {
+                const registrationData = {
+                    email: this.currentEmail,
+                    student_id: this.currentStudent.id,
+                    course_id: pkg.choreographies[0].id, // Use first course for payment page
+                    student_type: this.currentStudent.student_type,
+                    first_name: this.currentStudent.first_name,
+                    last_name: this.currentStudent.last_name,
+                    instagram_handle: this.currentStudent.instagram_handle,
+                    dance_experience: this.currentStudent.dance_experience,
+                    profile_complete: true,
+                    package_name: pkg.series_name,
+                    package_registration: true,
+                    registration_ids: result.registrationIds.join(',')
+                };
+
+                const params = new URLSearchParams(registrationData);
+                window.location.href = `/index-registration.html?${params.toString()}`;
+            } else {
+                this.showError('Registration created but no IDs returned');
+            }
+
+        } catch (error) {
+            this.hideLoading();
+            console.error('Package registration error:', error);
+            this.showError(error.message || 'Failed to register for package. Please try again.');
+        }
     }
 
     createCourseCard(course) {
