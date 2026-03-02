@@ -1,126 +1,98 @@
-# Active Context - Dance Registration Portal
+# Active Context
 
-## Current Work Focus (2025-09-30)
+## Current Focus: Code Modularization (In Progress)
 
-### ✅ Student Portal Registration Status Issues - COMPLETED & DEPLOYED
-**Date Completed**: 2025-09-30
+### Recent Changes (March 1, 2026)
+- ✅ Created modular code structure with separate directories
+- ✅ Extracted database initialization to `database/initialize.js`
+- ✅ Extracted auth middleware to `middleware/auth.js`
+- ✅ Extracted course availability logic to `utils/courseAvailability.js`
+- ✅ Created placeholder `routes/index.js` for route modularization
+- ✅ Archived one-time scripts to `scripts/archive/` with documentation
+- ⏳ Server.js still needs to import and use new modules
 
-#### **Issue 1: "Register for Another Class" Button Not Working**
-- **Problem**: Button existed but didn't function, preventing students from registering for additional courses
-- **Root Cause**: Missing event handler in `email-profile-registration.js` for `registerAnother` button
-- **Solution Applied**: Added proper click handler that resets state and reloads courses with current student session
-- **Fix Details**:
-  ```javascript
-  // Added to email-profile-registration.js
-  const registerAnother = document.getElementById('registerAnother');
-  if (registerAnother) {
-      registerAnother.addEventListener('click', () => {
-          this.resetRegistration();
-      });
-  }
-  
-  // Enhanced resetRegistration() method to preserve student session
-  resetRegistration() {
-      // ... reset state logic
-      const studentEmail = this.studentData?.email;
-      if (studentEmail) {
-          this.checkStudentProfile(); // Reload with preserved session
-      }
-  }
-  ```
+### Key Files Modified
+- `database/initialize.js` - Database setup and migrations
+- `middleware/auth.js` - Authentication helpers (asyncHandler, requireAuth)
+- `utils/courseAvailability.js` - Course capacity calculation logic
+- `routes/index.js` - Placeholder for extracted routes
+- `scripts/archive/` - Historical one-time scripts with README
 
-#### **Issue 2: Registration Status Not Showing on Return Visits**
-- **Problem**: When students returned to portal, course cards didn't show if they were already registered
-- **Root Cause**: Server API `/api/check-student-profile` didn't include registration status data like `/api/courses` endpoint did
-- **Solution Applied**: Enhanced server API to include registration status for each course
-- **Implementation**:
-  - Added registration status lookup in `/api/check-student-profile` endpoint
-  - Included `registration_status`, `registration_id`, `payment_status` fields in course objects
-  - Added visual status badges: "Registered" (green) and "Payment Pending" (yellow)
-  - Updated course card styling to show registration state
+### Next Steps
+1. **Complete route extraction**: Update server.js to import from routes/index.js
+2. **Test locally**: Ensure all endpoints work with modular structure
+3. **Deploy to Railway**: Test in production environment
+4. **Update documentation**: Document new code organization
 
-#### **Visual Enhancements Added**
-```css
-.registration-status-badge {
-    display: inline-flex;
-    align-items: center;
-    padding: 4px 8px;
-    border-radius: 12px;
-    font-size: 0.75rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
+## Active Decisions
 
-.registration-status-badge.registered {
-    background: rgba(40, 167, 69, 0.1);
-    color: #28a745;
-    border: 1px solid rgba(40, 167, 69, 0.3);
-}
+### Code Organization Strategy
+- **Separation of Concerns**: Breaking monolithic server.js into focused modules
+- **Backward Compatibility**: Maintaining all existing API endpoints
+- **Incremental Migration**: Creating modules first, then updating imports
+- **Testing First**: Local validation before production deployment
 
-.registration-status-badge.pending {
-    background: rgba(255, 193, 7, 0.1);
-    color: #ffc107;
-    border: 1px solid rgba(255, 193, 7, 0.3);
-}
+### Testing Approach
+- Deploy-first for production validation (per .clinerules)
+- User validates functionality in deployed environment
+- No local browser testing required
+
+## Important Patterns
+
+### Module Structure
+```
+database/
+  initialize.js     # DB setup, migrations, schema updates
+middleware/
+  auth.js          # asyncHandler, requireAuth helpers
+utils/
+  courseAvailability.js  # Capacity calculation logic
+  mailer.js        # Email utilities (existing)
+  schedule.js      # Schedule helpers (existing)
+routes/
+  index.js         # Route handlers (to be completed)
+scripts/
+  archive/         # One-time historical scripts
+    README.md      # Documentation of archived scripts
 ```
 
-#### **Files Modified & Deployed**
-- **✅ `public/js/email-profile-registration.js`** - Fixed "Register Another Class" button functionality
-- **✅ `server.js`** - Enhanced `/api/check-student-profile` API with registration status data  
-- **✅ `public/css/styles.css`** - Added registration status badge styling (already present)
-- **Git Commits**: 
-  - `4a7ca78` - Fix Register Another Class button and add registration status badges
-  - `a55df10` - Add registration status data to check-student-profile API
+### Database Initialization Pattern
+- Centralized in `database/initialize.js`
+- Exported function called from server.js
+- Handles schema migrations and table creation
+- Database-agnostic (SQLite/PostgreSQL compatible)
 
-#### **End-to-End Workflow Verified**
-1. **Student enters email** → Profile lookup with course registration status
-2. **Course cards display** → Visual badges show "Registered" or "Payment Pending" status  
-3. **Student completes registration** → Payment confirmation page
-4. **"Register Another Class" clicked** → Returns to course list with updated status badges
-5. **Student returns later** → Status badges still show correctly from server data
+### Middleware Pattern
+- Reusable auth functions in dedicated module
+- asyncHandler wraps async route handlers
+- requireAuth validates admin session
 
-#### **Deployment Status**
-- **✅ Production Deployed**: All changes live on Railway
-- **✅ End-to-End Testing**: Complete workflow verified working
-- **✅ Both Issues Resolved**: Registration button works, status badges show correctly
+### Utility Pattern
+- Course availability logic isolated in utils
+- Accepts dbConfig as parameter for testability
+- Handles different course types (choreography vs others)
 
----
+## Current System State
 
-## Previous Session Work (2025-09-18)
+### Codebase Organization
+- **Before**: 6000+ line monolithic server.js
+- **After**: Modular structure with focused files
+- **Status**: Modules created, server.js integration pending
 
-### ✅ Admin Registrations Management Enhancements - COMPLETED & DEPLOYED
-- Features: Admin can Cancel, Uncancel, and Edit registrations
-  - Cancel sets payment_status = 'canceled' and records canceled_at, canceled_by, cancellation_reason
-  - Uncancel restores to payment_status = 'pending'
-  - Edit allows updating student name/email/phone and payment_amount
-- Emails: Cancellation email sent via SendGrid when email_notifications_enabled is true
-- API Endpoints (auth required):
-  - PUT /api/admin/registrations/:id/cancel  { reason?: string }
-  - PUT /api/admin/registrations/:id/uncancel
-  - PUT /api/admin/registrations/:id/edit    { first_name?, last_name?, email?, phone?, payment_amount? }
-- UI:
-  - Registrations table actions: View, Edit, Cancel (or Uncancel when canceled)
-  - Status filter includes "Canceled"
-  - Badge style for status-canceled
-  - Cache-busting: admin-styles.css?v=10, admin.js?v=19
-- Deployment: Triggered via git push (commit c2a2386)
+### Recent Learnings
+1. **File Size Challenge**: 6000+ line server.js requires careful refactoring
+2. **Incremental Approach**: Create modules first, update imports second
+3. **Git Strategy**: Commit modular structure before integration
+4. **Documentation Value**: Archive README prevents confusion about old scripts
 
-### ✅ Historical Student Classification System - COMPLETED & DEPLOYED
-- ✅ **Planning Session Completed**: Designed one-time automated classification system
-- ✅ **Implementation Completed**: Full system implemented with comprehensive error handling
-- ✅ **Deployed to Production**: Successfully deployed to Railway with PostgreSQL database access
-- ✅ **Student Portal Enhanced**: Email profile registration and improved UX deployed
-- **Status**: FULLY OPERATIONAL - System can now identify crew members from "Dreamers Crew Practice" registrations
+### Known Considerations
+- Routes are placeholder - full extraction requires careful SEARCH/REPLACE
+- Server.js needs import updates (too large for single operation)
+- All existing endpoints must continue to work
+- Production deployment will validate integration
 
-### Key Requirements Identified
-1. **One-time classification script** to analyze existing student registration patterns
-2. **Enhanced crew member visibility** in admin interface (names and emails prominently displayed)
-3. **Database updates** for both PostgreSQL production and SQLite development
-4. **Manual review interface** for admin to approve/reject classification suggestions
-
-### Technical Implementation Plan
-
-#### **Classification Logic**
-```javascript
-// Students who registered for crew_practice courses →
+## Memory Bank Updates Needed
+- ✅ activeContext.md - Current work documented
+- ✅ systemPatterns.md - Architecture patterns updated
+- ✅ progress.md - Status tracking updated
+- ⏳ Complete after route extraction finished

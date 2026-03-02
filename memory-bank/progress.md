@@ -1,5 +1,38 @@
 # Progress - Dance Registration Portal
 
+## Latest Updates (2026-03-01)
+
+### 🔄 Choreography & Dance Series Feature - IN PROGRESS
+**Date Started**: 2026-03-01
+**Status**: Planning complete, implementation in progress
+
+#### **Feature Overview**
+Adding new course type "choreography" (2-class batches) with dance series packaging:
+- Admin can create choreography batches (2 classes each) with song/movie/instructor metadata
+- Admin can bundle up to 3 choreographies into Slot 1 or Slot 2 packages
+- Students can register for: single batches, multiple batches, slot packages, or combined packages
+- Reserve-on-pending capacity management for choreography courses
+
+#### **Implementation Progress**
+- [x] Memory bank updated with comprehensive plan
+- [x] Architecture patterns documented in systemPatterns.md
+- [x] Active context updated with requirements and approach
+- [ ] Database schema changes (courses columns + new tables)
+- [ ] Backend APIs (admin series CRUD + student registration endpoints)
+- [ ] Admin UI enhancements (choreography fields + series management)
+- [ ] Student UI enhancements (choreography cards + packages section)
+- [ ] Testing and deployment to Railway
+- [ ] User validation in production
+
+#### **Technical Decisions Made**
+- Backward compatible: no breaking changes to existing course types
+- Reserve-on-pending for choreography; existing flows unchanged
+- Dedicated endpoints for choreography to isolate new logic
+- Two-table design: dance_series + dance_series_courses for flexibility
+- Multi-select UI pattern with sticky footer for bundle selection
+
+---
+
 ## Latest Updates (2025-09-30)
 
 ### ✅ Student Portal Registration Status Issues - COMPLETED & DEPLOYED

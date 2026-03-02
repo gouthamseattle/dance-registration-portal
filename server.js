@@ -7,10 +7,17 @@ const path = require('path');
 const fs = require('fs');
 require('dotenv').config();
 
-// Import our database configuration
+// Import database configuration and initialization
 const DatabaseConfig = require('./database-config');
+const { initializeDatabase } = require('./database/initialize');
+
+// Import utilities
 const { sendRegistrationConfirmationEmail, sendWaitlistNotificationEmail, sendEmailWithFallback, verifyEmailTransport } = require('./utils/mailer');
 const { fetchCourseWithSlots } = require('./utils/schedule');
+const { getCourseAvailability, formatLocalDate, formatLocalDateShort } = require('./utils/courseAvailability');
+
+// Import middleware
+const { asyncHandler, requireAuth } = require('./middleware/auth');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -18,216 +25,6 @@ const PORT = process.env.PORT || 3000;
 // Initialize database
 const dbConfig = new DatabaseConfig();
 let db = null;
-
-// Initialize database connection
-async function initializeDatabase() {
-    try {
-        db = await dbConfig.connect();
-        console.log('✅ Database initialized successfully');
-
-        // Ensure practice_date column exists on course_slots
-        try {
-            if (dbConfig.isProduction) {
-                await dbConfig.run('ALTER TABLE course_slots ADD COLUMN IF NOT EXISTS practice_date DATE');
-            } else {
-                // SQLite: ignore if column exists
-                await dbConfig.run('ALTER TABLE course_slots ADD COLUMN practice_date TEXT').catch(() => {});
-            }
-            console.log('✅ Ensured course_slots.practice_date column exists');
-        } catch (e) {
-            console.log('ℹ️ practice_date column check skipped:', e.message || e);
-        }
-
-        // Ensure attendance tables exist
-        try {
-            if (dbConfig.isProduction) {
-                await dbConfig.run(`
-                    CREATE TABLE IF NOT EXISTS class_sessions (
-                        id SERIAL PRIMARY KEY,
-                        course_id INTEGER NOT NULL,
-                        session_date DATE NOT NULL,
-                        start_time TEXT,
-                        end_time TEXT,
-                        location TEXT,
-                        notes TEXT,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    )
-                `);
-                await dbConfig.run(`
-                    CREATE TABLE IF NOT EXISTS attendance_records (
-                        id SERIAL PRIMARY KEY,
-                        session_id INTEGER NOT NULL,
-                        student_id INTEGER NOT NULL,
-                        status TEXT CHECK (status IN ('present','absent','late')) NOT NULL,
-                        marked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        marked_by INTEGER
-                    )
-                `);
-                await dbConfig.run(`
-                    CREATE UNIQUE INDEX IF NOT EXISTS attendance_unique_session_student
-                    ON attendance_records(session_id, student_id)
-                `);
-            } else {
-                await dbConfig.run(`
-                    CREATE TABLE IF NOT EXISTS class_sessions (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        course_id INTEGER NOT NULL,
-                        session_date TEXT NOT NULL,
-                        start_time TEXT,
-                        end_time TEXT,
-                        location TEXT,
-                        notes TEXT,
-                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-                    )
-                `);
-                await dbConfig.run(`
-                    CREATE TABLE IF NOT EXISTS attendance_records (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        session_id INTEGER NOT NULL,
-                        student_id INTEGER NOT NULL,
-                        status TEXT NOT NULL,
-                        marked_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                        marked_by INTEGER
-                    )
-                `);
-                await dbConfig.run(`
-                    CREATE UNIQUE INDEX IF NOT EXISTS attendance_unique_session_student
-                    ON attendance_records(session_id, student_id)
-                `);
-            }
-            console.log('✅ Ensured attendance tables exist');
-        } catch (e) {
-            console.log('ℹ️ Attendance tables check skipped:', e.message || e);
-        }
-
-        // Ensure waitlist table exists
-        try {
-            if (dbConfig.isProduction) {
-                await dbConfig.run(`
-                    CREATE TABLE IF NOT EXISTS waitlist (
-                        id SERIAL PRIMARY KEY,
-                        student_id INTEGER NOT NULL,
-                        course_id INTEGER NOT NULL,
-                        waitlist_position INTEGER NOT NULL,
-                        notification_sent BOOLEAN DEFAULT FALSE,
-                        notification_sent_at TIMESTAMP NULL,
-                        notification_expires_at TIMESTAMP NULL,
-                        payment_link_token VARCHAR(255) NULL,
-                        status VARCHAR(20) DEFAULT 'active',
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        FOREIGN KEY (student_id) REFERENCES students(id),
-                        FOREIGN KEY (course_id) REFERENCES courses(id)
-                    )
-                `);
-                await dbConfig.run(`
-                    CREATE UNIQUE INDEX IF NOT EXISTS waitlist_unique_student_course
-                    ON waitlist(student_id, course_id)
-                `);
-            } else {
-                await dbConfig.run(`
-                    CREATE TABLE IF NOT EXISTS waitlist (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        student_id INTEGER NOT NULL,
-                        course_id INTEGER NOT NULL,
-                        waitlist_position INTEGER NOT NULL,
-                        notification_sent INTEGER DEFAULT 0,
-                        notification_sent_at TEXT NULL,
-                        notification_expires_at TEXT NULL,
-                        payment_link_token TEXT NULL,
-                        status TEXT DEFAULT 'active',
-                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-                    )
-                `);
-                await dbConfig.run(`
-                    CREATE UNIQUE INDEX IF NOT EXISTS waitlist_unique_student_course
-                    ON waitlist(student_id, course_id)
-                `);
-            }
-            console.log('✅ Ensured waitlist table exists');
-        } catch (e) {
-            console.log('ℹ️ Waitlist table check skipped:', e.message || e);
-        }
-
-        // Ensure payment_method column exists on registrations table
-        try {
-            if (dbConfig.isProduction) {
-                await dbConfig.run('ALTER TABLE registrations ADD COLUMN IF NOT EXISTS payment_method VARCHAR(10)');
-            } else {
-                // SQLite: ignore if column exists
-                await dbConfig.run('ALTER TABLE registrations ADD COLUMN payment_method TEXT').catch(() => {});
-            }
-            console.log('✅ Ensured registrations.payment_method column exists');
-        } catch (e) {
-            console.log('ℹ️ payment_method column check skipped:', e.message || e);
-        }
-
-        // Ensure cancellation audit columns exist on registrations table
-        try {
-            if (dbConfig.isProduction) {
-                await dbConfig.run('ALTER TABLE registrations ADD COLUMN IF NOT EXISTS canceled_at TIMESTAMP');
-                await dbConfig.run('ALTER TABLE registrations ADD COLUMN IF NOT EXISTS canceled_by INTEGER');
-                await dbConfig.run('ALTER TABLE registrations ADD COLUMN IF NOT EXISTS cancellation_reason TEXT');
-            } else {
-                // SQLite: ignore if column exists
-                await dbConfig.run('ALTER TABLE registrations ADD COLUMN canceled_at TEXT').catch(() => {});
-                await dbConfig.run('ALTER TABLE registrations ADD COLUMN canceled_by INTEGER').catch(() => {});
-                await dbConfig.run('ALTER TABLE registrations ADD COLUMN cancellation_reason TEXT').catch(() => {});
-            }
-            console.log('✅ Ensured registrations cancellation audit columns exist');
-        } catch (e) {
-            console.log('ℹ️ registrations cancellation columns check skipped:', e.message || e);
-        }
-
-        // Ensure waitlist-related columns exist on registrations table
-        try {
-            if (dbConfig.isProduction) {
-                await dbConfig.run('ALTER TABLE registrations ADD COLUMN IF NOT EXISTS created_from_waitlist BOOLEAN DEFAULT FALSE');
-                await dbConfig.run('ALTER TABLE registrations ADD COLUMN IF NOT EXISTS waitlist_notification_sent_at TIMESTAMP NULL');
-            } else {
-                // SQLite: ignore if column exists
-                await dbConfig.run('ALTER TABLE registrations ADD COLUMN created_from_waitlist INTEGER DEFAULT 0').catch(() => {});
-                await dbConfig.run('ALTER TABLE registrations ADD COLUMN waitlist_notification_sent_at TEXT').catch(() => {});
-            }
-            console.log('✅ Ensured registrations waitlist columns exist');
-        } catch (e) {
-            console.log('ℹ️ registrations waitlist columns check skipped:', e.message || e);
-        }
-
-        // Ensure student profile and access control columns exist
-        try {
-            if (dbConfig.isProduction) {
-                await dbConfig.run('ALTER TABLE students ADD COLUMN IF NOT EXISTS student_type VARCHAR(20) DEFAULT \'general\'');
-                await dbConfig.run('ALTER TABLE students ADD COLUMN IF NOT EXISTS profile_complete BOOLEAN DEFAULT FALSE');
-                await dbConfig.run('ALTER TABLE students ADD COLUMN IF NOT EXISTS admin_classified BOOLEAN DEFAULT FALSE');
-                await dbConfig.run('ALTER TABLE students ADD COLUMN IF NOT EXISTS instagram_handle VARCHAR(255)');
-                await dbConfig.run('ALTER TABLE courses ADD COLUMN IF NOT EXISTS required_student_type VARCHAR(20) DEFAULT \'any\'');
-            } else {
-                // SQLite: ignore if column exists
-                await dbConfig.run('ALTER TABLE students ADD COLUMN student_type TEXT DEFAULT \'general\'').catch(() => {});
-                await dbConfig.run('ALTER TABLE students ADD COLUMN profile_complete INTEGER DEFAULT 0').catch(() => {});
-                await dbConfig.run('ALTER TABLE students ADD COLUMN admin_classified INTEGER DEFAULT 0').catch(() => {});
-                await dbConfig.run('ALTER TABLE students ADD COLUMN instagram_handle TEXT').catch(() => {});
-                await dbConfig.run('ALTER TABLE courses ADD COLUMN required_student_type TEXT DEFAULT \'any\'').catch(() => {});
-            }
-            console.log('✅ Ensured student profile and access control columns exist');
-        } catch (e) {
-            console.log('ℹ️ Student profile columns check skipped:', e.message || e);
-        }
-        
-        // Run migration if in production (non-blocking so server can start listening)
-        if (process.env.NODE_ENV === 'production') {
-            const { migrateToPostgres } = require('./scripts/migrate-to-postgres');
-            migrateToPostgres()
-                .then(() => console.log('✅ Background migration completed'))
-                .catch((err) => console.error('❌ Background migration failed:', err));
-        }
-    } catch (error) {
-        console.error('❌ Database initialization failed:', error);
-        process.exit(1);
-    }
-}
 
 // Middleware
 app.use(cors());
@@ -248,68 +45,6 @@ app.use(session({
         sameSite: 'lax'
     }
 }));
-
-// Utility functions
-const asyncHandler = (fn) => (req, res, next) => {
-    Promise.resolve(fn(req, res, next)).catch(next);
-};
-
-const requireAuth = (req, res, next) => {
-    if (req.session.adminId) {
-        next();
-    } else {
-        res.status(401).json({ error: 'Authentication required' });
-    }
-};
-
-// Course availability helper - fixes slot counting logic
-const getCourseAvailability = async (courseId) => {
-    try {
-        // Get minimum slot capacity (treats multi-week series as single seat per student)
-        const capacityResult = await dbConfig.get(`
-            SELECT MIN(cs.capacity) as course_capacity
-            FROM course_slots cs
-            WHERE cs.course_id = $1
-        `, [courseId]);
-        
-        const capacity = Number(capacityResult?.course_capacity) || 0;
-        
-        // Count only completed registrations
-        const registrationResult = await dbConfig.get(`
-            SELECT COUNT(*) as registered_count
-            FROM registrations r
-            WHERE r.course_id = $1 AND r.payment_status = 'completed'
-        `, [courseId]);
-        
-        const registeredCount = Number(registrationResult?.registered_count) || 0;
-        const available = Math.max(0, capacity - registeredCount);
-        
-        return {
-            capacity,
-            registeredCount,
-            available
-        };
-    } catch (error) {
-        console.error('❌ getCourseAvailability error for course', courseId, error);
-        return { capacity: 0, registeredCount: 0, available: 0 };
-    }
-};
-
-// Local date helpers to avoid timezone shifts when formatting YYYY-MM-DD
-function formatLocalDate(dateStr) {
-    // Accept both 'YYYY-MM-DD' and 'YYYY-MM-DDTHH:mm:ssZ' without timezone shift
-    const m = String(dateStr || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
-    return m
-        ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).toLocaleDateString()
-        : (dateStr ? new Date(dateStr).toLocaleDateString() : '');
-}
-function formatLocalDateShort(dateStr) {
-    // Accept both 'YYYY-MM-DD' and 'YYYY-MM-DDTHH:mm:ssZ' without timezone shift
-    const m = String(dateStr || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
-    return m
-        ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-        : (dateStr ? new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '');
-}
 
 // Routes
 
@@ -1188,6 +923,7 @@ app.post('/api/courses', requireAuth, asyncHandler(async (req, res) => {
     const {
         name, description, course_type, duration_weeks,
         start_date, end_date, instructor, schedule_info, prerequisites,
+        song_name, movie_name, language, series_slot,
         slots // Array of slot objects with difficulty_level, capacity, pricing, etc.
     } = req.body;
     
@@ -1204,12 +940,14 @@ app.post('/api/courses', requireAuth, asyncHandler(async (req, res) => {
     const courseResult = await dbConfig.run(`
         INSERT INTO courses (
             name, description, course_type, duration_weeks,
-            start_date, end_date, instructor, schedule_info, prerequisites
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            start_date, end_date, instructor, schedule_info, prerequisites,
+            song_name, movie_name, language, series_slot
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
         ${dbConfig.isProduction ? 'RETURNING id' : ''}
     `, [
         name, description, course_type, duration_weeks || 1,
-        start_date, end_date, instructor, schedule_info, prerequisites
+        start_date, end_date, instructor, schedule_info, prerequisites,
+        song_name || null, movie_name || null, language || null, series_slot || null
     ]);
     
     // Get course ID
@@ -1283,6 +1021,7 @@ app.put('/api/courses/:id', requireAuth, asyncHandler(async (req, res) => {
     const {
         name, description, course_type, duration_weeks,
         start_date, end_date, instructor, schedule_info, prerequisites, is_active,
+        song_name, movie_name, language, series_slot,
         slots // Array of slot objects for updating
     } = req.body;
 
@@ -1297,7 +1036,11 @@ app.put('/api/courses/:id', requireAuth, asyncHandler(async (req, res) => {
         instructor,
         schedule_info,
         prerequisites,
-        is_active
+        is_active,
+        song_name,
+        movie_name,
+        language,
+        series_slot
     };
 
     const sets = [];
@@ -1511,6 +1254,224 @@ app.delete('/api/courses/:courseId/slots/:slotId', requireAuth, asyncHandler(asy
     // Delete slot (pricing will be deleted by cascade)
     await dbConfig.run('DELETE FROM course_slots WHERE id = $1 AND course_id = $2', [slotId, courseId]);
     
+    res.json({ success: true });
+}));
+
+// Admin: Dance Series Management
+app.get('/api/admin/dance-series', requireAuth, asyncHandler(async (req, res) => {
+    const { active_only } = req.query;
+    let query = `
+        SELECT *
+        FROM dance_series
+    `;
+    const conditions = [];
+    if (active_only === 'true') {
+        conditions.push(dbConfig.isProduction ? 'is_active = true' : 'is_active = 1');
+    }
+    if (conditions.length > 0) {
+        query += ' WHERE ' + conditions.join(' AND ');
+    }
+    query += ' ORDER BY created_at DESC';
+
+    const series = await dbConfig.all(query);
+
+    const seriesWithCourses = await Promise.all(series.map(async (s) => {
+        const courses = await dbConfig.all(`
+            SELECT dsc.*, c.name, c.instructor, c.song_name, c.movie_name, c.language, c.series_slot
+            FROM dance_series_courses dsc
+            JOIN courses c ON c.id = dsc.course_id
+            WHERE dsc.series_id = $1
+            ORDER BY dsc.slot_number ASC, dsc.position ASC
+        `, [s.id]);
+
+        return {
+            ...s,
+            is_active: dbConfig.isProduction ? s.is_active : Boolean(s.is_active),
+            courses
+        };
+    }));
+
+    res.json(seriesWithCourses);
+}));
+
+app.post('/api/admin/dance-series', requireAuth, asyncHandler(async (req, res) => {
+    const {
+        name,
+        description,
+        is_active = true,
+        slot1_package_price,
+        slot2_package_price,
+        combined_package_price,
+        slot1_course_ids = [],
+        slot2_course_ids = []
+    } = req.body || {};
+
+    if (!name) {
+        return res.status(400).json({ error: 'Series name is required' });
+    }
+
+    if (slot1_course_ids.length > 3 || slot2_course_ids.length > 3) {
+        return res.status(400).json({ error: 'Maximum 3 choreography batches per slot' });
+    }
+
+    // Validate courses are choreography type and match series_slot
+    const allCourseIds = [...slot1_course_ids, ...slot2_course_ids];
+    if (allCourseIds.length > 0) {
+        const placeholders = allCourseIds.map((_, idx) => `$${idx + 1}`).join(',');
+        const courses = await dbConfig.all(
+            `SELECT id, course_type, series_slot FROM courses WHERE id IN (${placeholders})`,
+            allCourseIds
+        );
+        const courseMap = new Map(courses.map(c => [Number(c.id), c]));
+
+        for (const courseId of slot1_course_ids) {
+            const course = courseMap.get(Number(courseId));
+            if (!course || course.course_type !== 'choreography') {
+                return res.status(400).json({ error: `Course ${courseId} is not a choreography batch` });
+            }
+            if (course.series_slot !== 1) {
+                return res.status(400).json({ error: `Course ${courseId} must have series_slot=1` });
+            }
+        }
+
+        for (const courseId of slot2_course_ids) {
+            const course = courseMap.get(Number(courseId));
+            if (!course || course.course_type !== 'choreography') {
+                return res.status(400).json({ error: `Course ${courseId} is not a choreography batch` });
+            }
+            if (course.series_slot !== 2) {
+                return res.status(400).json({ error: `Course ${courseId} must have series_slot=2` });
+            }
+        }
+    }
+
+    const result = await dbConfig.run(`
+        INSERT INTO dance_series (
+            name, description, is_active,
+            slot1_package_price, slot2_package_price, combined_package_price
+        ) VALUES ($1, $2, $3, $4, $5, $6)
+        ${dbConfig.isProduction ? 'RETURNING id' : ''}
+    `, [
+        name,
+        description || null,
+        dbConfig.isProduction ? Boolean(is_active) : (is_active ? 1 : 0),
+        slot1_package_price || null,
+        slot2_package_price || null,
+        combined_package_price || null
+    ]);
+
+    const seriesId = dbConfig.isProduction ? result[0]?.id : result.lastID;
+
+    const insertMapping = async (courseId, slotNumber, position) => {
+        await dbConfig.run(`
+            INSERT INTO dance_series_courses (series_id, course_id, slot_number, position)
+            VALUES ($1, $2, $3, $4)
+        `, [seriesId, courseId, slotNumber, position]);
+    };
+
+    for (let i = 0; i < slot1_course_ids.length; i++) {
+        await insertMapping(slot1_course_ids[i], 1, i + 1);
+    }
+    for (let i = 0; i < slot2_course_ids.length; i++) {
+        await insertMapping(slot2_course_ids[i], 2, i + 1);
+    }
+
+    res.json({ success: true, series_id: seriesId });
+}));
+
+app.put('/api/admin/dance-series/:id', requireAuth, asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const {
+        name,
+        description,
+        is_active,
+        slot1_package_price,
+        slot2_package_price,
+        combined_package_price,
+        slot1_course_ids = [],
+        slot2_course_ids = []
+    } = req.body || {};
+
+    if (!name) {
+        return res.status(400).json({ error: 'Series name is required' });
+    }
+
+    if (slot1_course_ids.length > 3 || slot2_course_ids.length > 3) {
+        return res.status(400).json({ error: 'Maximum 3 choreography batches per slot' });
+    }
+
+    const allCourseIds = [...slot1_course_ids, ...slot2_course_ids];
+    if (allCourseIds.length > 0) {
+        const placeholders = allCourseIds.map((_, idx) => `$${idx + 1}`).join(',');
+        const courses = await dbConfig.all(
+            `SELECT id, course_type, series_slot FROM courses WHERE id IN (${placeholders})`,
+            allCourseIds
+        );
+        const courseMap = new Map(courses.map(c => [Number(c.id), c]));
+
+        for (const courseId of slot1_course_ids) {
+            const course = courseMap.get(Number(courseId));
+            if (!course || course.course_type !== 'choreography') {
+                return res.status(400).json({ error: `Course ${courseId} is not a choreography batch` });
+            }
+            if (course.series_slot !== 1) {
+                return res.status(400).json({ error: `Course ${courseId} must have series_slot=1` });
+            }
+        }
+
+        for (const courseId of slot2_course_ids) {
+            const course = courseMap.get(Number(courseId));
+            if (!course || course.course_type !== 'choreography') {
+                return res.status(400).json({ error: `Course ${courseId} is not a choreography batch` });
+            }
+            if (course.series_slot !== 2) {
+                return res.status(400).json({ error: `Course ${courseId} must have series_slot=2` });
+            }
+        }
+    }
+
+    await dbConfig.run(`
+        UPDATE dance_series SET
+            name = $1,
+            description = $2,
+            is_active = $3,
+            slot1_package_price = $4,
+            slot2_package_price = $5,
+            combined_package_price = $6,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = $7
+    `, [
+        name,
+        description || null,
+        dbConfig.isProduction ? Boolean(is_active) : (is_active ? 1 : 0),
+        slot1_package_price || null,
+        slot2_package_price || null,
+        combined_package_price || null,
+        id
+    ]);
+
+    await dbConfig.run('DELETE FROM dance_series_courses WHERE series_id = $1', [id]);
+
+    const insertMapping = async (courseId, slotNumber, position) => {
+        await dbConfig.run(`
+            INSERT INTO dance_series_courses (series_id, course_id, slot_number, position)
+            VALUES ($1, $2, $3, $4)
+        `, [id, courseId, slotNumber, position]);
+    };
+
+    for (let i = 0; i < slot1_course_ids.length; i++) {
+        await insertMapping(slot1_course_ids[i], 1, i + 1);
+    }
+    for (let i = 0; i < slot2_course_ids.length; i++) {
+        await insertMapping(slot2_course_ids[i], 2, i + 1);
+    }
+
+    res.json({ success: true });
+}));
+
+app.delete('/api/admin/dance-series/:id', requireAuth, asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    await dbConfig.run('DELETE FROM dance_series WHERE id = $1', [id]);
     res.json({ success: true });
 }));
 
@@ -4598,7 +4559,7 @@ app.use((req, res) => {
 
 // Initialize database and start server
 async function startServer() {
-    await initializeDatabase();
+    db = await initializeDatabase(dbConfig);
     
     app.listen(PORT, () => {
         console.log(`🎉 Dance Registration Portal running on http://localhost:${PORT}`);
@@ -4645,463 +4606,6 @@ app.post('/api/test/make-course-available', asyncHandler(async (req, res) => {
     }
 }));
 
-// Production setup endpoints for January 2026 session
-app.post('/api/admin/setup-january-2026', async (req, res) => {
-    try {
-        console.log('🎭 Setting up January 2026 Dance Session in production...');
-        
-        // Session dates
-        const tuesdays = ['2026-01-06', '2026-01-13', '2026-01-20', '2026-01-27'];
-        const fridays = ['2026-01-09', '2026-01-16', '2026-01-23', '2026-01-30'];
-        
-        const location = 'Studio G, Seattle Armory';
-        const capacity = 25;
-        
-        console.log('📅 Session dates:', { tuesdays, fridays });
-        
-        // 1. Create Level 1 House series
-        console.log('🏠 Creating Level 1 House series...');
-        const level1Result = await dbConfig.run(`
-            INSERT INTO courses (
-                name, description, course_type, duration_weeks,
-                start_date, end_date, instructor, schedule_info,
-                is_active, required_student_type
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-            ${dbConfig.isProduction ? 'RETURNING id' : ''}
-        `, [
-            'Level 1 House - January 2026',
-            'Level 1 House classes with beginner-friendly choreography and technique. Includes special combined class in week 4.',
-            'multi-week',
-            4,
-            tuesdays[0],
-            tuesdays[3],
-            null,
-            'Tuesdays 6:15-7:30 PM at Studio G, Seattle Armory',
-            true,
-            'any'
-        ]);
-        
-        const level1Id = dbConfig.isProduction ? level1Result[0]?.id : level1Result.lastID;
-        console.log(`✅ Created Level 1 course (ID: ${level1Id})`);
-        
-        // Create Level 1 slots (weeks 1-3 regular, week 4 extended)
-        for (let i = 0; i < 4; i++) {
-            const isWeek4 = i === 3;
-            const startTime = isWeek4 ? '6:30 PM' : '6:15 PM';
-            const endTime = isWeek4 ? '9:00 PM' : '7:30 PM';
-            const slotName = isWeek4 ? 'Level 1 & 2 Combined Session' : `Week ${i + 1}`;
-            
-            const slotResult = await dbConfig.run(`
-                INSERT INTO course_slots (
-                    course_id, slot_name, difficulty_level, capacity,
-                    day_of_week, start_time, end_time, location
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-                ${dbConfig.isProduction ? 'RETURNING id' : ''}
-            `, [
-                level1Id, slotName, 'Level 1', capacity,
-                'Tuesday', startTime, endTime, location
-            ]);
-            
-            const slotId = dbConfig.isProduction ? slotResult[0]?.id : slotResult.lastID;
-            
-            // Add pricing
-            await dbConfig.run(`
-                INSERT INTO course_pricing (course_slot_id, pricing_type, price)
-                VALUES ($1, 'full_package', $2)
-            `, [slotId, 80]);
-            
-            if (!isWeek4) {
-                await dbConfig.run(`
-                    INSERT INTO course_pricing (course_slot_id, pricing_type, price)
-                    VALUES ($1, 'drop_in', $2)
-                `, [slotId, 25]);
-            }
-        }
-        
-        // 2. Create Level 2 House series  
-        console.log('🏠 Creating Level 2 House series...');
-        const level2Result = await dbConfig.run(`
-            INSERT INTO courses (
-                name, description, course_type, duration_weeks,
-                start_date, end_date, instructor, schedule_info,
-                is_active, required_student_type
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-            ${dbConfig.isProduction ? 'RETURNING id' : ''}
-        `, [
-            'Level 2 House - January 2026',
-            'Level 2 House classes with intermediate choreography and technique. Includes special combined class in week 4.',
-            'multi-week',
-            4,
-            tuesdays[0],
-            tuesdays[3],
-            null,
-            'Tuesdays 7:30-9:00 PM at Studio G, Seattle Armory',
-            true,
-            'any'
-        ]);
-        
-        const level2Id = dbConfig.isProduction ? level2Result[0]?.id : level2Result.lastID;
-        console.log(`✅ Created Level 2 course (ID: ${level2Id})`);
-        
-        // Create Level 2 slots (weeks 1-3 regular, week 4 extended)
-        for (let i = 0; i < 4; i++) {
-            const isWeek4 = i === 3;
-            const startTime = isWeek4 ? '6:30 PM' : '7:30 PM';
-            const endTime = isWeek4 ? '9:00 PM' : '9:00 PM';
-            const slotName = isWeek4 ? 'Level 1 & 2 Combined Session' : `Week ${i + 1}`;
-            
-            const slotResult = await dbConfig.run(`
-                INSERT INTO course_slots (
-                    course_id, slot_name, difficulty_level, capacity,
-                    day_of_week, start_time, end_time, location
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-                ${dbConfig.isProduction ? 'RETURNING id' : ''}
-            `, [
-                level2Id, slotName, 'Level 2', capacity,
-                'Tuesday', startTime, endTime, location
-            ]);
-            
-            const slotId = dbConfig.isProduction ? slotResult[0]?.id : slotResult.lastID;
-            
-            // Add pricing
-            await dbConfig.run(`
-                INSERT INTO course_pricing (course_slot_id, pricing_type, price)
-                VALUES ($1, 'full_package', $2)
-            `, [slotId, 100]);
-            
-            if (!isWeek4) {
-                await dbConfig.run(`
-                    INSERT INTO course_pricing (course_slot_id, pricing_type, price)
-                    VALUES ($1, 'drop_in', $2)
-                `, [slotId, 30]);
-            }
-        }
-        
-        // 3. Create Crew Practice sessions (Fridays)
-        console.log('👥 Creating Crew Practice sessions...');
-        for (let i = 0; i < fridays.length; i++) {
-            const practiceDate = fridays[i];
-            
-            const crewResult = await dbConfig.run(`
-                INSERT INTO courses (
-                    name, description, course_type, duration_weeks,
-                    start_date, end_date, instructor, schedule_info,
-                    is_active, required_student_type
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-                ${dbConfig.isProduction ? 'RETURNING id' : ''}
-            `, [
-                `Crew Practice - ${practiceDate}`,
-                'Crew practice session for advanced dancers and crew members.',
-                'crew_practice',
-                1,
-                practiceDate,
-                practiceDate,
-                null,
-                `Friday 6:30-10:30 PM at ${location}`,
-                true,
-                'crew_member'
-            ]);
-            
-            const crewId = dbConfig.isProduction ? crewResult[0]?.id : crewResult.lastID;
-            
-            // Create crew practice slot
-            const crewSlotResult = await dbConfig.run(`
-                INSERT INTO course_slots (
-                    course_id, slot_name, difficulty_level, capacity,
-                    practice_date, start_time, end_time, location
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-                ${dbConfig.isProduction ? 'RETURNING id' : ''}
-            `, [
-                crewId, 'Crew Practice', 'Advanced', capacity,
-                practiceDate, '6:30 PM', '10:30 PM', location
-            ]);
-            
-            const crewSlotId = dbConfig.isProduction ? crewSlotResult[0]?.id : crewSlotResult.lastID;
-            
-            // Add crew practice pricing
-            await dbConfig.run(`
-                INSERT INTO course_pricing (course_slot_id, pricing_type, price)
-                VALUES ($1, 'drop_in', $2)
-            `, [crewSlotId, 30]);
-            
-            console.log(`✅ Created Crew Practice for ${practiceDate} (ID: ${crewId})`);
-        }
-        
-        // 4. Create Drop-in classes (weeks 1-3 only)
-        console.log('🎫 Creating Drop-in classes...');
-        const dropInWeeks = tuesdays.slice(0, 3); // Only weeks 1-3
-        
-        for (let i = 0; i < dropInWeeks.length; i++) {
-            const date = dropInWeeks[i];
-            const weekNum = i + 1;
-            
-            // Level 1 Drop-in
-            const l1DropResult = await dbConfig.run(`
-                INSERT INTO courses (
-                    name, description, course_type, duration_weeks,
-                    start_date, end_date, instructor, schedule_info,
-                    is_active, required_student_type
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-                ${dbConfig.isProduction ? 'RETURNING id' : ''}
-            `, [
-                `Level 1 Drop-in - Week ${weekNum} (${date})`,
-                `Single drop-in class for Level 1 House, Week ${weekNum}.`,
-                'multi-week',
-                1,
-                date,
-                date,
-                null,
-                `Tuesday 6:15-7:30 PM at ${location}`,
-                true,
-                'any'
-            ]);
-            
-            const l1DropId = dbConfig.isProduction ? l1DropResult[0]?.id : l1DropResult.lastID;
-            
-            const l1DropSlotResult = await dbConfig.run(`
-                INSERT INTO course_slots (
-                    course_id, slot_name, difficulty_level, capacity,
-                    practice_date, start_time, end_time, location
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-                ${dbConfig.isProduction ? 'RETURNING id' : ''}
-            `, [
-                l1DropId, `Week ${weekNum}`, 'Level 1', capacity,
-                date, '6:15 PM', '7:30 PM', location
-            ]);
-            
-            const l1DropSlotId = dbConfig.isProduction ? l1DropSlotResult[0]?.id : l1DropSlotResult.lastID;
-            
-            await dbConfig.run(`
-                INSERT INTO course_pricing (course_slot_id, pricing_type, price)
-                VALUES ($1, 'drop_in', $2)
-            `, [l1DropSlotId, 30]);
-            
-            // Level 2 Drop-in
-            const l2DropResult = await dbConfig.run(`
-                INSERT INTO courses (
-                    name, description, course_type, duration_weeks,
-                    start_date, end_date, instructor, schedule_info,
-                    is_active, required_student_type
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-                ${dbConfig.isProduction ? 'RETURNING id' : ''}
-            `, [
-                `Level 2 Drop-in - Week ${weekNum} (${date})`,
-                `Single drop-in class for Level 2 House, Week ${weekNum}.`,
-                'multi-week',
-                1,
-                date,
-                date,
-                null,
-                `Tuesday 7:30-9:00 PM at ${location}`,
-                true,
-                'any'
-            ]);
-            
-            const l2DropId = dbConfig.isProduction ? l2DropResult[0]?.id : l2DropResult.lastID;
-            
-            const l2DropSlotResult = await dbConfig.run(`
-                INSERT INTO course_slots (
-                    course_id, slot_name, difficulty_level, capacity,
-                    practice_date, start_time, end_time, location
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-                ${dbConfig.isProduction ? 'RETURNING id' : ''}
-            `, [
-                l2DropId, `Week ${weekNum}`, 'Level 2', capacity,
-                date, '7:30 PM', '9:00 PM', location
-            ]);
-            
-            const l2DropSlotId = dbConfig.isProduction ? l2DropSlotResult[0]?.id : l2DropSlotResult.lastID;
-            
-            await dbConfig.run(`
-                INSERT INTO course_pricing (course_slot_id, pricing_type, price)
-                VALUES ($1, 'drop_in', $2)
-            `, [l2DropSlotId, 30]);
-            
-            console.log(`✅ Created drop-in classes for Week ${weekNum} (${date})`);
-        }
-        
-        res.json({
-            success: true,
-            message: 'January 2026 session created successfully',
-            summary: {
-                level1Id,
-                level2Id,
-                crewSessions: fridays.length,
-                dropInClasses: 6,
-                totalCourses: 2 + fridays.length + 6
-            }
-        });
-        
-    } catch (error) {
-        console.error('❌ Setup failed:', error);
-        res.status(500).json({
-            success: false,
-            error: error.message
-        });
-    }
-});
-
-// Setup combo packages endpoint
-app.post('/api/admin/setup-combo-packages', async (req, res) => {
-    try {
-        console.log('🎯 Setting up Combo Packages in production...');
-        
-        const location = 'Studio G, Seattle Armory';
-        const capacity = 25;
-        
-        // 1. Level 1 + 2 Combo Package ($150)
-        console.log('🎯 Creating Level 1 + 2 Combo Package...');
-        const comboResult = await dbConfig.run(`
-            INSERT INTO courses (
-                name, description, course_type, duration_weeks,
-                start_date, end_date, instructor, schedule_info,
-                is_active, required_student_type
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-            ${dbConfig.isProduction ? 'RETURNING id' : ''}
-        `, [
-            'Level 1 + 2 House Combo - January 2026',
-            'Complete access to both Level 1 and Level 2 House classes. Includes Week 4 combined class. Perfect for dancers wanting to experience both levels.',
-            'multi-week',
-            4,
-            '2026-01-06',
-            '2026-01-27',
-            null,
-            'Tuesdays: Level 1 (6:15-7:30 PM) + Level 2 (7:30-9:00 PM) + Week 4 Combined (6:30-9:00 PM)',
-            true,
-            'any'
-        ]);
-        
-        const comboId = dbConfig.isProduction ? comboResult[0]?.id : comboResult.lastID;
-        console.log(`✅ Created Level 1+2 Combo (ID: ${comboId})`);
-        
-        // Create combo slots
-        const comboSlotResult = await dbConfig.run(`
-            INSERT INTO course_slots (
-                course_id, slot_name, difficulty_level, capacity,
-                day_of_week, start_time, end_time, location
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-            ${dbConfig.isProduction ? 'RETURNING id' : ''}
-        `, [
-            comboId, 'Level 1 + 2 Full Access', 'Beginner to Intermediate', capacity,
-            'Tuesday', '6:15 PM', '9:00 PM', location
-        ]);
-        
-        const comboSlotId = dbConfig.isProduction ? comboSlotResult[0]?.id : comboSlotResult.lastID;
-        
-        // Add combo pricing
-        await dbConfig.run(`
-            INSERT INTO course_pricing (course_slot_id, pricing_type, price)
-            VALUES ($1, 'full_package', $2)
-        `, [comboSlotId, 150]);
-        
-        // 2. Crew + House Package ($200)
-        console.log('🎯 Creating Crew + House Unlimited Package...');
-        const crewHouseResult = await dbConfig.run(`
-            INSERT INTO courses (
-                name, description, course_type, duration_weeks,
-                start_date, end_date, instructor, schedule_info,
-                is_active, required_student_type
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-            ${dbConfig.isProduction ? 'RETURNING id' : ''}
-        `, [
-            'Crew + House Unlimited - January 2026',
-            'Complete access to ALL House classes (Level 1 & 2) PLUS unlimited Crew Practice sessions. The ultimate package for serious dancers.',
-            'multi-week',
-            4,
-            '2026-01-06',
-            '2026-01-30',
-            null,
-            'Tuesdays: House Classes (6:15-9:00 PM) + Fridays: Crew Practice (6:30-10:30 PM) - Unlimited Access',
-            true,
-            'crew_member'
-        ]);
-        
-        const crewHouseId = dbConfig.isProduction ? crewHouseResult[0]?.id : crewHouseResult.lastID;
-        console.log(`✅ Created Crew+House Unlimited (ID: ${crewHouseId})`);
-        
-        // Create unlimited package slot
-        const unlimitedSlotResult = await dbConfig.run(`
-            INSERT INTO course_slots (
-                course_id, slot_name, difficulty_level, capacity,
-                day_of_week, start_time, end_time, location
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-            ${dbConfig.isProduction ? 'RETURNING id' : ''}
-        `, [
-            crewHouseId, 'Unlimited Access Pass', 'All Levels + Crew', capacity,
-            'Tuesday,Friday', '6:15 PM', '10:30 PM', location
-        ]);
-        
-        const unlimitedSlotId = dbConfig.isProduction ? unlimitedSlotResult[0]?.id : unlimitedSlotResult.lastID;
-        
-        // Add unlimited package pricing
-        await dbConfig.run(`
-            INSERT INTO course_pricing (course_slot_id, pricing_type, price)
-            VALUES ($1, 'full_package', $2)
-        `, [unlimitedSlotId, 200]);
-        
-        // 3. Triple Threat Package (All Individual Classes) - $260 value for $220
-        console.log('🎯 Creating Triple Threat Package...');
-        const tripleResult = await dbConfig.run(`
-            INSERT INTO courses (
-                name, description, course_type, duration_weeks,
-                start_date, end_date, instructor, schedule_info,
-                is_active, required_student_type
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-            ${dbConfig.isProduction ? 'RETURNING id' : ''}
-        `, [
-            'Triple Threat Package - January 2026',
-            'Complete access to Level 1 House ($80) + Level 2 House ($100) + All Crew Practice ($80) = $260 value for only $220! Save $40 with this comprehensive package.',
-            'multi-week',
-            4,
-            '2026-01-06',
-            '2026-01-30',
-            null,
-            'EVERYTHING: Tuesdays House Classes + Fridays Crew Practice + Week 4 Combined Class',
-            true,
-            'any'
-        ]);
-        
-        const tripleId = dbConfig.isProduction ? tripleResult[0]?.id : tripleResult.lastID;
-        console.log(`✅ Created Triple Threat Package (ID: ${tripleId})`);
-        
-        // Create triple package slot
-        const tripleSlotResult = await dbConfig.run(`
-            INSERT INTO course_slots (
-                course_id, slot_name, difficulty_level, capacity,
-                day_of_week, start_time, end_time, location
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-            ${dbConfig.isProduction ? 'RETURNING id' : ''}
-        `, [
-            tripleId, 'Complete Access - Everything Included', 'All Levels', capacity,
-            'Tuesday,Friday', '6:15 PM', '10:30 PM', location
-        ]);
-        
-        const tripleSlotId = dbConfig.isProduction ? tripleSlotResult[0]?.id : tripleSlotResult.lastID;
-        
-        // Add triple package pricing
-        await dbConfig.run(`
-            INSERT INTO course_pricing (course_slot_id, pricing_type, price)
-            VALUES ($1, 'full_package', $2)
-        `, [tripleSlotId, 220]);
-        
-        res.json({
-            success: true,
-            message: 'Combo packages created successfully',
-            packages: {
-                combo: { id: comboId, price: 150 },
-                crew_house: { id: crewHouseId, price: 200 },
-                triple_threat: { id: tripleId, price: 220 }
-            }
-        });
-        
-    } catch (error) {
-        console.error('❌ Combo packages setup failed:', error);
-        res.status(500).json({
-            success: false,
-            error: error.message
-        });
-    }
-});
 
 // Create the test profiles endpoint
 app.post('/api/admin/create-test-profiles', async (req, res) => {

@@ -512,6 +512,210 @@ button.textContent = isRegistered ? 'Already Registered' :
 - Client renders UI based on status flags
 - Status changes trigger immediate visual updates
 - Consistent status representation across all UI components
+
+---
+
+## Choreography & Dance Series Patterns (2026-03)
+
+### Course Type Extension Pattern
+**Pattern**: Extend existing course model with new type without breaking existing functionality.
+
+```javascript
+// New course_type value: 'choreography'
+// Existing types remain: 'multi_week', 'crew_practice', 'drop_in'
+// course_type determines:
+//   - UI rendering (which fields to show/hide)
+//   - Validation rules (2 dates for choreography)
+//   - Capacity counting logic (pending vs completed)
+//   - Registration endpoints (choreography uses dedicated endpoints)
+```
+
+**Implementation**:
+- courses table additions: `song_name`, `movie_name`, `language`, `series_slot`
+- Backward compatible: existing types unaffected
+- Clear UI distinction: "Choreography (2 classes)" vs "Drop-in" vs "Multi-week"
+
+### Dance Series Aggregation Pattern
+**Pattern**: Aggregate courses into logical bundles with package pricing.
+
+```sql
+-- New tables for series management
+CREATE TABLE dance_series (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT,
+    is_active BOOLEAN DEFAULT true,
+    slot1_package_price DECIMAL(10,2),
+    slot2_package_price DECIMAL(10,2),
+    combined_package_price DECIMAL(10,2),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE dance_series_courses (
+    id INTEGER PRIMARY KEY,
+    series_id INTEGER REFERENCES dance_series(id) ON DELETE CASCADE,
+    course_id INTEGER REFERENCES courses(id) ON DELETE CASCADE,
+    slot_number INTEGER, -- 1 or 2
+    position INTEGER,    -- Order within slot (1-3)
+    UNIQUE(series_id, course_id)
+);
+```
+
+**Key Features**:
+- Series can contain up to 3 courses per slot (Slot 1, Slot 2)
+- Package pricing at series level (slot1, slot2, combined)
+- Cascading deletes preserve data integrity
+- Position field maintains display order
+
+### Capacity Reservation Policy Pattern
+**Pattern**: Different reservation policies for different course types.
+
+```javascript
+// Choreography courses: Reserve on PENDING
+function getCourseAvailability(courseId, courseType) {
+    if (courseType === 'choreography') {
+        // Count both pending AND completed
+        const query = `
+            SELECT COUNT(*) as registered 
+            FROM registrations 
+            WHERE course_id = ? 
+            AND payment_status IN ('pending', 'completed')
+            AND payment_status != 'canceled'
+        `;
+    } else {
+        // Legacy behavior: count only completed
+        const query = `
+            SELECT COUNT(*) as registered 
+            FROM registrations 
+            WHERE course_id = ? 
+            AND payment_status = 'completed'
+        `;
+    }
+}
+```
+
+**Rationale**:
+- Choreography: Immediate seat holds prevent overbooking during payment window
+- Legacy courses: Existing behavior unchanged (operational stability)
+- Admin can cancel pending registrations to free capacity
+
+### Multi-Course Bundle Registration Pattern
+**Pattern**: Single transaction creates multiple registrations with validation.
+
+```javascript
+// POST /api/register-choreography-bundle
+async function registerChoreographyBundle(studentId, courseIds, totalAmount) {
+    // 1. Validate all courses have capacity
+    for (const courseId of courseIds) {
+        const available = await getCourseAvailability(courseId, 'choreography');
+        if (available <= 0) {
+            throw new Error(`Course ${courseId} is full`);
+        }
+    }
+    
+    // 2. Create registrations atomically
+    const registrationIds = [];
+    for (const courseId of courseIds) {
+        const regId = await createRegistration({
+            student_id: studentId,
+            course_id: courseId,
+            payment_status: 'pending',
+            payment_amount: totalAmount / courseIds.length
+        });
+        registrationIds.push(regId);
+    }
+    
+    // 3. Return all registration IDs for payment confirmation
+    return registrationIds;
+}
+```
+
+**Key Features**:
+- Atomic validation before creating any registrations
+- Pro-rated pricing across courses
+- Single payment confirmation flow
+- Rollback mechanism if any registration fails
+
+### Student Multi-Select UI Pattern
+**Pattern**: Checkbox-based course selection with live total calculation.
+
+```javascript
+// Client-side pattern
+class ChoreographySelector {
+    constructor() {
+        this.selectedCourses = new Set();
+        this.setupCheckboxListeners();
+    }
+    
+    updateTotal() {
+        const total = Array.from(this.selectedCourses)
+            .reduce((sum, course) => sum + course.price, 0);
+        this.displayStickyFooter(`Selected ${this.selectedCourses.size} • Total $${total}`);
+    }
+    
+    async submitBundle() {
+        const courseIds = Array.from(this.selectedCourses).map(c => c.id);
+        await fetch('/api/register-choreography-bundle', {
+            method: 'POST',
+            body: JSON.stringify({ course_ids: courseIds })
+        });
+    }
+}
+```
+
+**UI Components**:
+- Course cards with checkboxes
+- Sticky footer with running total
+- "Continue" button navigates to payment
+- Visual feedback for selection state
+
+### Admin Series Management Pattern
+**Pattern**: Two-stage creation process for complex entities.
+
+```javascript
+// Stage 1: Create choreography batches
+// - Admin creates 6 individual choreography courses
+// - Each tagged with series_slot (1 or 2)
+
+// Stage 2: Bundle into series
+// - Admin selects 3 courses for Slot 1
+// - Admin selects 3 courses for Slot 2
+// - Sets package pricing for Slot 1, Slot 2, Combined
+// - System validates: all courses are choreography type
+// - System validates: series_slot matches slot_number
+```
+
+**Validation Rules**:
+- Only `course_type='choreography'` can be added to series
+- Each course can belong to max 1 active series
+- series_slot must match slot_number in dance_series_courses
+- Package prices must be > 0 and <= sum of individual prices
+
+### Choreography Date Display Pattern
+**Pattern**: Show multiple practice dates in condensed format.
+
+```javascript
+// Frontend rendering for 2-date batches
+function renderChoreographySchedule(course) {
+    // course.slots = [
+    //   { practice_date: '2026-03-15', start_time: '19:00', end_time: '20:30', location: 'Studio A' },
+    //   { practice_date: '2026-03-22', start_time: '19:00', end_time: '20:30', location: 'Studio A' }
+    // ]
+    
+    const dates = course.slots.map(s => formatShortDate(s.practice_date)).join(', ');
+    const time = `${formatTime(course.slots[0].start_time)} - ${formatTime(course.slots[0].end_time)}`;
+    const location = course.slots[0].location;
+    
+    return `${dates} • ${time} • ${location}`;
+    // Example: "Mar 15, Mar 22 • 7:00 PM - 8:30 PM • Studio A"
+}
+```
+
+**Display Strategy**:
+- Short date format for multiple dates
+- Single time range (shared across dates)
+- Single location (shared across dates)
+- Bullet separators for readability
 ### Cache Busting and Staleness Prevention
 - `public/admin.html` references:
   - `css/admin-styles.css?v=10`
