@@ -14,7 +14,9 @@ class EmailProfileRegistrationApp {
         this.currentEmail = '';
         this.currentStudent = null;
         this.eligibleCourses = [];
+        this.seriesPackages = [];
         this.selectedCourse = null;
+        this.selectedPackage = null;
         this.registrationData = {};
         this.settings = {};
         
@@ -286,7 +288,7 @@ class EmailProfileRegistrationApp {
         this.scrollToTop();
     }
 
-    showAvailableCourses() {
+    async showAvailableCourses() {
         this.currentStep = 'course-selection';
         this.hideAllSections();
         document.getElementById('courseSelection').style.display = 'block';
@@ -304,39 +306,87 @@ class EmailProfileRegistrationApp {
         
         document.getElementById('courseFilterInfo').textContent = filterText;
 
+        // Load series packages
+        await this.loadSeriesPackages();
+
         // Categorize and render courses
         this.renderCategorizedCourses();
 
         this.scrollToTop();
     }
 
+    async loadSeriesPackages() {
+        try {
+            const response = await fetch('/api/admin/series');
+            if (!response.ok) {
+                console.warn('Failed to load series packages');
+                this.seriesPackages = [];
+                return;
+            }
+            
+            const packages = await response.json();
+            // Only show active packages
+            this.seriesPackages = packages.filter(p => p.is_active);
+            console.log('✅ Loaded series packages:', this.seriesPackages.length);
+        } catch (error) {
+            console.error('Error loading series packages:', error);
+            this.seriesPackages = [];
+        }
+    }
+
     renderCategorizedCourses() {
         const multiWeekContainer = document.getElementById('multiWeekCourses');
         const crewPracticeContainer = document.getElementById('crewPracticeCourses');
         const dropInContainer = document.getElementById('dropInClasses');
+        const choreographyContainer = document.getElementById('choreographyCourses');
         const crewPracticeSection = document.getElementById('crewPracticeSection');
         const dropInSection = document.getElementById('dropInSection');
+        const choreographySection = document.getElementById('choreographySection');
+        const seriesPackagesSection = document.getElementById('seriesPackagesSection');
         const noCoursesMessage = document.getElementById('noCoursesMessage');
 
         // Clear containers
         multiWeekContainer.innerHTML = '';
         crewPracticeContainer.innerHTML = '';
         dropInContainer.innerHTML = '';
+        choreographyContainer.innerHTML = '';
 
         // Categorize courses
         const multiWeekCourses = [];
         const crewPracticeCourses = [];
         const dropInCourses = [];
+        const choreographyCourses = [];
 
         this.eligibleCourses.forEach(course => {
             if (course.course_type === 'crew_practice') {
                 crewPracticeCourses.push(course);
             } else if (course.course_type === 'drop_in') {
                 dropInCourses.push(course);
+            } else if (course.course_type === 'choreography') {
+                choreographyCourses.push(course);
             } else {
                 multiWeekCourses.push(course);
             }
         });
+
+        // Render series packages if available
+        if (this.seriesPackages.length > 0) {
+            seriesPackagesSection.style.display = 'block';
+            this.renderSeriesPackages();
+        } else {
+            seriesPackagesSection.style.display = 'none';
+        }
+
+        // Render choreography courses
+        if (choreographyCourses.length > 0) {
+            choreographySection.style.display = 'block';
+            choreographyCourses.forEach(course => {
+                const courseCard = this.createChoreographyCard(course);
+                choreographyContainer.appendChild(courseCard);
+            });
+        } else {
+            choreographySection.style.display = 'none';
+        }
 
         // Render each category
         multiWeekCourses.forEach(course => {
@@ -365,11 +415,228 @@ class EmailProfileRegistrationApp {
         }
 
         // Show no courses message if no courses available
-        if (this.eligibleCourses.length === 0) {
+        if (this.eligibleCourses.length === 0 && this.seriesPackages.length === 0) {
             noCoursesMessage.style.display = 'block';
         } else {
             noCoursesMessage.style.display = 'none';
         }
+    }
+
+    renderSeriesPackages() {
+        const slot1Container = document.getElementById('slot1Packages');
+        const slot2Container = document.getElementById('slot2Packages');
+        
+        slot1Container.innerHTML = '';
+        slot2Container.innerHTML = '';
+
+        // Separate packages by slot
+        const slot1Packages = this.seriesPackages.filter(p => p.slot_number === 1);
+        const slot2Packages = this.seriesPackages.filter(p => p.slot_number === 2);
+
+        // Render Slot 1 packages
+        if (slot1Packages.length > 0) {
+            const slot1Header = document.createElement('h5');
+            slot1Header.className = 'text-muted mb-3';
+            slot1Header.innerHTML = '<i class="fas fa-layer-group me-2"></i>Slot 1 Packages';
+            slot1Container.appendChild(slot1Header);
+
+            const slot1Row = document.createElement('div');
+            slot1Row.className = 'row';
+            slot1Packages.forEach(pkg => {
+                const card = this.createPackageCard(pkg);
+                slot1Row.appendChild(card);
+            });
+            slot1Container.appendChild(slot1Row);
+        }
+
+        // Render Slot 2 packages
+        if (slot2Packages.length > 0) {
+            const slot2Header = document.createElement('h5');
+            slot2Header.className = 'text-muted mb-3 mt-4';
+            slot2Header.innerHTML = '<i class="fas fa-layer-group me-2"></i>Slot 2 Packages';
+            slot2Container.appendChild(slot2Header);
+
+            const slot2Row = document.createElement('div');
+            slot2Row.className = 'row';
+            slot2Packages.forEach(pkg => {
+                const card = this.createPackageCard(pkg);
+                slot2Row.appendChild(card);
+            });
+            slot2Container.appendChild(slot2Row);
+        }
+    }
+
+    createPackageCard(pkg) {
+        const col = document.createElement('div');
+        col.className = 'col-lg-6 col-xl-4 mb-4';
+
+        // Get choreographies included in package
+        const choreographies = pkg.choreographies || [];
+        const choreographyList = choreographies.map(c => {
+            const metaInfo = [c.song_name, c.movie_name, c.language].filter(Boolean).join(' • ');
+            return `
+                <div class="mb-2">
+                    <strong>${c.name}</strong>
+                    ${metaInfo ? `<br><small class="text-muted">${metaInfo}</small>` : ''}
+                </div>
+            `;
+        }).join('');
+
+        const packagePrice = pkg.package_price || 0;
+        const individualTotal = choreographies.reduce((sum, c) => sum + (c.full_course_price || 0), 0);
+        const savings = individualTotal - packagePrice;
+
+        col.innerHTML = `
+            <div class="card course-card border-info fade-in">
+                <div class="card-header bg-info text-white">
+                    <span class="badge bg-light text-info mb-2">PACKAGE DEAL</span>
+                    <h5 class="card-title mb-0">${pkg.series_name}</h5>
+                    <p class="card-subtitle mb-0 mt-1"><small>${choreographies.length} Choreography Batches</small></p>
+                </div>
+                <div class="card-body">
+                    ${pkg.description ? `<p class="text-muted mb-3">${pkg.description}</p>` : ''}
+                    
+                    <div class="mb-3">
+                        <h6 class="text-muted mb-2">Includes:</h6>
+                        ${choreographyList}
+                    </div>
+
+                    <div class="package-pricing mb-3">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span class="text-muted">Package Price:</span>
+                            <span class="h4 text-info mb-0">$${packagePrice}</span>
+                        </div>
+                        ${savings > 0 ? `
+                            <div class="text-end">
+                                <small class="text-success">
+                                    <i class="fas fa-tag me-1"></i>Save $${savings}!
+                                </small>
+                            </div>
+                        ` : ''}
+                    </div>
+
+                    <button class="btn btn-info w-100 text-white" onclick="app.selectPackage(${pkg.id})">
+                        <i class="fas fa-box me-2"></i>Select Package
+                    </button>
+                </div>
+            </div>
+        `;
+
+        return col;
+    }
+
+    createChoreographyCard(course) {
+        const col = document.createElement('div');
+        col.className = 'col-lg-6 col-xl-4 mb-4';
+
+        const availableSpots = parseInt(course.available_spots) || 0;
+        const registrationStatus = course.registration_status || 'not_registered';
+        const isRegistered = registrationStatus === 'registered_completed';
+        const isPending = registrationStatus === 'registered_pending';
+
+        // Build choreography metadata
+        const metaItems = [];
+        if (course.song_name) {
+            metaItems.push(`<div class="course-info-item"><i class="fas fa-music"></i><span><strong>Song:</strong> ${course.song_name}</span></div>`);
+        }
+        if (course.movie_name) {
+            metaItems.push(`<div class="course-info-item"><i class="fas fa-film"></i><span><strong>Movie:</strong> ${course.movie_name}</span></div>`);
+        }
+        if (course.language) {
+            metaItems.push(`<div class="course-info-item"><i class="fas fa-language"></i><span><strong>Language:</strong> ${course.language}</span></div>`);
+        }
+
+        // Build schedule info
+        let scheduleHtml = '';
+        if (course.slots && course.slots.length > 0) {
+            const scheduleItems = course.slots.map(slot => {
+                const parts = [];
+                if (slot.day_of_week) parts.push(`${slot.day_of_week}s`);
+                const start = slot.start_time || course.start_time;
+                const end = slot.end_time || course.end_time;
+                if (start && end) parts.push(`${start} - ${end}`);
+                if (slot.location) parts.push(`at ${slot.location}`);
+                return parts.join(' ');
+            }).filter(t => t);
+
+            let dateInfo = '';
+            if (course.start_date && course.end_date) {
+                const startDate = formatLocalDate(course.start_date);
+                const endDate = formatLocalDate(course.end_date);
+                dateInfo = `<br><small>${startDate} - ${endDate}</small>`;
+            }
+
+            if (scheduleItems.length > 0) {
+                scheduleHtml = `
+                    <div class="course-info-item">
+                        <i class="fas fa-calendar"></i>
+                        <span>${scheduleItems.join('<br>')}${dateInfo}</span>
+                    </div>
+                `;
+            }
+        }
+
+        col.innerHTML = `
+            <div class="card course-card border-success fade-in ${isRegistered ? 'registered-course' : ''} ${isPending ? 'pending-course' : ''}">
+                <div class="card-header bg-success text-white">
+                    <span class="badge bg-light text-success mb-2">CHOREOGRAPHY</span>
+                    <h5 class="card-title mb-0">${course.name}</h5>
+                    <p class="card-subtitle mb-0 mt-1"><small>2-Class Batch</small></p>
+                    ${isRegistered ? `
+                        <div class="registration-status-badge registered">
+                            <i class="fas fa-check-circle"></i> Registered
+                        </div>
+                    ` : isPending ? `
+                        <div class="registration-status-badge pending">
+                            <i class="fas fa-clock"></i> Payment Pending
+                        </div>
+                    ` : ''}
+                </div>
+                <div class="card-body">
+                    ${course.description ? `<p class="text-muted mb-3">${course.description}</p>` : ''}
+                    
+                    <div class="course-info mb-3">
+                        ${metaItems.join('')}
+                        ${scheduleHtml}
+                    </div>
+
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <span class="text-muted">Price:</span>
+                        <span class="h5 mb-0 text-success">$${course.full_course_price || course.per_class_price || 0}</span>
+                    </div>
+
+                    <button class="btn register-btn ${availableSpots <= 0 && !isRegistered && !isPending ? 'waitlist-btn' : ''}" 
+                            onclick="app.selectCourse(${course.id})"
+                            ${availableSpots <= 0 && !isRegistered && !isPending ? '' : isRegistered || isPending ? 'disabled' : ''}>
+                        <i class="fas ${isRegistered ? 'fa-check' : isPending ? 'fa-clock' : availableSpots > 0 ? 'fa-user-plus' : 'fa-list-alt'}"></i>
+                        ${isRegistered ? 'Already Registered' : isPending ? 'Payment Pending' : availableSpots > 0 ? 'Register Now' : 'Join Waitlist'}
+                    </button>
+                </div>
+            </div>
+        `;
+
+        return col;
+    }
+
+    async selectPackage(packageId) {
+        const pkg = this.seriesPackages.find(p => p.id === packageId);
+        
+        if (!pkg) {
+            this.showError('Package not found');
+            return;
+        }
+
+        this.selectedPackage = pkg;
+        console.log('Package selected:', pkg.series_name);
+
+        // For now, show info that package registration will be implemented
+        this.showError('Package registration will be available soon! Please register for individual choreography batches for now.');
+        
+        // TODO: Implement package registration flow
+        // This would involve:
+        // 1. Creating registrations for all choreographies in the package
+        // 2. Applying the package price
+        // 3. Handling payment for the entire package
     }
 
     createCourseCard(course) {

@@ -17,12 +17,14 @@ Adding new course type "choreography" (2-class batches) with dance series packag
 - [x] Memory bank updated with comprehensive plan
 - [x] Architecture patterns documented in systemPatterns.md
 - [x] Active context updated with requirements and approach
-- [ ] Database schema changes (courses columns + new tables)
-- [ ] Backend APIs (admin series CRUD + student registration endpoints)
-- [ ] Admin UI enhancements (choreography fields + series management)
+- [x] Database schema changes (courses columns + new tables)
+- [x] Backend APIs for choreography course CRUD
+- [x] Admin UI enhancements (choreography fields for course creation)
+- [x] Testing and deployment to Railway
+- [x] User validation in production - "I was able to create and save it"
+- [ ] Admin series management UI (bundle choreographies into packages)
 - [ ] Student UI enhancements (choreography cards + packages section)
-- [ ] Testing and deployment to Railway
-- [ ] User validation in production
+- [ ] Student registration flow for choreography courses
 
 #### **Technical Decisions Made**
 - Backward compatible: no breaking changes to existing course types

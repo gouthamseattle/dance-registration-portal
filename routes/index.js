@@ -4245,6 +4245,202 @@ module.exports = function registerRoutes(app, deps) {
         });
     }));
 
+    // ============================================
+    // CHOREOGRAPHY SERIES MANAGEMENT APIs
+    // ============================================
+
+    /**
+     * Get all dance series (admin)
+     * GET /api/admin/series
+     */
+    app.get('/api/admin/series', requireAuth, asyncHandler(async (req, res) => {
+        const series = await dbConfig.all(`
+            SELECT ds.*, 
+                   COUNT(dsc.id) as course_count
+            FROM dance_series ds
+            LEFT JOIN dance_series_courses dsc ON ds.id = dsc.series_id
+            GROUP BY ds.id
+            ORDER BY ds.created_at DESC
+        `);
+
+        // For each series, get the courses
+        const seriesWithCourses = await Promise.all(series.map(async (s) => {
+            const courses = await dbConfig.all(`
+                SELECT dsc.*, c.name, c.song_name, c.movie_name, c.language
+                FROM dance_series_courses dsc
+                JOIN courses c ON c.id = dsc.course_id
+                WHERE dsc.series_id = $1
+                ORDER BY dsc.slot_number ASC, dsc.position ASC
+            `, [s.id]);
+
+            return {
+                ...s,
+                courses: courses
+            };
+        }));
+
+        res.json(seriesWithCourses);
+    }));
+
+    /**
+     * Get choreography courses available for series bundling
+     * GET /api/admin/choreography-courses?series_slot=1
+     */
+    app.get('/api/admin/choreography-courses', requireAuth, asyncHandler(async (req, res) => {
+        const { series_slot } = req.query;
+
+        let query = `
+            SELECT c.id, c.name, c.song_name, c.movie_name, c.language, c.series_slot,
+                   c.is_active, c.created_at
+            FROM courses c
+            WHERE c.course_type = 'choreography'
+        `;
+
+        const params = [];
+        if (series_slot) {
+            query += ' AND c.series_slot = $1';
+            params.push(series_slot);
+        }
+
+        query += ' ORDER BY c.created_at DESC';
+
+        const courses = await dbConfig.all(query, params);
+        res.json(courses);
+    }));
+
+    /**
+     * Create a new dance series
+     * POST /api/admin/series
+     * Body: { name, description, slot_number, course_ids: [1,2,3], pricing }
+     */
+    app.post('/api/admin/series', requireAuth, asyncHandler(async (req, res) => {
+        const { name, description, slot_number, course_ids, pricing } = req.body;
+
+        if (!name || !slot_number || !course_ids || course_ids.length === 0) {
+            return res.status(400).json({ error: 'name, slot_number, and course_ids array are required' });
+        }
+
+        if (course_ids.length > 3) {
+            return res.status(400).json({ error: 'Maximum 3 choreographies per series' });
+        }
+
+        // Validate all courses exist and are choreography type with matching series_slot
+        for (const courseId of course_ids) {
+            const course = await dbConfig.get(`
+                SELECT id, course_type, series_slot 
+                FROM courses 
+                WHERE id = $1 AND course_type = 'choreography'
+            `, [courseId]);
+
+            if (!course) {
+                return res.status(400).json({ error: `Course ${courseId} not found or not a choreography course` });
+            }
+
+            if (course.series_slot && Number(course.series_slot) !== Number(slot_number)) {
+                return res.status(400).json({ 
+                    error: `Course ${courseId} is assigned to slot ${course.series_slot}, not slot ${slot_number}` 
+                });
+            }
+        }
+
+        // Create series
+        const result = await dbConfig.run(`
+            INSERT INTO dance_series (
+                name, description, slot_number, package_price, is_active
+            ) VALUES ($1, $2, $3, $4, ${dbConfig.isProduction ? 'true' : '1'})
+            ${dbConfig.isProduction ? 'RETURNING id' : ''}
+        `, [name, description || null, slot_number, pricing?.package_price || null]);
+
+        let seriesId;
+        if (dbConfig.isProduction) {
+            seriesId = result[0]?.id;
+        } else {
+            seriesId = result.lastID;
+        }
+
+        // Add courses to series
+        for (let i = 0; i < course_ids.length; i++) {
+            await dbConfig.run(`
+                INSERT INTO dance_series_courses (series_id, course_id, slot_number, position)
+                VALUES ($1, $2, $3, $4)
+            `, [seriesId, course_ids[i], slot_number, i + 1]);
+        }
+
+        console.log('📦 Dance series created:', { id: seriesId, name, slot_number, courses: course_ids.length });
+
+        res.json({ success: true, series_id: seriesId });
+    }));
+
+    /**
+     * Update a dance series
+     * PUT /api/admin/series/:id
+     */
+    app.put('/api/admin/series/:id', requireAuth, asyncHandler(async (req, res) => {
+        const { id } = req.params;
+        const { name, description, slot_number, course_ids, pricing, is_active } = req.body;
+
+        // Update series metadata
+        const updates = [];
+        const params = [];
+        let i = 1;
+
+        if (name !== undefined) { updates.push(`name = $${i++}`); params.push(name); }
+        if (description !== undefined) { updates.push(`description = $${i++}`); params.push(description); }
+        if (slot_number !== undefined) { updates.push(`slot_number = $${i++}`); params.push(slot_number); }
+        if (pricing?.package_price !== undefined) { updates.push(`package_price = $${i++}`); params.push(pricing.package_price); }
+        if (is_active !== undefined) { 
+            const activeValue = dbConfig.isProduction ? (is_active === true || is_active === 'true') : (is_active === true || is_active === 'true' ? 1 : 0);
+            updates.push(`is_active = $${i++}`); 
+            params.push(activeValue); 
+        }
+
+        if (updates.length > 0) {
+            params.push(id);
+            await dbConfig.run(`
+                UPDATE dance_series SET ${updates.join(', ')}, updated_at = CURRENT_TIMESTAMP 
+                WHERE id = $${i}
+            `, params);
+        }
+
+        // Update courses if provided
+        if (course_ids && Array.isArray(course_ids)) {
+            if (course_ids.length > 3) {
+                return res.status(400).json({ error: 'Maximum 3 choreographies per series' });
+            }
+
+            // Delete existing course associations
+            await dbConfig.run('DELETE FROM dance_series_courses WHERE series_id = $1', [id]);
+
+            // Add new course associations
+            for (let i = 0; i < course_ids.length; i++) {
+                await dbConfig.run(`
+                    INSERT INTO dance_series_courses (series_id, course_id, slot_number, position)
+                    VALUES ($1, $2, $3, $4)
+                `, [id, course_ids[i], slot_number || 1, i + 1]);
+            }
+        }
+
+        res.json({ success: true });
+    }));
+
+    /**
+     * Delete a dance series
+     * DELETE /api/admin/series/:id
+     */
+    app.delete('/api/admin/series/:id', requireAuth, asyncHandler(async (req, res) => {
+        const { id } = req.params;
+
+        // Delete course associations first (if not handled by CASCADE)
+        await dbConfig.run('DELETE FROM dance_series_courses WHERE series_id = $1', [id]);
+
+        // Delete series
+        await dbConfig.run('DELETE FROM dance_series WHERE id = $1', [id]);
+
+        console.log('🗑️ Dance series deleted:', id);
+
+        res.json({ success: true });
+    }));
+
     // Clear all courses (admin only)
     app.delete('/api/admin/clear-all-courses', requireAuth, asyncHandler(async (req, res) => {
         console.log('🗑️  Admin requested to clear all courses');
