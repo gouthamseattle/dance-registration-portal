@@ -829,6 +829,19 @@ class AdminDashboard {
             slots: slots
         };
 
+        // Add choreography-specific fields if applicable
+        if (courseType === 'choreography') {
+            const songName = document.getElementById('songName').value.trim();
+            if (!songName) {
+                this.showError('Song Name is required for choreography courses');
+                return;
+            }
+            courseData.song_name = songName;
+            courseData.movie_name = document.getElementById('movieName').value.trim() || null;
+            courseData.language = document.getElementById('language').value.trim() || null;
+            courseData.series_slot = document.getElementById('seriesSlot').value || null;
+        }
+
         try {
             const url = courseId ? `/api/courses/${courseId}` : '/api/courses';
             const method = courseId ? 'PUT' : 'POST';
@@ -889,9 +902,31 @@ class AdminDashboard {
         courseTypeField.addEventListener('change', () => {
             updateSlotConstraints();
             this.updatePricingUIForCourseType();
+            this.updateChoreographyFieldsVisibility();
         });
         updateSlotConstraints(); // Initial call
         this.updatePricingUIForCourseType();
+    }
+
+    updateChoreographyFieldsVisibility() {
+        const courseType = document.getElementById('courseType').value;
+        const choreographyFields = document.getElementById('choreographyFields');
+        
+        if (!choreographyFields) return;
+        
+        if (courseType === 'choreography') {
+            choreographyFields.style.display = '';
+            const songName = document.getElementById('songName');
+            const seriesSlot = document.getElementById('seriesSlot');
+            if (songName) songName.required = true;
+            if (seriesSlot) seriesSlot.required = true;
+        } else {
+            choreographyFields.style.display = 'none';
+            const songName = document.getElementById('songName');
+            const seriesSlot = document.getElementById('seriesSlot');
+            if (songName) songName.required = false;
+            if (seriesSlot) seriesSlot.required = false;
+        }
     }
 
     updatePricingUIForCourseType() {
@@ -1571,11 +1606,19 @@ Questions? Reply to this message`;
         document.getElementById('courseId').value = course.id;
         document.getElementById('courseName').value = course.name || '';
         document.getElementById('courseDescription').value = course.description || '';
-        document.getElementById('courseType').value = course.course_type || 'dance_series';
+        document.getElementById('courseType').value = course.course_type || 'multi-week';
         document.getElementById('courseDuration').value = course.duration_weeks || '1';
         const startDateEl = document.getElementById('startDate');
         if (startDateEl) {
             startDateEl.value = course.start_date ? new Date(course.start_date).toISOString().split('T')[0] : '';
+        }
+
+        // Populate choreography fields if applicable
+        if (course.course_type === 'choreography') {
+            document.getElementById('songName').value = course.song_name || '';
+            document.getElementById('movieName').value = course.movie_name || '';
+            document.getElementById('language').value = course.language || '';
+            document.getElementById('seriesSlot').value = course.series_slot || '';
         }
 
         // Clear and populate slots based on existing course data

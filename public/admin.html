@@ -756,7 +756,8 @@
                             <div class="col-md-12 mb-3">
                                 <label for="courseType" class="form-label">Series Type *</label>
                                 <select class="form-select" id="courseType" name="course_type" required>
-                                    <option value="dance_series">Dance Series</option>
+                                    <option value="multi-week">Multi-Week Series</option>
+                                    <option value="choreography">Choreography Batch</option>
                                     <option value="drop_in">Drop In Class</option>
                                     <option value="crew_practice">Crew Practice</option>
                                 </select>
@@ -771,6 +772,39 @@
                         <div class="mb-3">
                             <label for="courseDescription" class="form-label">Description</label>
                             <textarea class="form-control" id="courseDescription" name="description" rows="3"></textarea>
+                        </div>
+
+                        <!-- Choreography-specific fields -->
+                        <div id="choreographyFields" style="display: none;">
+                            <div class="alert alert-info">
+                                <i class="fas fa-music"></i>
+                                <strong>Choreography Batch:</strong> 2-class course with song and dance details
+                            </div>
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="songName" class="form-label">Song Name *</label>
+                                    <input type="text" class="form-control" id="songName" name="song_name" placeholder="e.g., Balle Balle">
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="movieName" class="form-label">Movie Name</label>
+                                    <input type="text" class="form-control" id="movieName" name="movie_name" placeholder="e.g., Bride and Prejudice">
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="language" class="form-label">Language</label>
+                                    <input type="text" class="form-control" id="language" name="language" placeholder="e.g., Hindi, Tamil, Punjabi">
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="seriesSlot" class="form-label">Series Slot *</label>
+                                    <select class="form-select" id="seriesSlot" name="series_slot">
+                                        <option value="">Not part of a slot package</option>
+                                        <option value="1">Slot 1</option>
+                                        <option value="2">Slot 2</option>
+                                    </select>
+                                    <div class="form-text">Assign to Slot 1 or Slot 2 to enable series packaging</div>
+                                </div>
+                            </div>
                         </div>
 
                         <div class="row">
@@ -931,6 +965,6 @@
 
     <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="js/admin.js?v=21"></script>
+    <script src="js/admin.js?v=22"></script>
 </body>
 </html>
