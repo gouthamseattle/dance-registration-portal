@@ -1269,6 +1269,7 @@ app.get('/api/admin/choreography-courses', requireAuth, asyncHandler(async (req,
                c.is_active, c.created_at
         FROM courses c
         WHERE c.course_type = 'choreography'
+        AND c.is_active = ${dbConfig.isProduction ? 'true' : '1'}
     `;
 
     const params = [];
