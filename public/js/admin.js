@@ -257,6 +257,9 @@ class AdminDashboard {
             case 'settings':
                 this.loadSettings();
                 break;
+            case 'packages':
+                this.loadPackagesSection();
+                break;
         }
     }
 
