@@ -4232,7 +4232,7 @@ Questions? Reply to this message`;
         };
         
         try {
-            const url = packageId ? `/api/admin/series/${packageId}` : '/api/admin/series';
+            const url = packageId ? `/api/admin/dance-series/${packageId}` : '/api/admin/dance-series';
             const method = packageId ? 'PUT' : 'POST';
             
             const response = await this.apiFetch(url, {
@@ -4281,7 +4281,7 @@ Questions? Reply to this message`;
         container.innerHTML = '<div class="text-center py-4"><div class="spinner-border"></div></div>';
         
         try {
-            const response = await this.apiFetch('/api/admin/series');
+            const response = await this.apiFetch('/api/admin/dance-series');
             const allSeries = await response.json();
             
             const slotSeries = allSeries.filter(s => s.slot_number === slotNumber);
@@ -4406,7 +4406,7 @@ Questions? Reply to this message`;
 
     async editPackage(packageId) {
         try {
-            const response = await this.apiFetch('/api/admin/series');
+            const response = await this.apiFetch('/api/admin/dance-series');
             const allSeries = await response.json();
             const series = allSeries.find(s => s.id === packageId);
             
@@ -4444,7 +4444,7 @@ Questions? Reply to this message`;
 
     async togglePackageStatus(packageId, newStatus) {
         try {
-            const response = await this.apiFetch(`/api/admin/series/${packageId}`, {
+            const response = await this.apiFetch(`/api/admin/dance-series/${packageId}`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json'
@@ -4471,7 +4471,7 @@ Questions? Reply to this message`;
         }
         
         try {
-            const response = await this.apiFetch(`/api/admin/series/${packageId}`, {
+            const response = await this.apiFetch(`/api/admin/dance-series/${packageId}`, {
                 method: 'DELETE'
             });
             
