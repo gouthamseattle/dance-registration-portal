@@ -4132,13 +4132,28 @@ Questions? Reply to this message`;
         
         try {
             const response = await this.apiFetch(`/api/admin/choreography-courses?series_slot=${slotNumber}`);
+            
+            if (!response.ok) {
+                throw new Error(`API returned ${response.status}: ${response.statusText}`);
+            }
+            
             const choreographies = await response.json();
+            
+            // Defensive check: ensure we got an array
+            if (!Array.isArray(choreographies)) {
+                console.error('API returned non-array:', choreographies);
+                throw new Error('Invalid response format from API');
+            }
             
             if (choreographies.length === 0) {
                 container.innerHTML = `
-                    <div class="text-muted">
-                        No choreographies found for Slot ${slotNumber}. 
-                        Create choreography courses first and assign them to this slot.
+                    <div class="alert alert-warning">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>No choreographies found for Slot ${slotNumber}</strong><br>
+                        <small>Create choreography courses first and assign them to Slot ${slotNumber}.</small><br>
+                        <a href="#" onclick="admin.showSection('courses'); return false;" class="btn btn-sm btn-primary mt-2">
+                            <i class="fas fa-plus"></i> Create Choreography Course
+                        </a>
                     </div>
                 `;
                 return;
@@ -4173,7 +4188,14 @@ Questions? Reply to this message`;
             
         } catch (error) {
             console.error('Error loading choreographies:', error);
-            container.innerHTML = '<div class="text-danger">Failed to load choreographies</div>';
+            container.innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <strong>Failed to load choreographies</strong><br>
+                    <small>${error.message || 'Unknown error'}</small><br>
+                    <small class="text-muted">Check browser console (F12) for details</small>
+                </div>
+            `;
         }
     }
 
