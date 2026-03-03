@@ -1311,10 +1311,20 @@ app.get('/api/admin/dance-series', requireAuth, asyncHandler(async (req, res) =>
             ORDER BY dsc.slot_number ASC, dsc.position ASC
         `, [s.id]);
 
+        // Derive slot_number and package_price for frontend compatibility
+        // Determine primary slot from courses (most courses belong to one slot)
+        const slot1Count = courses.filter(c => c.slot_number === 1).length;
+        const slot2Count = courses.filter(c => c.slot_number === 2).length;
+        const primarySlot = slot2Count > slot1Count ? 2 : (slot1Count > 0 ? 1 : null);
+        const packagePrice = primarySlot === 2 ? s.slot2_package_price : s.slot1_package_price;
+
         return {
             ...s,
             is_active: dbConfig.isProduction ? s.is_active : Boolean(s.is_active),
-            courses
+            courses,
+            course_count: courses.length,
+            slot_number: primarySlot,
+            package_price: packagePrice
         };
     }));
 
@@ -1322,26 +1332,40 @@ app.get('/api/admin/dance-series', requireAuth, asyncHandler(async (req, res) =>
 }));
 
 app.post('/api/admin/dance-series', requireAuth, asyncHandler(async (req, res) => {
-    const {
-        name,
-        description,
-        is_active = true,
-        slot1_package_price,
-        slot2_package_price,
-        combined_package_price,
-        slot1_course_ids = [],
-        slot2_course_ids = []
-    } = req.body || {};
+    const body = req.body || {};
+    const { name, description, is_active = true } = body;
 
     if (!name) {
         return res.status(400).json({ error: 'Series name is required' });
+    }
+
+    // Support both frontend formats:
+    // Format A (new UI): { slot_number, course_ids, pricing: { package_price } }
+    // Format B (legacy):  { slot1_course_ids, slot2_course_ids, slot1_package_price, ... }
+    let slot1_course_ids = body.slot1_course_ids || [];
+    let slot2_course_ids = body.slot2_course_ids || [];
+    let slot1_package_price = body.slot1_package_price || null;
+    let slot2_package_price = body.slot2_package_price || null;
+    let combined_package_price = body.combined_package_price || null;
+
+    // Format A: map slot_number + course_ids into the correct slot arrays
+    if (body.slot_number && body.course_ids) {
+        const slotNum = parseInt(body.slot_number);
+        const price = body.pricing?.package_price || null;
+        if (slotNum === 1) {
+            slot1_course_ids = body.course_ids;
+            slot1_package_price = price;
+        } else if (slotNum === 2) {
+            slot2_course_ids = body.course_ids;
+            slot2_package_price = price;
+        }
     }
 
     if (slot1_course_ids.length > 3 || slot2_course_ids.length > 3) {
         return res.status(400).json({ error: 'Maximum 3 choreography batches per slot' });
     }
 
-    // Validate courses are choreography type and match series_slot
+    // Validate courses are choreography type
     const allCourseIds = [...slot1_course_ids, ...slot2_course_ids];
     if (allCourseIds.length > 0) {
         const placeholders = allCourseIds.map((_, idx) => `$${idx + 1}`).join(',');
@@ -1356,18 +1380,12 @@ app.post('/api/admin/dance-series', requireAuth, asyncHandler(async (req, res) =
             if (!course || course.course_type !== 'choreography') {
                 return res.status(400).json({ error: `Course ${courseId} is not a choreography batch` });
             }
-            if (course.series_slot !== 1) {
-                return res.status(400).json({ error: `Course ${courseId} must have series_slot=1` });
-            }
         }
 
         for (const courseId of slot2_course_ids) {
             const course = courseMap.get(Number(courseId));
             if (!course || course.course_type !== 'choreography') {
                 return res.status(400).json({ error: `Course ${courseId} is not a choreography batch` });
-            }
-            if (course.series_slot !== 2) {
-                return res.status(400).json({ error: `Course ${courseId} must have series_slot=2` });
             }
         }
     }
@@ -1408,19 +1426,47 @@ app.post('/api/admin/dance-series', requireAuth, asyncHandler(async (req, res) =
 
 app.put('/api/admin/dance-series/:id', requireAuth, asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const {
-        name,
-        description,
-        is_active,
-        slot1_package_price,
-        slot2_package_price,
-        combined_package_price,
-        slot1_course_ids = [],
-        slot2_course_ids = []
-    } = req.body || {};
+    const body = req.body || {};
+    const { name, description, is_active } = body;
+
+    // Support partial updates (e.g., just toggling is_active)
+    if (name === undefined && is_active !== undefined) {
+        // Partial update: just toggle active status
+        await dbConfig.run(`
+            UPDATE dance_series SET
+                is_active = $1,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = $2
+        `, [
+            dbConfig.isProduction ? Boolean(is_active) : (is_active ? 1 : 0),
+            id
+        ]);
+        return res.json({ success: true });
+    }
 
     if (!name) {
         return res.status(400).json({ error: 'Series name is required' });
+    }
+
+    // Support both frontend formats (same as POST):
+    // Format A (new UI): { slot_number, course_ids, pricing: { package_price } }
+    // Format B (legacy):  { slot1_course_ids, slot2_course_ids, slot1_package_price, ... }
+    let slot1_course_ids = body.slot1_course_ids || [];
+    let slot2_course_ids = body.slot2_course_ids || [];
+    let slot1_package_price = body.slot1_package_price || null;
+    let slot2_package_price = body.slot2_package_price || null;
+    let combined_package_price = body.combined_package_price || null;
+
+    if (body.slot_number && body.course_ids) {
+        const slotNum = parseInt(body.slot_number);
+        const price = body.pricing?.package_price || null;
+        if (slotNum === 1) {
+            slot1_course_ids = body.course_ids;
+            slot1_package_price = price;
+        } else if (slotNum === 2) {
+            slot2_course_ids = body.course_ids;
+            slot2_package_price = price;
+        }
     }
 
     if (slot1_course_ids.length > 3 || slot2_course_ids.length > 3) {
