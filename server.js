@@ -1257,6 +1257,32 @@ app.delete('/api/courses/:courseId/slots/:slotId', requireAuth, asyncHandler(asy
     res.json({ success: true });
 }));
 
+/**
+ * Get choreography courses available for series bundling
+ * GET /api/admin/choreography-courses?series_slot=1
+ */
+app.get('/api/admin/choreography-courses', requireAuth, asyncHandler(async (req, res) => {
+    const { series_slot } = req.query;
+
+    let query = `
+        SELECT c.id, c.name, c.song_name, c.movie_name, c.language, c.series_slot,
+               c.is_active, c.created_at
+        FROM courses c
+        WHERE c.course_type = 'choreography'
+    `;
+
+    const params = [];
+    if (series_slot) {
+        query += ' AND c.series_slot = $1';
+        params.push(series_slot);
+    }
+
+    query += ' ORDER BY c.created_at DESC';
+
+    const courses = await dbConfig.all(query, params);
+    res.json(courses);
+}));
+
 // Admin: Dance Series Management
 app.get('/api/admin/dance-series', requireAuth, asyncHandler(async (req, res) => {
     const { active_only } = req.query;
