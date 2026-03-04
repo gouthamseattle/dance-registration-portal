@@ -604,13 +604,14 @@ class DanceRegistrationApp {
             relevantCourses = courses;
         }
 
-        // Get relevant packages
+        // Get relevant packages — include 'both' packages for any slot view
+        // (the price helper will pick the correct slot-specific price)
         const packages = this.choreoState.packages;
         let relevantPackages = [];
         if (track === 'slot1') {
-            relevantPackages = packages.filter(p => p.primary_slot === 1);
+            relevantPackages = packages.filter(p => p.primary_slot === 1 || p.primary_slot === 'both');
         } else if (track === 'slot2') {
-            relevantPackages = packages.filter(p => p.primary_slot === 2);
+            relevantPackages = packages.filter(p => p.primary_slot === 2 || p.primary_slot === 'both');
         } else {
             relevantPackages = packages; // Show all including combined
         }
@@ -618,6 +619,14 @@ class DanceRegistrationApp {
         this.renderPackageOptions(relevantPackages, track);
         this.renderChoreographyCheckboxes(relevantCourses, track);
         this.updateLiveSummary();
+    }
+
+    // Helper: get the correct package price for the selected track
+    getPackagePriceForTrack(pkg, track) {
+        if (track === 'slot1' && pkg.slot1_package_price) return pkg.slot1_package_price;
+        if (track === 'slot2' && pkg.slot2_package_price) return pkg.slot2_package_price;
+        if (track === 'both' && pkg.combined_package_price) return pkg.combined_package_price;
+        return pkg.package_price || 0;
     }
 
     renderPackageOptions(packages, track) {
@@ -630,9 +639,16 @@ class DanceRegistrationApp {
         container.style.display = 'block';
 
         const packagesHtml = packages.map(pkg => {
-            const savingsHtml = pkg.savings > 0 ? `<span class="badge bg-success ms-2">Save $${pkg.savings.toFixed(0)}!</span>` : '';
-            const priceDisplay = pkg.package_price ? `$${pkg.package_price.toFixed(2)}` : 'Contact us';
-            const choreoList = (pkg.courses || []).map(c => c.song_name || c.name).join(', ');
+            const effectivePrice = this.getPackagePriceForTrack(pkg, track);
+            // Filter courses to only those in this track for display
+            let displayCourses = pkg.courses || [];
+            if (track === 'slot1') displayCourses = displayCourses.filter(c => Number(c.series_slot) === 1);
+            else if (track === 'slot2') displayCourses = displayCourses.filter(c => Number(c.series_slot) === 2);
+            const individualTotal = displayCourses.reduce((sum, c) => sum + (c.full_course_price || 0), 0);
+            const savings = individualTotal - effectivePrice;
+            const savingsHtml = savings > 0 ? `<span class="badge bg-success ms-2">Save $${savings.toFixed(0)}!</span>` : '';
+            const priceDisplay = effectivePrice ? `$${effectivePrice.toFixed(2)}` : 'Contact us';
+            const choreoList = displayCourses.map(c => c.song_name || c.name).join(', ');
 
             return `
                 <div class="col-md-${packages.length === 1 ? '12' : '6'} mb-3">
@@ -801,19 +817,26 @@ class DanceRegistrationApp {
         let itemsHtml = '';
 
         if (pkg) {
-            // Package mode
-            totalAmount = pkg.package_price || 0;
+            // Package mode — use track-specific price
+            const track = this.choreoState.selectedTrack || 'both';
+            totalAmount = this.getPackagePriceForTrack(pkg, track);
+            // Compute savings for this track
+            let displayCourses = pkg.courses || [];
+            if (track === 'slot1') displayCourses = displayCourses.filter(c => Number(c.series_slot) === 1);
+            else if (track === 'slot2') displayCourses = displayCourses.filter(c => Number(c.series_slot) === 2);
+            const individualTotal = displayCourses.reduce((sum, c) => sum + (c.full_course_price || 0), 0);
+            const trackSavings = individualTotal - totalAmount;
             itemsHtml = `
                 <div class="summary-item d-flex justify-content-between mb-2">
                     <span><i class="fas fa-gem text-warning me-2"></i><strong>${pkg.name}</strong></span>
                     <span class="text-success fw-bold">$${totalAmount.toFixed(2)}</span>
                 </div>
                 <ul class="list-unstyled small text-muted ms-4 mb-2">
-                    ${(pkg.courses || []).map(c => `<li>✓ ${c.song_name || c.name}</li>`).join('')}
+                    ${displayCourses.map(c => `<li>✓ ${c.song_name || c.name}</li>`).join('')}
                 </ul>
-                ${pkg.savings > 0 ? `
+                ${trackSavings > 0 ? `
                     <div class="alert alert-success py-1 px-2 small mb-2">
-                        <i class="fas fa-tag me-1"></i>Package discount: -$${pkg.savings.toFixed(2)} applied!
+                        <i class="fas fa-tag me-1"></i>Package discount: -$${trackSavings.toFixed(2)} applied!
                     </div>
                 ` : ''}
             `;
