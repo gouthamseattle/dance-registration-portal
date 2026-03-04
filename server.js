@@ -1304,8 +1304,8 @@ app.get('/api/dance-series', asyncHandler(async (req, res) => {
                 WHERE course_slot_id = $1
             `, [slot.id]);
             pricing.forEach(p => {
-                if (p.pricing_type === 'full_course') fullCoursePrice = parseFloat(p.price);
-                if (p.pricing_type === 'per_class') perClassPrice = parseFloat(p.price);
+                if (p.pricing_type === 'full_package') fullCoursePrice = parseFloat(p.price);
+                if (p.pricing_type === 'drop_in') perClassPrice = parseFloat(p.price);
             });
         }
 
