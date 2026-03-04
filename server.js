@@ -1402,10 +1402,10 @@ app.get('/api/admin/choreography-courses', requireAuth, asyncHandler(async (req,
  * Register a student for all courses in a choreography series/package
  */
 app.post('/api/register-series-package', asyncHandler(async (req, res) => {
-    const { email, student_id, series_id, payment_amount, special_requests } = req.body;
+    const { email, student_id, series_id, course_ids, payment_amount, special_requests } = req.body;
 
-    if (!email || !series_id) {
-        return res.status(400).json({ error: 'Required fields missing: email and series_id are required' });
+    if (!email || (!series_id && (!course_ids || course_ids.length === 0))) {
+        return res.status(400).json({ error: 'Required fields missing: email and either series_id or course_ids are required' });
     }
 
     // Check if registration is open
@@ -1414,26 +1414,42 @@ app.post('/api/register-series-package', asyncHandler(async (req, res) => {
         return res.status(400).json({ error: 'Registration is currently closed' });
     }
 
-    // Verify the series exists and is active
-    const series = await dbConfig.get(
-        `SELECT * FROM dance_series WHERE id = $1 AND is_active = ${dbConfig.isProduction ? 'true' : '1'}`,
-        [series_id]
-    );
-    if (!series) {
-        return res.status(404).json({ error: 'Package not found or inactive' });
+    // Build the list of courses to register for
+    let seriesCourses = [];
+    let series = null;
+    let seriesName = 'Choreography Registration';
+
+    if (series_id) {
+        // Full package registration via series_id
+        series = await dbConfig.get(
+            `SELECT * FROM dance_series WHERE id = $1 AND is_active = ${dbConfig.isProduction ? 'true' : '1'}`,
+            [series_id]
+        );
+        if (!series) {
+            return res.status(404).json({ error: 'Package not found or inactive' });
+        }
+        seriesName = series.name;
+
+        seriesCourses = await dbConfig.all(`
+            SELECT dsc.course_id, dsc.slot_number, c.name, c.is_active
+            FROM dance_series_courses dsc
+            JOIN courses c ON c.id = dsc.course_id
+            WHERE dsc.series_id = $1
+            ORDER BY dsc.slot_number ASC, dsc.position ASC
+        `, [series_id]);
     }
 
-    // Get courses in this series
-    const seriesCourses = await dbConfig.all(`
-        SELECT dsc.course_id, dsc.slot_number, c.name, c.is_active
-        FROM dance_series_courses dsc
-        JOIN courses c ON c.id = dsc.course_id
-        WHERE dsc.series_id = $1
-        ORDER BY dsc.slot_number ASC, dsc.position ASC
-    `, [series_id]);
+    // If course_ids provided, use those instead (flexible selection)
+    if (course_ids && Array.isArray(course_ids) && course_ids.length > 0) {
+        seriesCourses = [];
+        for (const cid of course_ids) {
+            const c = await dbConfig.get('SELECT id AS course_id, name, is_active FROM courses WHERE id = $1', [cid]);
+            if (c) seriesCourses.push({ ...c, slot_number: 1 });
+        }
+    }
 
     if (seriesCourses.length === 0) {
-        return res.status(400).json({ error: 'Package has no courses assigned' });
+        return res.status(400).json({ error: 'No courses to register for' });
     }
 
     // Find or verify the student
