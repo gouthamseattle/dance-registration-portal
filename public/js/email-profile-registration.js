@@ -317,16 +317,16 @@ class EmailProfileRegistrationApp {
 
     async loadSeriesPackages() {
         try {
-            const response = await fetch('/api/admin/series');
+            const response = await fetch('/api/dance-series');
             if (!response.ok) {
                 console.warn('Failed to load series packages');
                 this.seriesPackages = [];
                 return;
             }
-            
-            const packages = await response.json();
-            // Only show active packages
-            this.seriesPackages = packages.filter(p => p.is_active);
+
+            const data = await response.json();
+            // data.packages contains active packages with courses, pricing, savings
+            this.seriesPackages = (data.packages || []).filter(p => p.is_active);
             console.log('✅ Loaded series packages:', this.seriesPackages.length);
         } catch (error) {
             console.error('Error loading series packages:', error);
@@ -429,9 +429,12 @@ class EmailProfileRegistrationApp {
         slot1Container.innerHTML = '';
         slot2Container.innerHTML = '';
 
-        // Separate packages by slot
-        const slot1Packages = this.seriesPackages.filter(p => p.slot_number === 1);
-        const slot2Packages = this.seriesPackages.filter(p => p.slot_number === 2);
+        // Separate packages by slot (new API uses primary_slot)
+        const slot1Packages = this.seriesPackages.filter(p => p.primary_slot === 1 || p.slot_number === 1);
+        const slot2Packages = this.seriesPackages.filter(p => p.primary_slot === 2 || p.slot_number === 2);
+        const bothPackages = this.seriesPackages.filter(p => p.primary_slot === 'both');
+        // Add "both" packages to both slots for visibility
+        slot1Packages.push(...bothPackages);
 
         // Render Slot 1 packages
         if (slot1Packages.length > 0) {
@@ -470,8 +473,8 @@ class EmailProfileRegistrationApp {
         const col = document.createElement('div');
         col.className = 'col-lg-6 col-xl-4 mb-4';
 
-        // Get choreographies included in package
-        const choreographies = pkg.choreographies || [];
+        // Get choreographies included in package (new API uses 'courses', old used 'choreographies')
+        const choreographies = pkg.courses || pkg.choreographies || [];
         const choreographyList = choreographies.map(c => {
             const metaInfo = [c.song_name, c.movie_name, c.language].filter(Boolean).join(' • ');
             return `
@@ -483,14 +486,15 @@ class EmailProfileRegistrationApp {
         }).join('');
 
         const packagePrice = pkg.package_price || 0;
-        const individualTotal = choreographies.reduce((sum, c) => sum + (c.full_course_price || 0), 0);
-        const savings = individualTotal - packagePrice;
+        const individualTotal = pkg.individual_total || choreographies.reduce((sum, c) => sum + (c.full_course_price || 0), 0);
+        const savings = pkg.savings || (individualTotal - packagePrice);
+        const seriesName = pkg.name || pkg.series_name || 'Choreography Package';
 
         col.innerHTML = `
             <div class="card course-card border-info fade-in">
                 <div class="card-header bg-info text-white">
                     <span class="badge bg-light text-info mb-2">PACKAGE DEAL</span>
-                    <h5 class="card-title mb-0">${pkg.series_name}</h5>
+                    <h5 class="card-title mb-0">${seriesName}</h5>
                     <p class="card-subtitle mb-0 mt-1"><small>${choreographies.length} Choreography Batches</small></p>
                 </div>
                 <div class="card-body">
@@ -627,7 +631,9 @@ class EmailProfileRegistrationApp {
         }
 
         this.selectedPackage = pkg;
-        console.log('Package selected:', pkg.series_name);
+        const seriesName = pkg.name || pkg.series_name || 'Choreography Package';
+        const courses = pkg.courses || pkg.choreographies || [];
+        console.log('Package selected:', seriesName);
 
         this.showLoading();
 
@@ -643,7 +649,7 @@ class EmailProfileRegistrationApp {
                     student_id: this.currentStudent.id,
                     series_id: packageId,
                     payment_amount: pkg.package_price || 0,
-                    special_requests: `Series package: ${pkg.series_name}`
+                    special_requests: `Series package: ${seriesName}`
                 })
             });
 
@@ -659,17 +665,18 @@ class EmailProfileRegistrationApp {
 
             // Redirect to payment page with the first registration ID
             if (result.registrationIds && result.registrationIds.length > 0) {
+                const firstCourseId = courses.length > 0 ? courses[0].id : null;
                 const registrationData = {
                     email: this.currentEmail,
                     student_id: this.currentStudent.id,
-                    course_id: pkg.choreographies[0].id, // Use first course for payment page
+                    course_id: firstCourseId, // Use first course for payment page
                     student_type: this.currentStudent.student_type,
                     first_name: this.currentStudent.first_name,
                     last_name: this.currentStudent.last_name,
                     instagram_handle: this.currentStudent.instagram_handle,
                     dance_experience: this.currentStudent.dance_experience,
                     profile_complete: true,
-                    package_name: pkg.series_name,
+                    package_name: seriesName,
                     package_registration: true,
                     registration_ids: result.registrationIds.join(',')
                 };

@@ -1,65 +1,52 @@
 # Active Context
 
-## Current Focus: Choreography & Dance Series Feature (Resumed)
+## Current Focus: Choreography Packages on Student Portal (Completed March 3, 2026)
 
-### Status Update (March 1, 2026 - 11:31 PM)
-- ✅ **Code Modularization**: Successfully completed and deployed
-  - Fixed production deployment bug in database initialization
-  - Admin portal confirmed working
-- 🔄 **Resuming Choreography Feature**: Back to implementing dance series functionality
+### What Was Done
+- **Problem**: Student registration portal displayed individual choreography courses as separate cards (Face Card, Sajni Re, AA23 Theme @ $25 each). Admin had created choreography packages via admin dashboard but student portal wasn't fetching/displaying them.
+- **Solution Implemented**:
+  1. Created public `GET /api/dance-series` endpoint (no auth) returning active packages with courses, pricing, schedule info, savings calculations
+  2. Filtered choreography courses (`course_type = 'choreography'`) from `GET /api/courses` so they no longer appear as individual cards
+  3. Added "Choreography Batches" section to `index.html` with 4-step interactive flow
+  4. Added full choreography selection flow to `registration.js`:
+     - Step 1: Track selection cards (Slot 1, Slot 2, Both Slots)
+     - Step 2: Best Value package cards with auto-select, savings display, and click-to-toggle
+     - Step 3: Individual choreography checkboxes with song/movie/language metadata and prices
+     - Step 4: Live pricing summary with "Continue to Registration" button
+  5. Registration proceeds with synthetic course object carrying package/selection metadata
+- **Key files changed**: `server.js`, `public/index.html`, `public/js/registration.js`
+- **Deployed**: Pushed to main, Railway deployment triggered
 
-### Choreography Feature Overview
-**Goal**: Add choreography course type with flexible series packaging
-- **Choreography Batches**: 2-class courses with song/movie/language metadata
-- **Series Packaging**: Bundle up to 3 choreographies into Slot 1 or Slot 2 packages
-- **Registration Options**: Single batch, multiple batches, slot packages, or combined packages
-- **Capacity Logic**: Reserve-on-pending for choreography (different from existing courses)
+### Previous Admin-Side Fixes (Same Session)
+- Fixed server-side data format mismatch for choreography package save/display in admin dashboard
+- Added missing `case 'packages'` in admin.js `showSection()` switch
 
-### Implementation Status Check Needed
-Before proceeding, need to verify what's already implemented:
-1. **Database Schema** - Check if choreography columns and series tables exist
-2. **Backend APIs** - Verify which admin/student endpoints are already built
-3. **Frontend UI** - Assess current state of admin and student interfaces
+## Choreography Feature - Full Status
 
-### Known Schema Components (from database/initialize.js)
-- ✅ Choreography columns on courses table: `song_name`, `movie_name`, `language`, `series_slot`
-- ✅ Dance series tables: `dance_series`, `dance_series_courses`
-- ✅ Schema initialization functions already present
+### Completed Components
+- ✅ **Database Schema**: `dance_series`, `dance_series_courses` tables with choreography columns on `courses`
+- ✅ **Admin Choreography Creation**: Form with song/movie/language/series_slot fields
+- ✅ **Admin Series/Package Management**: CRUD endpoints + UI (packages tab)
+- ✅ **Admin Package Save/Display**: Fixed format mismatch bug + missing navigation handler
+- ✅ **Public API**: `GET /api/dance-series` endpoint for student portal
+- ✅ **Student Portal Display**: Packages shown as interactive track → package → checkbox → summary flow
+- ✅ **Choreography Filtering**: Individual choreography courses hidden from `/api/courses`
 
-### Next Immediate Steps
-1. Verify current implementation status in server.js (API endpoints)
-2. Check admin.html/admin.js for series management UI
-3. Check student portal for choreography display
-4. Identify gaps and prioritize remaining work
+### Architecture Decisions
+- **Public endpoint**: `/api/dance-series` returns packages + all choreography courses (no auth needed)
+- **Filtering**: Choreography courses excluded from `/api/courses` via `course_type != 'choreography'` condition
+- **Registration flow**: Synthetic course object created from package/individual selections, carries `_choreo_package`, `_choreo_course_ids`, `_choreo_total` metadata
+- **CSS**: Injected dynamically via `injectChoreographyStyles()` at app init
 
-## Technical Decisions (Choreography Feature)
+## Current System State
 
-### Database Design
-- **courses table**: Added choreography-specific columns without breaking existing courses
-- **dance_series table**: Stores series metadata and pricing for slot packages
-- **dance_series_courses table**: Junction table linking series to courses with slot/position
-- **Backward Compatible**: No changes to existing course types or registrations
-
-### Capacity Management
-- **Choreography**: Reserve slots on pending payment (count both pending + completed)
-- **Existing Courses**: Continue using completed-only logic
-- **Implementation**: Uses `course_type` field to determine counting logic
-
-### API Strategy
-- **Admin Series CRUD**: Dedicated endpoints for series management
-- **Student Registration**: New endpoints for choreography-specific flows
-- **Isolation**: New logic doesn't interfere with existing registration flows
-
-## Recent Code Modularization (Completed March 1, 2026)
-
-### Achievements
-- Created `database/initialize.js` - Database setup and migrations (400+ lines)
-- Created `middleware/auth.js` - Authentication helpers (~50 lines)
-- Created `utils/courseAvailability.js` - Capacity logic (~100 lines)
-- Moved 6 one-time scripts to `scripts/archive/` with README
-- Reduced server.js from 6000+ to ~4500 lines
-- Fixed production deployment bug
-- Successfully deployed to Railway
+### Working Systems
+- ✅ Admin portal operational in production
+- ✅ Student registration flows functional (multi-week, drop-in, crew practice, choreography packages)
+- ✅ Database initialization with schema migrations
+- ✅ Modular codebase structure
+- ✅ Email confirmations active
+- ✅ Choreography packages displayed on student portal
 
 ### Module Structure
 ```
@@ -74,31 +61,3 @@ utils/
 scripts/
   archive/         # Historical one-time scripts with README
 ```
-
-## Current System State
-
-### Working Systems
-- ✅ Admin portal operational in production
-- ✅ Student registration flows functional
-- ✅ Database initialization with schema migrations
-- ✅ Modular codebase structure
-- ✅ Email confirmations active
-
-### Choreography Feature Progress (Updated March 1, 2026 - 11:42 PM)
-- ✅ **Admin UI for Choreography Creation** - Complete and validated in production
-  - Form fields: song_name, movie_name, language, series_slot
-  - Show/hide logic based on course type
-  - Save and edit functionality working
-  - User confirmed: "I was able to create and save it"
-- ⏳ **Series Management UI** - Next priority
-  - Create/manage slot packages (bundle 3 choreographies)
-  - Assign choreographies to slots
-  - Set package pricing
-- ⏳ **Student Registration UI** - After series management
-  - Display choreography metadata (song, movie, language)
-  - Show series package options
-  - Handle choreography-specific registration flow
-- ⏳ **Testing & Validation**
-  - Test series package creation
-  - Test student registration for choreography
-  - Validate capacity logic for reserve-on-pending
