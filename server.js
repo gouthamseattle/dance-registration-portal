@@ -196,9 +196,6 @@ app.get('/api/courses', asyncHandler(async (req, res) => {
         }
     }
     
-    // Exclude choreography courses — they are displayed as packages via /api/dance-series
-    conditions.push("c.course_type != 'choreography'");
-
     // Filter courses based on student access level
     if (studentType === 'crew_member') {
         // Crew members can access all courses

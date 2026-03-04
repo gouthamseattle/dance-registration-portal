@@ -377,8 +377,9 @@ class EmailProfileRegistrationApp {
             seriesPackagesSection.style.display = 'none';
         }
 
-        // Render choreography courses
-        if (choreographyCourses.length > 0) {
+        // Render individual choreography courses ONLY if no packages are available
+        // When packages exist, choreographies are shown bundled in the packages section
+        if (choreographyCourses.length > 0 && this.seriesPackages.length === 0) {
             choreographySection.style.display = 'block';
             choreographyCourses.forEach(course => {
                 const courseCard = this.createChoreographyCard(course);
