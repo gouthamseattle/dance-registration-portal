@@ -1400,6 +1400,121 @@ app.get('/api/admin/choreography-courses', requireAuth, asyncHandler(async (req,
     res.json(courses);
 }));
 
+/**
+ * POST /api/register-series-package
+ * Register a student for all courses in a choreography series/package
+ */
+app.post('/api/register-series-package', asyncHandler(async (req, res) => {
+    const { email, student_id, series_id, payment_amount, special_requests } = req.body;
+
+    if (!email || !series_id) {
+        return res.status(400).json({ error: 'Required fields missing: email and series_id are required' });
+    }
+
+    // Check if registration is open
+    const settings = await dbConfig.get('SELECT setting_value FROM system_settings WHERE setting_key = $1', ['registration_open']);
+    if (settings && settings.setting_value !== 'true') {
+        return res.status(400).json({ error: 'Registration is currently closed' });
+    }
+
+    // Verify the series exists and is active
+    const series = await dbConfig.get(
+        `SELECT * FROM dance_series WHERE id = $1 AND is_active = ${dbConfig.isProduction ? 'true' : '1'}`,
+        [series_id]
+    );
+    if (!series) {
+        return res.status(404).json({ error: 'Package not found or inactive' });
+    }
+
+    // Get courses in this series
+    const seriesCourses = await dbConfig.all(`
+        SELECT dsc.course_id, dsc.slot_number, c.name, c.is_active
+        FROM dance_series_courses dsc
+        JOIN courses c ON c.id = dsc.course_id
+        WHERE dsc.series_id = $1
+        ORDER BY dsc.slot_number ASC, dsc.position ASC
+    `, [series_id]);
+
+    if (seriesCourses.length === 0) {
+        return res.status(400).json({ error: 'Package has no courses assigned' });
+    }
+
+    // Find or verify the student
+    let student;
+    if (student_id) {
+        student = await dbConfig.get('SELECT * FROM students WHERE id = $1', [student_id]);
+    }
+    if (!student) {
+        student = await dbConfig.get('SELECT * FROM students WHERE email = $1', [email]);
+    }
+    if (!student) {
+        return res.status(400).json({ error: 'Student profile not found. Please create a profile first.' });
+    }
+
+    // Register for each course in the series
+    const registrationIds = [];
+    const effectiveAmount = payment_amount || 0;
+    // Split payment evenly across courses, or assign full amount to first
+    const perCourseAmount = seriesCourses.length > 0 ? Math.round((effectiveAmount / seriesCourses.length) * 100) / 100 : 0;
+
+    for (const sc of seriesCourses) {
+        // Skip inactive courses
+        const isActive = dbConfig.isProduction ? sc.is_active : Boolean(sc.is_active);
+        if (!isActive) continue;
+
+        // Check for existing registration (dedup)
+        const existingCompleted = await dbConfig.get(
+            "SELECT id FROM registrations WHERE student_id = $1 AND course_id = $2 AND payment_status = 'completed' LIMIT 1",
+            [student.id, sc.course_id]
+        );
+        if (existingCompleted) {
+            console.log(`⚠️ Student ${student.id} already completed for course ${sc.course_id}, skipping`);
+            registrationIds.push(existingCompleted.id);
+            continue;
+        }
+
+        const existingPending = await dbConfig.get(
+            "SELECT id FROM registrations WHERE student_id = $1 AND course_id = $2 AND payment_status = 'pending' ORDER BY registration_date DESC LIMIT 1",
+            [student.id, sc.course_id]
+        );
+        if (existingPending) {
+            console.log(`ℹ️ Returning existing pending registration for course ${sc.course_id}`);
+            registrationIds.push(existingPending.id);
+            continue;
+        }
+
+        // Create registration
+        const regResult = await dbConfig.run(`
+            INSERT INTO registrations (
+                student_id, course_id, payment_amount, payment_status, special_requests
+            ) VALUES ($1, $2, $3, 'pending', $4)
+            ${dbConfig.isProduction ? 'RETURNING id' : ''}
+        `, [student.id, sc.course_id, perCourseAmount, special_requests || `Series package: ${series.name}`]);
+
+        let regId;
+        if (dbConfig.isProduction) {
+            regId = regResult[0]?.id;
+        } else {
+            regId = regResult.lastID;
+        }
+
+        if (regId) {
+            registrationIds.push(regId);
+            console.log(`📝 Series registration created: reg ${regId} for course ${sc.course_id} (${sc.name})`);
+        }
+    }
+
+    console.log(`✅ Series package registration complete: ${registrationIds.length} courses for student ${student.id}`);
+
+    res.json({
+        success: true,
+        registrationIds,
+        studentId: student.id,
+        seriesId: series_id,
+        packageName: series.name
+    });
+}));
+
 // Admin: Dance Series Management
 app.get('/api/admin/dance-series', requireAuth, asyncHandler(async (req, res) => {
     const { active_only } = req.query;
