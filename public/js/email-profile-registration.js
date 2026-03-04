@@ -414,24 +414,13 @@ class EmailProfileRegistrationApp {
 
         // Collect all choreography courses from packages + standalone
         const allChoreos = [];
-        const packageMap = {}; // courseId → package info
-
-        // From series packages
         this.seriesPackages.forEach(pkg => {
-            const courses = pkg.courses || [];
-            courses.forEach(c => {
-                if (!allChoreos.find(x => Number(x.id) === Number(c.id))) {
-                    allChoreos.push(c);
-                    packageMap[c.id] = pkg;
-                }
+            (pkg.courses || []).forEach(c => {
+                if (!allChoreos.find(x => Number(x.id) === Number(c.id))) allChoreos.push(c);
             });
         });
-
-        // From standalone choreography courses (not in any package)
         choreographyCourses.forEach(c => {
-            if (!allChoreos.find(x => Number(x.id) === Number(c.id))) {
-                allChoreos.push(c);
-            }
+            if (!allChoreos.find(x => Number(x.id) === Number(c.id))) allChoreos.push(c);
         });
 
         if (allChoreos.length === 0) {
@@ -439,129 +428,298 @@ class EmailProfileRegistrationApp {
             return;
         }
 
-        // Determine pricing
-        const bestPackage = this.seriesPackages.length > 0 ? this.seriesPackages[0] : null;
-        const packagePrice = bestPackage ? (bestPackage.package_price || 0) : 0;
-        const totalCourses = allChoreos.length;
+        // Group by series_slot
+        const slot1Courses = allChoreos.filter(c => (c.series_slot || c.package_slot_number) === 1);
+        const slot2Courses = allChoreos.filter(c => (c.series_slot || c.package_slot_number) === 2);
 
-        // Build checkbox UI
-        let html = `<div class="card border-info">
-            <div class="card-header bg-info text-white">
-                <h5 class="mb-0"><i class="fas fa-check-square me-2"></i>Select Your Choreographies</h5>
-                <small>Choose the choreographies you'd like to learn</small>
-            </div>
-            <div class="card-body">`;
+        // Get schedule info from first course in each slot
+        const getSlotSchedule = (courses) => {
+            for (const c of courses) {
+                if (c.slots && c.slots.length > 0) {
+                    const s = c.slots[0];
+                    const day = s.day_of_week || '';
+                    const time = (s.start_time && s.end_time) ? `${s.start_time}–${s.end_time}` : '';
+                    return day && time ? `${day} ${time}` : (day || time || '');
+                }
+            }
+            return '';
+        };
+        const slot1Schedule = getSlotSchedule(slot1Courses);
+        const slot2Schedule = getSlotSchedule(slot2Courses);
+        const slot1Weeks = slot1Courses[0]?.duration_weeks || 6;
+        const slot2Weeks = slot2Courses[0]?.duration_weeks || 6;
 
-        // Choreography checkboxes
-        allChoreos.forEach((course, idx) => {
-            const metaItems = [course.song_name, course.movie_name, course.language].filter(Boolean).join(' • ');
-            const individualPrice = course.full_course_price || course.per_class_price || 25;
-            const registrationStatus = course.registration_status || 'not_registered';
-            const isRegistered = registrationStatus === 'registered_completed';
-            const isPending = registrationStatus === 'registered_pending';
+        // Get package pricing
+        const pkg = this.seriesPackages[0] || {};
+        const slot1PkgPrice = pkg.slot1_package_price || 0;
+        const slot2PkgPrice = pkg.slot2_package_price || 0;
+        const combinedPkgPrice = pkg.combined_package_price || 0;
 
-            html += `
-                <div class="form-check choreo-checkbox-item p-3 mb-2 border rounded ${isRegistered ? 'bg-light' : ''}" style="cursor: pointer;"
-                     onclick="if(!this.querySelector('input').disabled) { this.querySelector('input').checked = !this.querySelector('input').checked; app.updateChoreoPricing(); }">
-                    <input class="form-check-input choreo-check" type="checkbox" 
-                           id="choreo_${course.id}" value="${course.id}"
-                           data-price="${individualPrice}" data-name="${course.name}"
-                           ${isRegistered || isPending ? 'disabled checked' : ''}
-                           onclick="event.stopPropagation(); app.updateChoreoPricing();">
-                    <label class="form-check-label w-100" for="choreo_${course.id}" onclick="event.stopPropagation();">
-                        <div class="d-flex justify-content-between align-items-start">
-                            <div>
-                                <strong>${course.name}</strong>
-                                ${isRegistered ? '<span class="badge bg-success ms-2">✓ Registered</span>' : ''}
-                                ${isPending ? '<span class="badge bg-warning ms-2">Payment Pending</span>' : ''}
-                                ${metaItems ? `<br><small class="text-muted">${metaItems}</small>` : ''}
-                            </div>
-                            <span class="text-muted">$${individualPrice}</span>
-                        </div>
-                    </label>
-                </div>`;
-        });
+        // Store state
+        this._choreoState = {
+            slot1Courses, slot2Courses, allChoreos,
+            slot1PkgPrice, slot2PkgPrice, combinedPkgPrice,
+            selectedTrack: null, pkg
+        };
 
-        // Pricing summary
+        // === BUILD HTML ===
+        let html = '';
+
+        // STEP 1: Choose Your Track
         html += `
-                <div id="choreoPricingSummary" class="mt-3 p-3 bg-light rounded" style="display: none;">
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                        <span id="choreoSelectedCount" class="text-muted">0 selected</span>
-                        <span id="choreoTotalPrice" class="h5 mb-0 text-info">$0</span>
+        <div id="choreoStep1" class="mb-4">
+            <h5 class="mb-3"><span class="badge bg-primary rounded-pill me-2">1</span>Choose Your Track</h5>
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <div class="card h-100 border-primary track-card" id="trackCard1" onclick="app.selectTrack(1)" style="cursor:pointer;">
+                        <div class="card-body text-center">
+                            <div class="mb-2"><i class="fas fa-music fa-2x text-primary"></i></div>
+                            <h6 class="card-title">Slot 1</h6>
+                            <p class="text-muted small mb-1">${slot1Schedule || 'Schedule TBD'}</p>
+                            <p class="text-muted small mb-2">${slot1Courses.length} choreographies • ${slot1Weeks} weeks</p>
+                            ${slot1PkgPrice > 0 ? `<span class="badge bg-primary">Package: $${slot1PkgPrice}</span>` : ''}
+                        </div>
                     </div>
-                    <div id="choreoPackageDeal" class="text-success small mb-2" style="display: none;">
-                        <i class="fas fa-tag me-1"></i><span id="choreoSavingsText"></span>
+                </div>
+                <div class="col-md-4">
+                    <div class="card h-100 border-info track-card" id="trackCard2" onclick="app.selectTrack(2)" style="cursor:pointer;">
+                        <div class="card-body text-center">
+                            <div class="mb-2"><i class="fas fa-music fa-2x text-info"></i></div>
+                            <h6 class="card-title">Slot 2</h6>
+                            <p class="text-muted small mb-1">${slot2Schedule || 'Schedule TBD'}</p>
+                            <p class="text-muted small mb-2">${slot2Courses.length} choreographies • ${slot2Weeks} weeks</p>
+                            ${slot2PkgPrice > 0 ? `<span class="badge bg-info">Package: $${slot2PkgPrice}</span>` : ''}
+                        </div>
                     </div>
-                    <button id="choreoSubmitBtn" class="btn btn-info w-100 text-white" onclick="app.submitChoreographySelection()" disabled>
+                </div>
+                <div class="col-md-4">
+                    <div class="card h-100 border-warning track-card" id="trackCardBoth" onclick="app.selectTrack('both')" style="cursor:pointer;">
+                        <div class="card-body text-center">
+                            <div class="mb-2"><i class="fas fa-fire fa-2x text-warning"></i></div>
+                            <h6 class="card-title">Both Slots</h6>
+                            <p class="text-muted small mb-1">Full Experience</p>
+                            <p class="text-muted small mb-2">All ${allChoreos.length} choreographies</p>
+                            ${combinedPkgPrice > 0 ? `<span class="badge bg-warning text-dark">Package: $${combinedPkgPrice}</span>` : ''}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>`;
+
+        // STEP 2: Choose Choreographies (hidden initially)
+        html += `
+        <div id="choreoStep2" class="mb-4" style="display:none;">
+            <h5 class="mb-3"><span class="badge bg-primary rounded-pill me-2">2</span>Choose Your Choreographies</h5>
+            <div id="choreoPackageBanner" class="alert alert-success d-flex justify-content-between align-items-center mb-3" style="display:none!important;">
+                <span><i class="fas fa-tag me-2"></i><strong id="pkgBannerText">Select all for package deal!</strong></span>
+                <button class="btn btn-success btn-sm" onclick="app.selectAllChoreos()">
+                    <i class="fas fa-check-double me-1"></i>Select All (Best Value)
+                </button>
+            </div>
+            <div id="choreoCheckboxList">
+                <!-- Dynamically populated -->
+            </div>
+        </div>`;
+
+        // STEP 3: Live Summary (hidden initially)
+        html += `
+        <div id="choreoStep3" class="mb-4" style="display:none;">
+            <h5 class="mb-3"><span class="badge bg-primary rounded-pill me-2">3</span>Your Selection</h5>
+            <div class="card border-dark">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between mb-2">
+                        <span class="text-muted">Track:</span>
+                        <strong id="summaryTrack">—</strong>
+                    </div>
+                    <div id="summaryItems">
+                        <!-- Dynamically populated -->
+                    </div>
+                    <hr>
+                    <div id="summaryPackageDeal" class="text-success mb-2" style="display:none;">
+                        <i class="fas fa-tag me-1"></i><span id="summaryDealText"></span>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <span class="h5 mb-0">Total:</span>
+                        <span class="h4 mb-0 text-primary" id="summaryTotal">$0</span>
+                    </div>
+                    <button id="choreoCheckoutBtn" class="btn btn-primary btn-lg w-100" onclick="app.submitChoreographySelection()" disabled>
                         <i class="fas fa-arrow-right me-2"></i>Continue to Payment
                     </button>
-                </div>`;
+                </div>
+            </div>
+        </div>`;
 
-        // Package deal hint
-        if (bestPackage && packagePrice > 0 && totalCourses > 1) {
-            html += `
-                <div class="mt-2 text-center">
-                    <small class="text-muted">
-                        <i class="fas fa-info-circle me-1"></i>
-                        Select all ${totalCourses} choreographies for the package deal: <strong>$${packagePrice}</strong>
-                    </small>
-                </div>`;
+        container.innerHTML = html;
+    }
+
+    selectTrack(track) {
+        this._choreoState.selectedTrack = track;
+
+        // Highlight selected track card
+        document.querySelectorAll('.track-card').forEach(c => {
+            c.classList.remove('bg-primary', 'bg-info', 'bg-warning', 'text-white');
+            c.style.opacity = '0.6';
+        });
+        const selectedCard = track === 'both' ? document.getElementById('trackCardBoth') :
+                             track === 1 ? document.getElementById('trackCard1') :
+                             document.getElementById('trackCard2');
+        if (selectedCard) {
+            const colorClass = track === 'both' ? 'bg-warning' : track === 1 ? 'bg-primary' : 'bg-info';
+            selectedCard.classList.add(colorClass, track === 'both' ? '' : 'text-white');
+            selectedCard.style.opacity = '1';
         }
 
-        html += `</div></div>`;
-        container.innerHTML = html;
+        // Get relevant courses
+        const st = this._choreoState;
+        let courses = [];
+        if (track === 1) courses = st.slot1Courses;
+        else if (track === 2) courses = st.slot2Courses;
+        else courses = [...st.slot1Courses, ...st.slot2Courses];
 
-        // Store pricing data for dynamic updates
-        this._choreoPricing = {
-            courses: allChoreos,
-            packagePrice: packagePrice,
-            totalCourses: totalCourses,
-            bestPackage: bestPackage
-        };
+        // Determine package price for this track
+        let trackPkgPrice = 0;
+        if (track === 1) trackPkgPrice = st.slot1PkgPrice;
+        else if (track === 2) trackPkgPrice = st.slot2PkgPrice;
+        else trackPkgPrice = st.combinedPkgPrice;
+
+        this._choreoState.visibleCourses = courses;
+        this._choreoState.trackPkgPrice = trackPkgPrice;
+
+        // Show Step 2
+        document.getElementById('choreoStep2').style.display = 'block';
+
+        // Show package banner
+        const banner = document.getElementById('choreoPackageBanner');
+        if (trackPkgPrice > 0 && courses.length > 1) {
+            banner.style.display = 'flex';
+            banner.style.cssText = ''; // remove display:none!important
+            const indivTotal = courses.reduce((s, c) => s + (c.full_course_price || c.per_class_price || 25), 0);
+            const savings = indivTotal - trackPkgPrice;
+            document.getElementById('pkgBannerText').textContent =
+                `Select all ${courses.length} for $${trackPkgPrice}` + (savings > 0 ? ` (Save $${savings}!)` : '');
+        } else {
+            banner.style.display = 'none';
+        }
+
+        // Build checkboxes
+        const listEl = document.getElementById('choreoCheckboxList');
+        let checkHtml = '';
+
+        // If "both" selected, group by slot
+        if (track === 'both') {
+            if (st.slot1Courses.length > 0) {
+                checkHtml += `<h6 class="text-muted mt-2 mb-2"><i class="fas fa-layer-group me-1"></i>Slot 1</h6>`;
+                checkHtml += this._buildChoreoCheckboxes(st.slot1Courses);
+            }
+            if (st.slot2Courses.length > 0) {
+                checkHtml += `<h6 class="text-muted mt-3 mb-2"><i class="fas fa-layer-group me-1"></i>Slot 2</h6>`;
+                checkHtml += this._buildChoreoCheckboxes(st.slot2Courses);
+            }
+        } else {
+            checkHtml += this._buildChoreoCheckboxes(courses);
+        }
+
+        listEl.innerHTML = checkHtml;
+
+        // Show summary
+        document.getElementById('choreoStep3').style.display = 'block';
+        document.getElementById('summaryTrack').textContent =
+            track === 'both' ? 'Both Slots' : `Slot ${track}`;
+
+        this.updateChoreoPricing();
+
+        // Smooth scroll to step 2
+        document.getElementById('choreoStep2').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    _buildChoreoCheckboxes(courses) {
+        let html = '';
+        courses.forEach(course => {
+            const meta = [course.song_name, course.movie_name, course.language].filter(Boolean).join(' • ');
+            const price = course.full_course_price || course.per_class_price || 25;
+            const regStatus = course.registration_status || 'not_registered';
+            const isReg = regStatus === 'registered_completed';
+            const isPend = regStatus === 'registered_pending';
+
+            html += `
+            <div class="form-check p-3 mb-2 border rounded ${isReg ? 'bg-light' : ''}" style="cursor:pointer;"
+                 onclick="if(!this.querySelector('input').disabled){this.querySelector('input').checked=!this.querySelector('input').checked;app.updateChoreoPricing();}">
+                <input class="form-check-input choreo-check" type="checkbox"
+                       id="choreo_${course.id}" value="${course.id}"
+                       data-price="${price}" data-name="${course.name}"
+                       ${isReg || isPend ? 'disabled checked' : ''}
+                       onclick="event.stopPropagation();app.updateChoreoPricing();">
+                <label class="form-check-label w-100" for="choreo_${course.id}" onclick="event.stopPropagation();">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <strong>${course.name}</strong>
+                            ${isReg ? '<span class="badge bg-success ms-2">✓ Registered</span>' : ''}
+                            ${isPend ? '<span class="badge bg-warning ms-2">Pending</span>' : ''}
+                            ${meta ? `<br><small class="text-muted">${meta}</small>` : ''}
+                        </div>
+                        <span class="text-muted fw-bold">$${price}</span>
+                    </div>
+                </label>
+            </div>`;
+        });
+        return html;
+    }
+
+    selectAllChoreos() {
+        document.querySelectorAll('.choreo-check:not(:disabled)').forEach(cb => { cb.checked = true; });
+        this.updateChoreoPricing();
     }
 
     updateChoreoPricing() {
-        const checkboxes = document.querySelectorAll('.choreo-check:checked:not(:disabled)');
-        const count = checkboxes.length;
-        const summary = document.getElementById('choreoPricingSummary');
-        const countEl = document.getElementById('choreoSelectedCount');
-        const priceEl = document.getElementById('choreoTotalPrice');
-        const dealEl = document.getElementById('choreoPackageDeal');
-        const savingsEl = document.getElementById('choreoSavingsText');
-        const submitBtn = document.getElementById('choreoSubmitBtn');
+        const checked = document.querySelectorAll('.choreo-check:checked:not(:disabled)');
+        const count = checked.length;
+        const st = this._choreoState || {};
+        const visibleCount = (st.visibleCourses || []).length;
+        const trackPkgPrice = st.trackPkgPrice || 0;
+
+        // Summary items
+        const summaryEl = document.getElementById('summaryItems');
+        const dealEl = document.getElementById('summaryPackageDeal');
+        const dealTextEl = document.getElementById('summaryDealText');
+        const totalEl = document.getElementById('summaryTotal');
+        const checkoutBtn = document.getElementById('choreoCheckoutBtn');
 
         if (count === 0) {
-            summary.style.display = 'none';
-            submitBtn.disabled = true;
+            summaryEl.innerHTML = '<p class="text-muted small">No choreographies selected yet</p>';
+            dealEl.style.display = 'none';
+            totalEl.textContent = '$0';
+            checkoutBtn.disabled = true;
             return;
         }
 
-        summary.style.display = 'block';
-        submitBtn.disabled = false;
+        checkoutBtn.disabled = false;
 
-        // Calculate price
-        let individualTotal = 0;
-        checkboxes.forEach(cb => {
-            individualTotal += parseFloat(cb.dataset.price) || 0;
+        // Build summary list
+        let indivTotal = 0;
+        let itemsHtml = '';
+        checked.forEach(cb => {
+            const p = parseFloat(cb.dataset.price) || 0;
+            indivTotal += p;
+            itemsHtml += `<div class="d-flex justify-content-between small mb-1">
+                <span>✓ ${cb.dataset.name}</span><span>$${p}</span>
+            </div>`;
         });
+        summaryEl.innerHTML = itemsHtml;
 
-        const pricing = this._choreoPricing || {};
-        const allSelected = count >= (pricing.totalCourses || 999);
-        const packagePrice = pricing.packagePrice || 0;
-
+        // Check package deal
+        const allSelected = count >= visibleCount && visibleCount > 0;
         let finalPrice;
-        if (allSelected && packagePrice > 0 && packagePrice < individualTotal) {
-            finalPrice = packagePrice;
-            const savings = individualTotal - packagePrice;
+        if (allSelected && trackPkgPrice > 0 && trackPkgPrice < indivTotal) {
+            finalPrice = trackPkgPrice;
+            const savings = indivTotal - trackPkgPrice;
             dealEl.style.display = 'block';
-            savingsEl.textContent = `Package deal applied! Save $${savings.toFixed(0)}!`;
+            dealTextEl.textContent = `Package deal applied! Save $${savings}!`;
         } else {
-            finalPrice = individualTotal;
+            finalPrice = indivTotal;
             dealEl.style.display = 'none';
         }
 
-        countEl.textContent = `${count} of ${pricing.totalCourses || '?'} selected`;
-        priceEl.textContent = `$${finalPrice.toFixed(0)}`;
+        totalEl.textContent = `$${finalPrice}`;
     }
 
     async submitChoreographySelection() {
@@ -574,17 +732,18 @@ class EmailProfileRegistrationApp {
         const selectedIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
         const selectedNames = Array.from(checkboxes).map(cb => cb.dataset.name);
 
-        // Calculate price
+        // Calculate price using new state
         let individualTotal = 0;
         checkboxes.forEach(cb => {
             individualTotal += parseFloat(cb.dataset.price) || 0;
         });
 
-        const pricing = this._choreoPricing || {};
-        const allSelected = selectedIds.length >= (pricing.totalCourses || 999);
-        const packagePrice = pricing.packagePrice || 0;
-        const isPackageDeal = allSelected && packagePrice > 0 && packagePrice < individualTotal;
-        const finalPrice = isPackageDeal ? packagePrice : individualTotal;
+        const st = this._choreoState || {};
+        const visibleCount = (st.visibleCourses || []).length;
+        const trackPkgPrice = st.trackPkgPrice || 0;
+        const allSelected = checkboxes.length >= visibleCount && visibleCount > 0;
+        const isPackageDeal = allSelected && trackPkgPrice > 0 && trackPkgPrice < individualTotal;
+        const finalPrice = isPackageDeal ? trackPkgPrice : individualTotal;
 
         this.showLoading();
 
@@ -596,7 +755,7 @@ class EmailProfileRegistrationApp {
                 body: JSON.stringify({
                     email: this.currentEmail,
                     student_id: this.currentStudent.id,
-                    series_id: pricing.bestPackage ? pricing.bestPackage.id : null,
+                    series_id: st.pkg ? st.pkg.id : null,
                     course_ids: selectedIds,
                     payment_amount: finalPrice,
                     special_requests: isPackageDeal
@@ -623,7 +782,7 @@ class EmailProfileRegistrationApp {
                     dance_experience: this.currentStudent.dance_experience || '',
                     profile_complete: true,
                     package_registration: true,
-                    package_name: isPackageDeal ? (pricing.bestPackage?.name || 'Choreography Package') : 'Selected Choreographies',
+                    package_name: isPackageDeal ? (st.pkg?.name || 'Choreography Package') : 'Selected Choreographies',
                     package_price: finalPrice,
                     package_courses: selectedNames.join('|'),
                     registration_ids: result.registrationIds.join(',')
