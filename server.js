@@ -196,6 +196,9 @@ app.get('/api/courses', asyncHandler(async (req, res) => {
         }
     }
     
+    // Exclude choreography courses — they are displayed as packages via /api/dance-series
+    conditions.push("c.course_type != 'choreography'");
+
     // Filter courses based on student access level
     if (studentType === 'crew_member') {
         // Crew members can access all courses
@@ -1255,6 +1258,119 @@ app.delete('/api/courses/:courseId/slots/:slotId', requireAuth, asyncHandler(asy
     await dbConfig.run('DELETE FROM course_slots WHERE id = $1 AND course_id = $2', [slotId, courseId]);
     
     res.json({ success: true });
+}));
+
+// ==============================
+// Public: Dance Series / Choreography Packages (no auth)
+// ==============================
+
+/**
+ * GET /api/dance-series
+ * Public endpoint — returns active packages with courses, pricing, and schedule info.
+ * Used by the student registration portal to display choreography packages.
+ */
+app.get('/api/dance-series', asyncHandler(async (req, res) => {
+    // 1. Fetch active packages
+    const seriesQuery = `
+        SELECT * FROM dance_series
+        WHERE is_active = ${dbConfig.isProduction ? 'true' : '1'}
+        ORDER BY created_at DESC
+    `;
+    const series = await dbConfig.all(seriesQuery);
+
+    // 2. Fetch all active choreography courses with their slot/pricing data
+    const choreoCoursesQuery = `
+        SELECT c.id, c.name, c.description, c.song_name, c.movie_name, c.language,
+               c.series_slot, c.course_type, c.start_date, c.end_date,
+               c.duration_weeks, c.instructor, c.is_active
+        FROM courses c
+        WHERE c.course_type = 'choreography'
+        AND c.is_active = ${dbConfig.isProduction ? 'true' : '1'}
+        ORDER BY c.series_slot ASC, c.created_at ASC
+    `;
+    const allChoreoCourses = await dbConfig.all(choreoCoursesQuery);
+
+    // 3. For each choreography course, get slots and pricing
+    const coursesWithDetails = await Promise.all(allChoreoCourses.map(async (course) => {
+        const slots = await dbConfig.all(`
+            SELECT cs.* FROM course_slots cs
+            WHERE cs.course_id = $1
+            ORDER BY cs.created_at ASC
+        `, [course.id]);
+
+        // Get pricing for each slot
+        let fullCoursePrice = 0;
+        let perClassPrice = 0;
+        for (const slot of slots) {
+            const pricing = await dbConfig.all(`
+                SELECT pricing_type, price FROM course_pricing
+                WHERE course_slot_id = $1
+            `, [slot.id]);
+            pricing.forEach(p => {
+                if (p.pricing_type === 'full_course') fullCoursePrice = parseFloat(p.price);
+                if (p.pricing_type === 'per_class') perClassPrice = parseFloat(p.price);
+            });
+        }
+
+        return {
+            ...course,
+            slots,
+            full_course_price: fullCoursePrice,
+            per_class_price: perClassPrice
+        };
+    }));
+
+    // 4. For each series, attach its courses with details
+    const seriesWithCourses = await Promise.all(series.map(async (s) => {
+        const seriesCourseLinks = await dbConfig.all(`
+            SELECT dsc.course_id, dsc.slot_number, dsc.position
+            FROM dance_series_courses dsc
+            WHERE dsc.series_id = $1
+            ORDER BY dsc.slot_number ASC, dsc.position ASC
+        `, [s.id]);
+
+        const courses = seriesCourseLinks.map(link => {
+            const courseDetail = coursesWithDetails.find(c => Number(c.id) === Number(link.course_id));
+            return courseDetail ? {
+                ...courseDetail,
+                package_slot_number: link.slot_number,
+                position: link.position
+            } : null;
+        }).filter(Boolean);
+
+        // Derive primary slot
+        const slot1Count = seriesCourseLinks.filter(c => c.slot_number === 1).length;
+        const slot2Count = seriesCourseLinks.filter(c => c.slot_number === 2).length;
+        const hasBothSlots = slot1Count > 0 && slot2Count > 0;
+        const primarySlot = hasBothSlots ? 'both' : (slot2Count > slot1Count ? 2 : (slot1Count > 0 ? 1 : null));
+        const packagePrice = hasBothSlots ? s.combined_package_price :
+                            (primarySlot === 2 ? s.slot2_package_price : s.slot1_package_price);
+
+        // Compute sum of individual prices for savings display
+        const individualTotal = courses.reduce((sum, c) => sum + (c.full_course_price || 0), 0);
+
+        return {
+            id: s.id,
+            name: s.name,
+            description: s.description,
+            is_active: dbConfig.isProduction ? s.is_active : Boolean(s.is_active),
+            slot1_package_price: s.slot1_package_price ? parseFloat(s.slot1_package_price) : null,
+            slot2_package_price: s.slot2_package_price ? parseFloat(s.slot2_package_price) : null,
+            combined_package_price: s.combined_package_price ? parseFloat(s.combined_package_price) : null,
+            package_price: packagePrice ? parseFloat(packagePrice) : null,
+            primary_slot: primarySlot,
+            courses,
+            course_count: courses.length,
+            individual_total: individualTotal,
+            savings: (packagePrice && individualTotal > parseFloat(packagePrice)) ? (individualTotal - parseFloat(packagePrice)) : 0
+        };
+    }));
+
+    // 5. Return packages and all choreography courses
+    res.json({
+        packages: seriesWithCourses,
+        courses: coursesWithDetails
+    });
 }));
 
 /**
