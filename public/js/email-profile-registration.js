@@ -338,18 +338,14 @@ class EmailProfileRegistrationApp {
         const multiWeekContainer = document.getElementById('multiWeekCourses');
         const crewPracticeContainer = document.getElementById('crewPracticeCourses');
         const dropInContainer = document.getElementById('dropInClasses');
-        const choreographyContainer = document.getElementById('choreographyCourses');
         const crewPracticeSection = document.getElementById('crewPracticeSection');
         const dropInSection = document.getElementById('dropInSection');
-        const choreographySection = document.getElementById('choreographySection');
-        const seriesPackagesSection = document.getElementById('seriesPackagesSection');
         const noCoursesMessage = document.getElementById('noCoursesMessage');
 
         // Clear containers
         multiWeekContainer.innerHTML = '';
         crewPracticeContainer.innerHTML = '';
         dropInContainer.innerHTML = '';
-        choreographyContainer.innerHTML = '';
 
         // Categorize courses
         const multiWeekCourses = [];
