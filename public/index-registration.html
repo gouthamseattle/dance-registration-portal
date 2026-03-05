@@ -336,7 +336,15 @@
                 profile_complete: urlParams.get('profile_complete')
             };
 
+            // Package registration params
+            const isPackageRegistration = urlParams.get('package_registration') === 'true';
+            const packageName = urlParams.get('package_name') || 'Choreography Package';
+            const packagePrice = urlParams.get('package_price') || '0';
+            const packageCourses = urlParams.get('package_courses') ? urlParams.get('package_courses').split('|') : [];
+            const registrationIds = urlParams.get('registration_ids') || '';
+
             console.log('📝 Student data from URL:', studentData);
+            console.log('📦 Package registration:', { isPackageRegistration, packageName, packagePrice, packageCourses, registrationIds });
 
             if (studentData.student_id && studentData.course_id && studentData.email) {
                 // Pre-fill hidden form fields
@@ -369,15 +377,95 @@
                 `;
                 studentProfileDiv.style.display = 'block';
 
-                // Override the registration app's course selection
-                if (window.app) {
-                    console.log('🔧 Setting up registration app with pre-filled data');
-                    // Wait for app to initialize, then set the course
-                    setTimeout(() => {
-                        if (window.app.selectCourse) {
-                            window.app.selectCourse(parseInt(studentData.course_id));
+                if (isPackageRegistration) {
+                    // === PACKAGE REGISTRATION FLOW ===
+                    // Registrations are already created — just need to show info & collect payment
+                    console.log('📦 Package registration mode — skipping selectCourse, showing package info');
+
+                    // Build choreography list HTML
+                    const courseListHtml = packageCourses.length > 0
+                        ? packageCourses.map(name => `<li>${name}</li>`).join('')
+                        : '<li>Choreography Package</li>';
+
+                    // Populate course info with package details
+                    const infoContainer = document.getElementById('selectedCourseInfo');
+                    infoContainer.innerHTML = `
+                        <h5><i class="fas fa-box text-info me-2"></i>${packageName}</h5>
+                        <div class="mt-2">
+                            <strong>Includes ${packageCourses.length} choreographies:</strong>
+                            <ul class="mb-0 mt-1">${courseListHtml}</ul>
+                        </div>
+                    `;
+
+                    // Hide payment option radio buttons (not applicable for packages)
+                    document.getElementById('paymentOptions').style.display = 'none';
+
+                    // Set total amount to package price
+                    document.getElementById('totalAmount').textContent = '$' + packagePrice;
+
+                    // Configure the app for package payment when it initializes
+                    function setupAppForPackage() {
+                        if (!window.app) {
+                            setTimeout(setupAppForPackage, 200);
+                            return;
                         }
-                    }, 1000);
+                        console.log('📦 Configuring app for package payment');
+
+                        // Set registration data so payment flow works
+                        window.app.registrationData = {
+                            student_id: studentData.student_id,
+                            course_id: parseInt(studentData.course_id),
+                            email: studentData.email,
+                            first_name: studentData.first_name,
+                            last_name: studentData.last_name,
+                            instagram_handle: studentData.instagram_handle,
+                            dance_experience: studentData.dance_experience,
+                            payment_amount: packagePrice,
+                            registration_type: 'choreography-package',
+                            package_name: packageName,
+                            package_registration: true,
+                            registrationId: registrationIds.split(',')[0],  // Primary registration ID
+                            registration_ids: registrationIds
+                        };
+
+                        // Create a minimal selectedCourse so populatePaymentSummary works
+                        window.app.selectedCourse = {
+                            id: parseInt(studentData.course_id),
+                            name: packageName,
+                            course_type: 'choreography',
+                            full_course_price: parseFloat(packagePrice),
+                            per_class_price: 0
+                        };
+
+                        // Mark current step so form display is correct
+                        window.app.currentStep = 'form';
+
+                        // Setup payment method selection handlers
+                        if (window.app.setupPaymentMethodSelectionHandlers) {
+                            window.app.setupPaymentMethodSelectionHandlers();
+                        }
+                        if (window.app.setupPaymentMethodSelection) {
+                            window.app.setupPaymentMethodSelection();
+                        }
+
+                        // Hide loading overlay
+                        const loadingOverlay = document.getElementById('loadingOverlay');
+                        if (loadingOverlay) loadingOverlay.style.display = 'none';
+                    }
+                    setupAppForPackage();
+
+                } else {
+                    // === REGULAR SINGLE-COURSE FLOW ===
+                    // Override the registration app's course selection
+                    if (window.app) {
+                        console.log('🔧 Setting up registration app with pre-filled data');
+                        // Wait for app to initialize, then set the course
+                        setTimeout(() => {
+                            if (window.app.selectCourse) {
+                                window.app.selectCourse(parseInt(studentData.course_id));
+                            }
+                        }, 1000);
+                    }
                 }
             } else {
                 console.warn('⚠️ Missing required student or course data, redirecting to email profile');

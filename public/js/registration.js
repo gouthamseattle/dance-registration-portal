@@ -1929,6 +1929,15 @@ class DanceRegistrationApp {
                 this.registrationData.payment_method = this.selectedPaymentMethod;
             }
 
+            // PACKAGE REGISTRATION: registrations already exist, skip /api/register
+            if (this.registrationData.package_registration) {
+                console.log('📦 Package registration — skipping /api/register, going to payment');
+                console.log('📦 Registration IDs:', this.registrationData.registration_ids);
+                console.log('📦 Payment amount:', this.registrationData.payment_amount);
+                this.showPaymentSection();
+                return;
+            }
+
             // Try regular registration first
             const response = await fetch('/api/register', {
                 method: 'POST',
