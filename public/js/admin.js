@@ -614,6 +614,9 @@ class AdminDashboard {
                                 <i class="fas fa-${course.is_active ? 'pause' : 'play'}"></i>
                                 ${course.is_active ? 'Deactivate' : 'Activate'}
                             </button>
+                            <button class="btn btn-outline-danger btn-sm" onclick="admin.deleteCourse(${course.id})">
+                                <i class="fas fa-trash"></i> Delete
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -1677,6 +1680,26 @@ Questions? Reply to this message`;
         // Show modal
         const modal = new bootstrap.Modal(document.getElementById('courseModal'));
         modal.show();
+    }
+
+    async deleteCourse(courseId) {
+        if (!confirm('Delete this dance series? It will be hidden from the UI but kept in the database.')) {
+            return;
+        }
+        try {
+            const response = await this.apiFetch(`/api/courses/${courseId}`, { method: 'DELETE' });
+            if (response.ok) {
+                await this.loadInitialData();
+                this.showSuccess('Course deleted successfully');
+                if (this.currentSection === 'courses') this.loadCourses();
+            } else {
+                const error = await response.json();
+                this.showError(error.error || 'Failed to delete course');
+            }
+        } catch (error) {
+            console.error('Error deleting course:', error);
+            this.showError('Failed to delete course');
+        }
     }
 
     async toggleCourseStatus(courseId, newStatus) {

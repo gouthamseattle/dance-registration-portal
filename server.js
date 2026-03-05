@@ -175,6 +175,9 @@ app.get('/api/courses', asyncHandler(async (req, res) => {
     const params = [];
     const conditions = [];
     
+    // Exclude soft-deleted (hidden) courses
+    conditions.push(dbConfig.isProduction ? '(c.is_hidden IS NULL OR c.is_hidden = false)' : '(c.is_hidden IS NULL OR c.is_hidden = 0)');
+
     if (active_only === 'true') {
         if (dbConfig.isProduction) {
             conditions.push('c.is_active = true');
@@ -1239,6 +1242,16 @@ app.put('/api/courses/:courseId/slots/:slotId', requireAuth, asyncHandler(async 
         }
     }
     
+    res.json({ success: true });
+}));
+
+// Soft-delete a course (hide from UI, keep in DB)
+app.delete('/api/courses/:courseId', requireAuth, asyncHandler(async (req, res) => {
+    const { courseId } = req.params;
+    await dbConfig.run(
+        `UPDATE courses SET is_hidden = ${dbConfig.isProduction ? 'true' : '1'}, is_active = ${dbConfig.isProduction ? 'false' : '0'}, updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
+        [courseId]
+    );
     res.json({ success: true });
 }));
 

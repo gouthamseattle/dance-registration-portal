@@ -251,11 +251,13 @@ async function ensureChoreographyColumns(dbConfig) {
             await dbConfig.run('ALTER TABLE courses ADD COLUMN IF NOT EXISTS movie_name VARCHAR(255)');
             await dbConfig.run('ALTER TABLE courses ADD COLUMN IF NOT EXISTS language VARCHAR(50)');
             await dbConfig.run('ALTER TABLE courses ADD COLUMN IF NOT EXISTS series_slot INTEGER');
+            await dbConfig.run('ALTER TABLE courses ADD COLUMN IF NOT EXISTS is_hidden BOOLEAN DEFAULT FALSE');
         } else {
             await dbConfig.run('ALTER TABLE courses ADD COLUMN song_name TEXT').catch(() => {});
             await dbConfig.run('ALTER TABLE courses ADD COLUMN movie_name TEXT').catch(() => {});
             await dbConfig.run('ALTER TABLE courses ADD COLUMN language TEXT').catch(() => {});
             await dbConfig.run('ALTER TABLE courses ADD COLUMN series_slot INTEGER').catch(() => {});
+            await dbConfig.run('ALTER TABLE courses ADD COLUMN is_hidden INTEGER DEFAULT 0').catch(() => {});
         }
         console.log('✅ Ensured courses choreography columns exist');
     } catch (e) {
