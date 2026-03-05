@@ -1813,6 +1813,9 @@ class DanceRegistrationApp {
         const preFilledInstagram = document.getElementById('studentInstagram')?.value;
         const preFilledExperience = document.getElementById('studentExperience')?.value;
 
+        // Save package registration state before overwriting registrationData
+        const savedPackageData = this.registrationData.package_registration ? { ...this.registrationData } : null;
+
         // Prepare registration data using pre-filled data when available
         this.registrationData = {
             email: preFilledEmail || formData.get('email'),
@@ -1822,6 +1825,16 @@ class DanceRegistrationApp {
             dance_experience: preFilledExperience || formData.get('dance_experience') || null,
             student_id: studentId || null
         };
+
+        // Restore package registration state if it was a package flow
+        if (savedPackageData) {
+            this.registrationData.package_registration = true;
+            this.registrationData.payment_amount = savedPackageData.payment_amount;
+            this.registrationData.registrationId = savedPackageData.registrationId;
+            this.registrationData.registration_ids = savedPackageData.registration_ids;
+            this.registrationData.registration_type = savedPackageData.registration_type;
+            this.registrationData.package_name = savedPackageData.package_name;
+        }
 
         console.log('📝 Using registration data:', {
             hasPreFilledData: !!studentId,
