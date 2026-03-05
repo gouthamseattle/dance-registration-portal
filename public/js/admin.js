@@ -4132,28 +4132,32 @@ Questions? Reply to this message`;
     async loadChoreographiesForSlot(slotNumber) {
         const container = document.getElementById('choreographySelection');
         container.innerHTML = '<div class="text-center"><div class="spinner-border spinner-border-sm"></div> Loading...</div>';
-        
+
         try {
-            const response = await this.apiFetch(`/api/admin/choreography-courses?series_slot=${slotNumber}`);
-            
+            // For "both", load all choreographies (no series_slot filter)
+            const url = slotNumber === 'both'
+                ? '/api/admin/choreography-courses'
+                : `/api/admin/choreography-courses?series_slot=${slotNumber}`;
+            const response = await this.apiFetch(url);
+
             if (!response.ok) {
                 throw new Error(`API returned ${response.status}: ${response.statusText}`);
             }
-            
+
             const choreographies = await response.json();
-            
+
             // Defensive check: ensure we got an array
             if (!Array.isArray(choreographies)) {
                 console.error('API returned non-array:', choreographies);
                 throw new Error('Invalid response format from API');
             }
-            
+
             if (choreographies.length === 0) {
                 container.innerHTML = `
                     <div class="alert alert-warning">
                         <i class="fas fa-info-circle me-2"></i>
-                        <strong>No choreographies found for Slot ${slotNumber}</strong><br>
-                        <small>Create choreography courses first and assign them to Slot ${slotNumber}.</small><br>
+                        <strong>No choreographies found${slotNumber === 'both' ? '' : ` for Slot ${slotNumber}`}</strong><br>
+                        <small>Create choreography courses first${slotNumber !== 'both' ? ` and assign them to Slot ${slotNumber}` : ''}.</small><br>
                         <a href="#" onclick="admin.showSection('courses'); return false;" class="btn btn-sm btn-primary mt-2">
                             <i class="fas fa-plus"></i> Create Choreography Course
                         </a>
@@ -4161,30 +4165,45 @@ Questions? Reply to this message`;
                 `;
                 return;
             }
-            
-            const checkboxesHtml = choreographies.map(choreo => `
-                <div class="form-check mb-2">
-                    <input class="form-check-input choreography-checkbox" type="checkbox" 
-                           value="${choreo.id}" id="choreo_${choreo.id}">
-                    <label class="form-check-label" for="choreo_${choreo.id}">
-                        <strong>${choreo.name}</strong>
-                        ${choreo.song_name ? `<br><small class="text-muted">Song: ${choreo.song_name}</small>` : ''}
-                        ${choreo.movie_name ? `<br><small class="text-muted">Movie: ${choreo.movie_name}</small>` : ''}
-                        ${choreo.language ? `<br><small class="text-muted">Language: ${choreo.language}</small>` : ''}
-                    </label>
-                </div>
-            `).join('');
-            
+
+            let checkboxesHtml = '';
+            if (slotNumber === 'both') {
+                // Group by series_slot for combo view
+                const slot1 = choreographies.filter(c => Number(c.series_slot) === 1);
+                const slot2 = choreographies.filter(c => Number(c.series_slot) === 2);
+                if (slot1.length > 0) {
+                    checkboxesHtml += '<h6 class="text-primary mb-2">Slot 1 Choreographies</h6>';
+                    checkboxesHtml += slot1.map(choreo => this._choreoCheckboxHtml(choreo)).join('');
+                }
+                if (slot2.length > 0) {
+                    checkboxesHtml += '<hr class="my-2"><h6 class="text-success mb-2">Slot 2 Choreographies</h6>';
+                    checkboxesHtml += slot2.map(choreo => this._choreoCheckboxHtml(choreo)).join('');
+                }
+            } else {
+                checkboxesHtml = choreographies.map(choreo => this._choreoCheckboxHtml(choreo)).join('');
+            }
+
             container.innerHTML = checkboxesHtml;
-            
-            // Add max 3 selection limit
+
+            // Add max selection limit (6 for combo = 3 per slot, 3 for single slot)
+            const maxTotal = slotNumber === 'both' ? 6 : 3;
             const checkboxes = container.querySelectorAll('.choreography-checkbox');
             checkboxes.forEach(cb => {
                 cb.addEventListener('change', () => {
                     const checked = container.querySelectorAll('.choreography-checkbox:checked');
-                    if (checked.length > 3) {
+                    if (slotNumber === 'both') {
+                        // Check per-slot limits
+                        const slot1Checked = Array.from(checked).filter(c => c.dataset.slot === '1').length;
+                        const slot2Checked = Array.from(checked).filter(c => c.dataset.slot === '2').length;
+                        if (slot1Checked > 3 || slot2Checked > 3) {
+                            cb.checked = false;
+                            this.showError('Maximum 3 choreographies per slot');
+                            return;
+                        }
+                    }
+                    if (checked.length > maxTotal) {
                         cb.checked = false;
-                        this.showError('Maximum 3 choreographies per package');
+                        this.showError(`Maximum ${maxTotal} choreographies per package`);
                     }
                 });
             });
@@ -4200,6 +4219,22 @@ Questions? Reply to this message`;
                 </div>
             `;
         }
+    }
+
+    // Helper: generate checkbox HTML for a choreography course
+    _choreoCheckboxHtml(choreo) {
+        return `
+            <div class="form-check mb-2">
+                <input class="form-check-input choreography-checkbox" type="checkbox"
+                       value="${choreo.id}" id="choreo_${choreo.id}" data-slot="${choreo.series_slot || ''}">
+                <label class="form-check-label" for="choreo_${choreo.id}">
+                    <strong>${choreo.name}</strong>
+                    ${choreo.song_name ? `<br><small class="text-muted">Song: ${choreo.song_name}</small>` : ''}
+                    ${choreo.movie_name ? `<br><small class="text-muted">Movie: ${choreo.movie_name}</small>` : ''}
+                    ${choreo.language ? `<br><small class="text-muted">Language: ${choreo.language}</small>` : ''}
+                </label>
+            </div>
+        `;
     }
 
     async savePackage() {
@@ -4218,21 +4253,48 @@ Questions? Reply to this message`;
             this.showError('Please fill in all required fields and select at least one choreography');
             return;
         }
-        
-        if (courseIds.length > 3) {
-            this.showError('Maximum 3 choreographies per package');
-            return;
-        }
-        
-        const packageData = {
-            name,
-            description: description || null,
-            slot_number: parseInt(slotNumber),
-            course_ids: courseIds,
-            pricing: {
-                package_price: packagePrice ? parseFloat(packagePrice) : null
+
+        let packageData;
+
+        if (slotNumber === 'both') {
+            // Combo package: separate courses by their data-slot attribute
+            const slot1Ids = Array.from(selectedCheckboxes).filter(cb => cb.dataset.slot === '1').map(cb => parseInt(cb.value));
+            const slot2Ids = Array.from(selectedCheckboxes).filter(cb => cb.dataset.slot === '2').map(cb => parseInt(cb.value));
+            
+            if (slot1Ids.length > 3 || slot2Ids.length > 3) {
+                this.showError('Maximum 3 choreographies per slot');
+                return;
             }
-        };
+            if (slot1Ids.length === 0 && slot2Ids.length === 0) {
+                this.showError('Select choreographies from at least one slot');
+                return;
+            }
+            
+            // Send Format B directly for combo
+            packageData = {
+                name,
+                description: description || null,
+                slot1_course_ids: slot1Ids,
+                slot2_course_ids: slot2Ids,
+                combined_package_price: packagePrice ? parseFloat(packagePrice) : null
+            };
+        } else {
+            // Single slot: use Format A
+            if (courseIds.length > 3) {
+                this.showError('Maximum 3 choreographies per package');
+                return;
+            }
+            
+            packageData = {
+                name,
+                description: description || null,
+                slot_number: parseInt(slotNumber),
+                course_ids: courseIds,
+                pricing: {
+                    package_price: packagePrice ? parseFloat(packagePrice) : null
+                }
+            };
+        }
         
         try {
             const url = packageId ? `/api/admin/dance-series/${packageId}` : '/api/admin/dance-series';
@@ -4287,7 +4349,7 @@ Questions? Reply to this message`;
             const response = await this.apiFetch('/api/admin/dance-series');
             const allSeries = await response.json();
             
-            const slotSeries = allSeries.filter(s => s.slot_number === slotNumber);
+            const slotSeries = allSeries.filter(s => s.slot_number === slotNumber || s.slot_number === 'both');
             
             if (slotSeries.length === 0) {
                 container.innerHTML = `

@@ -1559,8 +1559,10 @@ app.get('/api/admin/dance-series', requireAuth, asyncHandler(async (req, res) =>
         // Determine primary slot from courses (most courses belong to one slot)
         const slot1Count = courses.filter(c => c.slot_number === 1).length;
         const slot2Count = courses.filter(c => c.slot_number === 2).length;
-        const primarySlot = slot2Count > slot1Count ? 2 : (slot1Count > 0 ? 1 : null);
-        const packagePrice = primarySlot === 2 ? s.slot2_package_price : s.slot1_package_price;
+        const hasBothSlots = slot1Count > 0 && slot2Count > 0;
+        const primarySlot = hasBothSlots ? 'both' : (slot2Count > slot1Count ? 2 : (slot1Count > 0 ? 1 : null));
+        const packagePrice = primarySlot === 'both' ? s.combined_package_price :
+                            (primarySlot === 2 ? s.slot2_package_price : s.slot1_package_price);
 
         return {
             ...s,
