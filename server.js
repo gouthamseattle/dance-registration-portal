@@ -1452,6 +1452,19 @@ app.post('/api/register-series-package', asyncHandler(async (req, res) => {
         return res.status(400).json({ error: 'No courses to register for' });
     }
 
+    // Check capacity for all courses before registering
+    for (const sc of seriesCourses) {
+        const availability = await getCourseAvailability(sc.course_id);
+        if (availability.available <= 0) {
+            return res.status(400).json({
+                error: `Choreography "${sc.name}" is full — registration blocked`,
+                course_full: true,
+                course_name: sc.name,
+                course_id: sc.course_id
+            });
+        }
+    }
+
     // Find or verify the student
     let student;
     if (student_id) {
