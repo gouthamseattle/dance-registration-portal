@@ -1584,6 +1584,17 @@ app.get('/api/admin/dance-series', requireAuth, asyncHandler(async (req, res) =>
             ORDER BY dsc.slot_number ASC, dsc.position ASC
         `, [s.id]);
 
+        // Add capacity info for each course
+        const coursesWithCapacity = await Promise.all(courses.map(async (c) => {
+            const avail = await getCourseAvailability(dbConfig, c.course_id, 'choreography');
+            return {
+                ...c,
+                capacity: avail.capacity,
+                registered_count: avail.registeredCount,
+                available_spots: avail.available
+            };
+        }));
+
         // Derive slot_number and package_price for frontend compatibility
         // Determine primary slot from courses (most courses belong to one slot)
         const slot1Count = courses.filter(c => c.slot_number === 1).length;
@@ -1596,8 +1607,8 @@ app.get('/api/admin/dance-series', requireAuth, asyncHandler(async (req, res) =>
         return {
             ...s,
             is_active: dbConfig.isProduction ? s.is_active : Boolean(s.is_active),
-            courses,
-            course_count: courses.length,
+            courses: coursesWithCapacity,
+            course_count: coursesWithCapacity.length,
             slot_number: primarySlot,
             package_price: packagePrice
         };

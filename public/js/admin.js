@@ -4402,13 +4402,24 @@ Questions? Reply to this message`;
                             
                             <div class="mb-3">
                                 <strong>Choreographies (${series.course_count}):</strong>
-                                <ul class="small mt-2">
-                                    ${(series.courses || []).map(c => `
-                                        <li>
-                                            ${c.name}
-                                            ${c.song_name ? `<br><small class="text-muted">♪ ${c.song_name}</small>` : ''}
-                                        </li>
-                                    `).join('')}
+                                <ul class="small mt-2 list-unstyled">
+                                    ${(series.courses || []).map(c => {
+                                        const cap = Number(c.capacity) || 0;
+                                        const reg = Number(c.registered_count) || 0;
+                                        const avail = Number(c.available_spots) || 0;
+                                        const pct = cap > 0 ? Math.round((reg / cap) * 100) : 0;
+                                        const barColor = pct >= 90 ? 'danger' : pct >= 70 ? 'warning' : 'success';
+                                        return `
+                                        <li class="mb-2">
+                                            <div class="d-flex justify-content-between align-items-center">
+                                                <span>${c.name}${c.song_name ? ` <small class="text-muted">♪ ${c.song_name}</small>` : ''}</span>
+                                                <span class="badge bg-${barColor}">${reg}/${cap}</span>
+                                            </div>
+                                            <div class="progress" style="height: 6px;">
+                                                <div class="progress-bar bg-${barColor}" style="width: ${pct}%"></div>
+                                            </div>
+                                        </li>`;
+                                    }).join('')}
                                 </ul>
                             </div>
                             
