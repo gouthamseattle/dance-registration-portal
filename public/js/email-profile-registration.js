@@ -449,17 +449,47 @@ class EmailProfileRegistrationApp {
         const slot1Weeks = slot1Courses[0]?.duration_weeks || 6;
         const slot2Weeks = slot2Courses[0]?.duration_weeks || 6;
 
-        // Get package pricing
-        const pkg = this.seriesPackages[0] || {};
-        const slot1PkgPrice = pkg.slot1_package_price || 0;
-        const slot2PkgPrice = pkg.slot2_package_price || 0;
-        const combinedPkgPrice = pkg.combined_package_price || 0;
+        // Get package pricing — aggregate across ALL packages
+        let slot1PkgPrice = 0;
+        let slot2PkgPrice = 0;
+        let combinedPkgPrice = 0;
+        let slot1Pkg = null;
+        let slot2Pkg = null;
+        let comboPkg = null;
+        this.seriesPackages.forEach(p => {
+            if (p.slot1_package_price && p.slot1_package_price > slot1PkgPrice) {
+                slot1PkgPrice = parseFloat(p.slot1_package_price);
+                if (p.primary_slot === 1 || p.primary_slot === '1') slot1Pkg = p;
+            }
+            if (p.slot2_package_price && p.slot2_package_price > slot2PkgPrice) {
+                slot2PkgPrice = parseFloat(p.slot2_package_price);
+                if (p.primary_slot === 2 || p.primary_slot === '2') slot2Pkg = p;
+            }
+            if (p.combined_package_price && p.combined_package_price > combinedPkgPrice) {
+                combinedPkgPrice = parseFloat(p.combined_package_price);
+                if (p.primary_slot === 'both') comboPkg = p;
+            }
+        });
+        // Fallback: if no slot-specific packages found, check package_price + primary_slot
+        if (!slot1PkgPrice) {
+            const s1 = this.seriesPackages.find(p => (p.primary_slot === 1 || p.primary_slot === '1') && p.package_price);
+            if (s1) { slot1PkgPrice = parseFloat(s1.package_price); slot1Pkg = s1; }
+        }
+        if (!slot2PkgPrice) {
+            const s2 = this.seriesPackages.find(p => (p.primary_slot === 2 || p.primary_slot === '2') && p.package_price);
+            if (s2) { slot2PkgPrice = parseFloat(s2.package_price); slot2Pkg = s2; }
+        }
+        if (!combinedPkgPrice) {
+            const cb = this.seriesPackages.find(p => p.primary_slot === 'both' && p.package_price);
+            if (cb) { combinedPkgPrice = parseFloat(cb.package_price); comboPkg = cb; }
+        }
 
         // Store state
         this._choreoState = {
             slot1Courses, slot2Courses, allChoreos,
             slot1PkgPrice, slot2PkgPrice, combinedPkgPrice,
-            selectedTrack: null, pkg
+            slot1Pkg, slot2Pkg, comboPkg,
+            selectedTrack: null, pkg: slot1Pkg || slot2Pkg || comboPkg || (this.seriesPackages[0] || {})
         };
 
         // === BUILD HTML ===
@@ -565,7 +595,8 @@ class EmailProfileRegistrationApp {
                              document.getElementById('trackCard2');
         if (selectedCard) {
             const colorClass = track === 'both' ? 'bg-warning' : track === 1 ? 'bg-primary' : 'bg-info';
-            selectedCard.classList.add(colorClass, track === 'both' ? '' : 'text-white');
+            selectedCard.classList.add(colorClass);
+            if (track !== 'both') selectedCard.classList.add('text-white');
             selectedCard.style.opacity = '1';
         }
 
@@ -576,14 +607,17 @@ class EmailProfileRegistrationApp {
         else if (track === 2) courses = st.slot2Courses;
         else courses = [...st.slot1Courses, ...st.slot2Courses];
 
-        // Determine package price for this track
+        // Determine package price and package ref for this track
         let trackPkgPrice = 0;
-        if (track === 1) trackPkgPrice = st.slot1PkgPrice;
-        else if (track === 2) trackPkgPrice = st.slot2PkgPrice;
-        else trackPkgPrice = st.combinedPkgPrice;
+        let trackPkg = null;
+        if (track === 1) { trackPkgPrice = st.slot1PkgPrice; trackPkg = st.slot1Pkg; }
+        else if (track === 2) { trackPkgPrice = st.slot2PkgPrice; trackPkg = st.slot2Pkg; }
+        else { trackPkgPrice = st.combinedPkgPrice; trackPkg = st.comboPkg; }
 
         this._choreoState.visibleCourses = courses;
         this._choreoState.trackPkgPrice = trackPkgPrice;
+        // Update pkg to the track-specific package for registration
+        if (trackPkg) this._choreoState.pkg = trackPkg;
 
         // Show Step 2
         document.getElementById('choreoStep2').style.display = 'block';
