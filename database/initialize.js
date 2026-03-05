@@ -275,9 +275,12 @@ async function ensureDanceSeriesTables(dbConfig) {
                     slot1_package_price DECIMAL(10,2),
                     slot2_package_price DECIMAL(10,2),
                     combined_package_price DECIMAL(10,2),
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             `);
+            // Migration: add updated_at if table already exists without it
+            await dbConfig.run(`ALTER TABLE dance_series ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP`);
             await dbConfig.run(`
                 CREATE TABLE IF NOT EXISTS dance_series_courses (
                     id SERIAL PRIMARY KEY,
@@ -304,7 +307,8 @@ async function ensureDanceSeriesTables(dbConfig) {
                     slot1_package_price REAL,
                     slot2_package_price REAL,
                     combined_package_price REAL,
-                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
                 )
             `);
             await dbConfig.run(`
