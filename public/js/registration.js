@@ -1821,7 +1821,7 @@ class DanceRegistrationApp {
             email: preFilledEmail || formData.get('email'),
             first_name: preFilledFirstName || formData.get('first_name'),
             last_name: preFilledLastName || formData.get('last_name'),
-            instagram_handle: preFilledInstagram || formData.get('instagram_handle') || null,
+            instagram_handle: preFilledInstagram || formData.get('instagram_id') || formData.get('instagram_handle') || null,
             dance_experience: preFilledExperience || formData.get('dance_experience') || null,
             student_id: studentId || null
         };
