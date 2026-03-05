@@ -246,7 +246,7 @@ app.get('/api/courses', asyncHandler(async (req, res) => {
     // Get slots and pricing for each course with corrected availability
     const coursesWithSlots = await Promise.all(courses.map(async (course) => {
         // Use the corrected availability helper
-        const availability = await getCourseAvailability(course.id);
+        const availability = await getCourseAvailability(dbConfig, course.id);
         
         const slots = await dbConfig.all(`
             SELECT cs.*, 
@@ -587,7 +587,7 @@ app.post('/api/register-dropin-bundle', asyncHandler(async (req, res) => {
             return res.status(400).json({ error: `Course ${courseId} not found` });
         }
 
-        const availability = await getCourseAvailability(courseId);
+        const availability = await getCourseAvailability(dbConfig, courseId);
         
         if (availability.available <= 0) {
             return res.status(400).json({ 
@@ -1468,7 +1468,7 @@ app.post('/api/register-series-package', asyncHandler(async (req, res) => {
 
     // Check capacity for all courses before registering
     for (const sc of seriesCourses) {
-        const availability = await getCourseAvailability(sc.course_id);
+        const availability = await getCourseAvailability(dbConfig, sc.course_id);
         if (availability.available <= 0) {
             return res.status(400).json({
                 error: `Choreography "${sc.name}" is full — registration blocked`,
@@ -3496,7 +3496,7 @@ app.post('/api/register', asyncHandler(async (req, res) => {
     }
 
     // Use the corrected availability helper
-    const availability = await getCourseAvailability(course_id);
+    const availability = await getCourseAvailability(dbConfig, course_id);
 
     console.log('🔎 Capacity check (corrected logic)', {
         courseId: course_id,
