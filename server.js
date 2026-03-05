@@ -1671,7 +1671,10 @@ app.post('/api/admin/dance-series', requireAuth, asyncHandler(async (req, res) =
 app.put('/api/admin/dance-series/:id', requireAuth, asyncHandler(async (req, res) => {
     const { id } = req.params;
     const body = req.body || {};
-    const { name, description, is_active } = body;
+    const { name, description } = body;
+
+    // Resolve is_active: if provided use it, otherwise keep current value
+    let is_active = body.is_active;
 
     // Support partial updates (e.g., just toggling is_active)
     if (name === undefined && is_active !== undefined) {
@@ -1690,6 +1693,12 @@ app.put('/api/admin/dance-series/:id', requireAuth, asyncHandler(async (req, res
 
     if (!name) {
         return res.status(400).json({ error: 'Series name is required' });
+    }
+
+    // If is_active not provided, fetch current value so we don't accidentally deactivate
+    if (is_active === undefined) {
+        const current = await dbConfig.get('SELECT is_active FROM dance_series WHERE id = $1', [id]);
+        is_active = current ? (dbConfig.isProduction ? current.is_active : Boolean(current.is_active)) : true;
     }
 
     // Support both frontend formats (same as POST):
@@ -1731,7 +1740,8 @@ app.put('/api/admin/dance-series/:id', requireAuth, asyncHandler(async (req, res
             if (!course || course.course_type !== 'choreography') {
                 return res.status(400).json({ error: `Course ${courseId} is not a choreography batch` });
             }
-            if (course.series_slot !== 1) {
+            // Use == for type-coerced comparison (PostgreSQL may return string or number)
+            if (course.series_slot != 1) {
                 return res.status(400).json({ error: `Course ${courseId} must have series_slot=1` });
             }
         }
@@ -1741,7 +1751,8 @@ app.put('/api/admin/dance-series/:id', requireAuth, asyncHandler(async (req, res
             if (!course || course.course_type !== 'choreography') {
                 return res.status(400).json({ error: `Course ${courseId} is not a choreography batch` });
             }
-            if (course.series_slot !== 2) {
+            // Use == for type-coerced comparison (PostgreSQL may return string or number)
+            if (course.series_slot != 2) {
                 return res.status(400).json({ error: `Course ${courseId} must have series_slot=2` });
             }
         }
