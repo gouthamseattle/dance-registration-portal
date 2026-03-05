@@ -281,6 +281,8 @@ async function ensureDanceSeriesTables(dbConfig) {
             `);
             // Migration: add updated_at if table already exists without it
             await dbConfig.run(`ALTER TABLE dance_series ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP`);
+            // Migration: add is_hidden for soft-delete support
+            await dbConfig.run(`ALTER TABLE dance_series ADD COLUMN IF NOT EXISTS is_hidden BOOLEAN DEFAULT FALSE`);
             await dbConfig.run(`
                 CREATE TABLE IF NOT EXISTS dance_series_courses (
                     id SERIAL PRIMARY KEY,

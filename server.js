@@ -1267,10 +1267,11 @@ app.delete('/api/courses/:courseId/slots/:slotId', requireAuth, asyncHandler(asy
  * Used by the student registration portal to display choreography packages.
  */
 app.get('/api/dance-series', asyncHandler(async (req, res) => {
-    // 1. Fetch active packages
+    // 1. Fetch active packages (exclude soft-deleted)
     const seriesQuery = `
         SELECT * FROM dance_series
         WHERE is_active = ${dbConfig.isProduction ? 'true' : '1'}
+        AND (is_hidden IS NULL OR is_hidden = ${dbConfig.isProduction ? 'false' : '0'})
         ORDER BY created_at DESC
     `;
     const series = await dbConfig.all(seriesQuery);
@@ -1549,6 +1550,8 @@ app.get('/api/admin/dance-series', requireAuth, asyncHandler(async (req, res) =>
         FROM dance_series
     `;
     const conditions = [];
+    // Exclude soft-deleted (hidden) series
+    conditions.push(dbConfig.isProduction ? '(is_hidden IS NULL OR is_hidden = false)' : '(is_hidden IS NULL OR is_hidden = 0)');
     if (active_only === 'true') {
         conditions.push(dbConfig.isProduction ? 'is_active = true' : 'is_active = 1');
     }
@@ -1814,7 +1817,8 @@ app.put('/api/admin/dance-series/:id', requireAuth, asyncHandler(async (req, res
 
 app.delete('/api/admin/dance-series/:id', requireAuth, asyncHandler(async (req, res) => {
     const { id } = req.params;
-    await dbConfig.run('DELETE FROM dance_series WHERE id = $1', [id]);
+    // Soft-delete: hide from UI but keep in database
+    await dbConfig.run(`UPDATE dance_series SET is_hidden = ${dbConfig.isProduction ? 'true' : '1'}, is_active = ${dbConfig.isProduction ? 'false' : '0'}, updated_at = CURRENT_TIMESTAMP WHERE id = $1`, [id]);
     res.json({ success: true });
 }));
 
