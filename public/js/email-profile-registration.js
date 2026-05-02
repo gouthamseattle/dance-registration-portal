@@ -1718,6 +1718,39 @@ class EmailProfileRegistrationApp {
                 document.getElementById('compZelleDetails').style.display = 'block';
             } catch (e) { this.showError('Failed to generate Zelle details'); }
         }
+
+        // Show the confirm payment button
+        const confirmBtn = document.getElementById('compConfirmPaymentBtn');
+        if (confirmBtn) confirmBtn.style.display = 'block';
+    }
+
+    async confirmCompPaymentCompleted() {
+        const btnContainer = document.getElementById('compConfirmPaymentBtn');
+        const btn = btnContainer ? btnContainer.querySelector('button') : null;
+        if (btn) { btn.disabled = true; btn.textContent = 'Confirming...'; }
+        try {
+            const res = await fetch('/api/competition/confirm-payment-submitted', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ registrationId: this.compRegistrationId })
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Failed to confirm');
+
+            // Hide payment options, show success
+            if (btnContainer) btnContainer.style.display = 'none';
+            document.getElementById('compVenmoDetails').style.display = 'none';
+            document.getElementById('compZelleDetails').style.display = 'none';
+            document.querySelectorAll('.comp-pay-option').forEach(o => o.style.display = 'none');
+
+            const successMsg = document.getElementById('compSuccessMessage');
+            const successRegId = document.getElementById('compSuccessRegId');
+            if (successRegId) successRegId.textContent = `#${this.compRegistrationId}`;
+            if (successMsg) successMsg.style.display = 'block';
+        } catch (err) {
+            this.showError(err.message || 'Failed to confirm payment');
+            if (btn) { btn.disabled = false; btn.textContent = '✅ I\'ve Completed Payment'; }
+        }
     }
 
     scrollToTop() {

@@ -4971,6 +4971,14 @@ app.post('/api/competition/generate-zelle-payment', asyncHandler(async (req, res
     res.json({ success: true, zelleRecipientName, zellePhone, paymentNote, amount: parseFloat(amount).toFixed(2) });
 }));
 
+// Public endpoint: user self-reports payment submitted
+app.post('/api/competition/confirm-payment-submitted', asyncHandler(async (req, res) => {
+    const { registrationId } = req.body;
+    if (!registrationId) return res.status(400).json({ error: 'Registration ID required' });
+    await dbConfig.run("UPDATE competition_registrations SET payment_status='payment_submitted', updated_at=CURRENT_TIMESTAMP WHERE id=$1 AND payment_status='pending'", [registrationId]);
+    res.json({ success: true });
+}));
+
 app.get('/api/admin/competition/registrations', requireAuth, asyncHandler(async (req, res) => {
     const { category, payment_status } = req.query;
     let query = 'SELECT * FROM competition_registrations'; const params = []; const conditions = [];

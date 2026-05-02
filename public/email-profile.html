@@ -338,14 +338,29 @@
                                     <div id="compVenmoDetails" style="display:none;" class="alert alert-info">
                                         <p class="mb-1"><strong>Send payment to:</strong> <span id="compVenmoUser">@monicaradd</span></p>
                                         <p class="mb-1"><strong>Note:</strong> <span id="compVenmoNote"></span></p>
+                                        <p class="mb-1 small text-muted">After paying, tap "I've Completed Payment" below</p>
                                         <a id="compVenmoLink" href="#" target="_blank" class="btn btn-primary w-100 mt-2">Open Venmo App 💙</a>
-                                        <a id="compVenmoWebLink" href="#" target="_blank" class="d-block text-center mt-1 small">Open Venmo in browser</a>
+                                        <a id="compVenmoWebLink" href="#" target="_blank" class="d-block text-center mt-1 small">Having trouble? Open Venmo in browser instead</a>
                                     </div>
                                     <div id="compZelleDetails" style="display:none;" class="alert alert-info">
                                         <p class="mb-1"><strong>Recipient:</strong> <span id="compZelleRecipient"></span></p>
                                         <p class="mb-1"><strong>Phone:</strong> <span id="compZellePhone"></span></p>
                                         <p class="mb-1"><strong>Amount:</strong> <span id="compZelleAmount"></span></p>
-                                        <p class="mb-0"><strong>Note:</strong> <span id="compZelleNote"></span></p>
+                                        <p class="mb-1"><strong>Note:</strong> <span id="compZelleNote"></span></p>
+                                        <p class="mb-0 small text-muted">Send via Zelle, then tap "I've Completed Payment" below</p>
+                                    </div>
+                                    <div id="compConfirmPaymentBtn" style="display:none;" class="mt-3">
+                                        <button class="btn btn-success w-100 py-3 fw-bold" style="font-size:1.1rem;" onclick="app.confirmCompPaymentCompleted()">
+                                            ✅ I've Completed Payment
+                                        </button>
+                                        <p class="text-center text-muted small mt-1">Click after you've sent payment via Venmo or Zelle</p>
+                                    </div>
+                                    <div id="compSuccessMessage" style="display:none;" class="text-center mt-3">
+                                        <div class="alert alert-success">
+                                            <h4>🎉 Registration Complete!</h4>
+                                            <p>Your payment has been received. Our team will verify it within 24 hours.</p>
+                                            <p class="small mb-0">Registration ID: <strong id="compSuccessRegId"></strong></p>
+                                        </div>
                                     </div>
                                     <button class="btn btn-outline-secondary mt-2" onclick="app.compBackToCategory()"><i class="fas fa-arrow-left"></i> Register Another</button>
                                 </div>

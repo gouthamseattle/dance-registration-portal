@@ -289,16 +289,15 @@
                 <!-- Venmo Details -->
                 <div id="venmoDetails" class="payment-details">
                     <div class="info-box">
-                        <p><strong>Step 1:</strong> Click the button below to open Venmo</p>
-                        <p><strong>Step 2:</strong> Send payment to <span class="highlight" id="venmoUsername">@monicaradd</span></p>
-                        <p><strong>Step 3:</strong> Use this note: <span class="highlight" id="venmoNote"></span></p>
-                        <p style="color:#888; font-size:0.85rem;">Admin will confirm your payment within 24 hours</p>
+                        <p><strong>Step 1:</strong> Send payment to <span class="highlight" id="venmoUsername">@monicaradd</span></p>
+                        <p><strong>Step 2:</strong> Use this note: <span class="highlight" id="venmoNote"></span></p>
+                        <p><strong>Step 3:</strong> After paying, tap "I've Completed Payment" below</p>
                     </div>
                     <a id="venmoLink" href="#" target="_blank" class="btn btn-primary" style="display:block; text-align:center; padding:14px; font-size:1.1rem; text-decoration:none;">
                         Open Venmo App 💙
                     </a>
                     <a id="venmoWebLink" href="#" target="_blank" style="display:block; text-align:center; color:#aaa; margin-top:8px; font-size:0.85rem;">
-                        Open Venmo in browser instead
+                        Having trouble? Open Venmo in browser instead
                     </a>
                 </div>
 
@@ -309,18 +308,34 @@
                         <p><strong>Phone:</strong> <span class="highlight" id="zellePhone"></span></p>
                         <p><strong>Amount:</strong> <span class="highlight" id="zelleAmount"></span></p>
                         <p><strong>Note:</strong> <span class="highlight" id="zelleNote"></span></p>
-                        <p style="color:#888; font-size:0.85rem;">Open your banking app and send via Zelle using the info above</p>
+                        <p style="color:#888; font-size:0.85rem;">Open your banking app and send via Zelle, then tap "I've Completed Payment" below</p>
                     </div>
+                </div>
+
+                <!-- I've Completed Payment button -->
+                <div id="confirmPaymentBtn" style="display:none; margin-top:20px;">
+                    <button onclick="confirmPaymentCompleted()" class="btn btn-primary" style="width:100%; padding:16px; font-size:1.15rem; background:linear-gradient(135deg, #27ae60, #2ecc71); border:none; border-radius:10px; font-weight:700;">
+                        ✅ I've Completed Payment
+                    </button>
+                    <p style="text-align:center; color:#888; font-size:0.8rem; margin-top:8px;">
+                        Click after you've sent payment via Venmo or Zelle
+                    </p>
                 </div>
             </div>
 
             <!-- Success Section -->
             <div id="successSection" class="success-section">
                 <div class="success-icon">🎉</div>
-                <h2 style="color:#fff;">Registration Submitted!</h2>
-                <p style="color:#aaa;">Your competition registration has been received. Please complete your payment to confirm your spot.</p>
+                <h2 style="color:#fff;">Registration Complete!</h2>
+                <p style="color:#aaa;">Your competition registration and payment have been received. Our team will verify your payment shortly.</p>
                 <p style="color:#888; font-size:0.9rem; margin-top:10px;">Registration ID: <span id="successRegId" style="color:#e74c3c; font-weight:600;"></span></p>
-                <a href="/competition.html" class="btn-back">Register Another Entry</a>
+                <div style="background:#16213e; border:1px solid #27ae60; border-radius:10px; padding:15px; margin:20px 0; text-align:left;">
+                    <p style="color:#27ae60; font-weight:600; margin-bottom:8px;">✅ What happens next?</p>
+                    <p style="color:#bbb; font-size:0.9rem; margin:4px 0;">• Your payment will be verified within 24 hours</p>
+                    <p style="color:#bbb; font-size:0.9rem; margin:4px 0;">• Submit your song selection by November 30</p>
+                    <p style="color:#bbb; font-size:0.9rem; margin:4px 0;">• Final edited audio due by January 31, 2025</p>
+                </div>
+                <a href="/competition" class="btn-back">Register Another Entry</a>
                 <a href="/" class="btn-back" style="margin-left:10px;">← Back to Main Portal</a>
             </div>
         </div>
@@ -499,6 +514,34 @@
                 document.getElementById('zelleNote').textContent = data.paymentNote;
                 document.getElementById('zelleDetails').classList.add('active');
             } catch(e) { alert('Failed to generate Zelle details'); }
+        }
+
+        // Show the confirm payment button after selecting a payment method
+        document.getElementById('confirmPaymentBtn').style.display = 'block';
+    }
+
+    async function confirmPaymentCompleted() {
+        const btn = document.querySelector('#confirmPaymentBtn button');
+        btn.disabled = true;
+        btn.textContent = 'Confirming...';
+        try {
+            const res = await fetch('/api/competition/confirm-payment-submitted', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ registrationId: currentRegistrationId })
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Failed to confirm');
+
+            // Show success section
+            document.getElementById('paymentSection').classList.remove('active');
+            document.getElementById('successRegId').textContent = `#${currentRegistrationId}`;
+            document.getElementById('successSection').classList.add('active');
+            document.getElementById('successSection').scrollIntoView({ behavior: 'smooth' });
+        } catch(err) {
+            alert(err.message || 'Failed to confirm payment. Please try again.');
+            btn.disabled = false;
+            btn.textContent = '✅ I\'ve Completed Payment';
         }
     }
     </script>
