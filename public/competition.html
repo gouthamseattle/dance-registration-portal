@@ -337,7 +337,7 @@
         try {
             const res = await fetch('/api/settings');
             const settings = await res.json();
-            if (settings.competition_registration_open === 'false') {
+            if (settings.competition_registration_open !== 'true') {
                 document.getElementById('mainContent').style.display = 'none';
                 document.getElementById('closedBanner').style.display = 'block';
             }
