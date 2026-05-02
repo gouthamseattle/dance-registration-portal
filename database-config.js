@@ -1,24 +1,32 @@
 let sqlite3; // lazy-loaded in development
-const { Client } = require('pg');
+const { Pool } = require('pg');
 const path = require('path');
 
 class DatabaseConfig {
     constructor() {
         this.isProduction = process.env.NODE_ENV === 'production';
         this.db = null;
-        this.client = null;
+        this.pool = null;
     }
 
     async connect() {
         if (this.isProduction) {
-            // PostgreSQL for production
-            this.client = new Client({
+            // PostgreSQL for production — use Pool for auto-reconnect
+            this.pool = new Pool({
                 connectionString: process.env.DATABASE_URL,
-                ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false
+                ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false,
+                max: 10,
+                idleTimeoutMillis: 30000,
+                connectionTimeoutMillis: 5000
             });
-            await this.client.connect();
-            console.log('✅ Connected to PostgreSQL database');
-            return this.client;
+            this.pool.on('error', (err) => {
+                console.error('⚠️ PostgreSQL pool idle-client error:', err.message);
+            });
+            // Verify connectivity
+            const testClient = await this.pool.connect();
+            testClient.release();
+            console.log('✅ Connected to PostgreSQL database (pool)');
+            return this.pool;
         } else {
             // SQLite for development (lazy-load to avoid requiring in production)
             sqlite3 = sqlite3 || require('sqlite3').verbose();
@@ -31,12 +39,12 @@ class DatabaseConfig {
 
     async query(sql, params = []) {
         if (this.isProduction) {
-            // PostgreSQL query
+            // PostgreSQL query via pool (auto-reconnect)
             try {
-                const result = await this.client.query(sql, params);
+                const result = await this.pool.query(sql, params);
                 return result.rows;
             } catch (error) {
-                console.error('PostgreSQL query error:', error);
+                console.error('PostgreSQL query error:', error.message);
                 throw error;
             }
         } else {
@@ -80,9 +88,9 @@ class DatabaseConfig {
     }
 
     async close() {
-        if (this.isProduction && this.client) {
-            await this.client.end();
-            console.log('✅ PostgreSQL connection closed');
+        if (this.isProduction && this.pool) {
+            await this.pool.end();
+            console.log('✅ PostgreSQL pool closed');
         } else if (this.db) {
             this.db.close();
             console.log('✅ SQLite connection closed');
