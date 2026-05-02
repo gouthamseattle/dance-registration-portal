@@ -216,6 +216,143 @@
                         </div>
                     </div>
 
+                    <!-- Competition Section -->
+                    <div id="competitionSection" class="mb-5" style="display: none;">
+                        <div class="section-header mb-3">
+                            <h4><i class="fas fa-trophy text-danger me-2"></i>🏆 Annual Showcase & Competition</h4>
+                            <p class="text-muted mb-0">All Styles. All Levels. One Stage. — $30 per person</p>
+                        </div>
+
+                        <!-- Category Selector -->
+                        <div id="compCategoryStep" class="row justify-content-center mb-3">
+                            <div class="col-md-5 mb-2">
+                                <div class="card comp-cat-card h-100" data-comp-cat="solo" onclick="app.selectCompCategory('solo')" style="cursor:pointer;">
+                                    <div class="card-body text-center py-4">
+                                        <i class="fas fa-user fa-2x text-info mb-2"></i>
+                                        <h5>Solo</h5>
+                                        <p class="text-muted mb-0 small">$30 • 1 dancer</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-5 mb-2">
+                                <div class="card comp-cat-card h-100" data-comp-cat="duo_trio" onclick="app.selectCompCategory('duo_trio')" style="cursor:pointer;">
+                                    <div class="card-body text-center py-4">
+                                        <i class="fas fa-users fa-2x text-warning mb-2"></i>
+                                        <h5>Duo / Trio</h5>
+                                        <p class="text-muted mb-0 small">$60-$90 • 2-3 dancers</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Solo Form -->
+                        <div id="compSoloForm" style="display:none;">
+                            <div class="card">
+                                <div class="card-header"><h5 class="mb-0"><i class="fas fa-user text-info me-2"></i>Solo Registration — $30</h5></div>
+                                <div class="card-body">
+                                    <form id="compSoloRegForm">
+                                        <div class="mb-3">
+                                            <label class="form-label">Dancer's Name *</label>
+                                            <input type="text" class="form-control" name="dancer_name" required placeholder="Full name">
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label">Email *</label>
+                                            <input type="email" class="form-control" name="email" id="compSoloEmail" required>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label">Instagram ID</label>
+                                            <input type="text" class="form-control" name="instagram_id" placeholder="@yourusername">
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label">Contact Number *</label>
+                                            <input type="tel" class="form-control" name="contact_number" required placeholder="(xxx) xxx-xxxx">
+                                        </div>
+                                        <div class="d-flex gap-2">
+                                            <button type="button" class="btn btn-outline-secondary" onclick="app.compBackToCategory()"><i class="fas fa-arrow-left"></i> Back</button>
+                                            <button type="submit" class="btn btn-primary flex-fill">Register & Continue to Payment →</button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Duo/Trio Form -->
+                        <div id="compDuoTrioForm" style="display:none;">
+                            <div class="card">
+                                <div class="card-header"><h5 class="mb-0"><i class="fas fa-users text-warning me-2"></i>Duo / Trio Registration</h5></div>
+                                <div class="card-body">
+                                    <label class="form-label">Number of Dancers *</label>
+                                    <div class="d-flex gap-2 mb-3">
+                                        <button type="button" class="btn btn-outline-primary flex-fill comp-member-btn" data-count="2" onclick="app.setCompMemberCount(2)">2 Dancers (Duo) — $60</button>
+                                        <button type="button" class="btn btn-outline-primary flex-fill comp-member-btn" data-count="3" onclick="app.setCompMemberCount(3)">3 Dancers (Trio) — $90</button>
+                                    </div>
+                                    <form id="compDuoTrioRegForm" style="display:none;">
+                                        <div class="mb-3">
+                                            <label class="form-label">Team Name *</label>
+                                            <input type="text" class="form-control" name="team_name" required placeholder="Your team name">
+                                        </div>
+                                        <div id="compMemberNameFields"></div>
+                                        <div class="mb-3">
+                                            <label class="form-label">POC Email *</label>
+                                            <input type="email" class="form-control" name="poc_email" id="compDuoEmail" required>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label">POC Contact Number *</label>
+                                            <input type="tel" class="form-control" name="poc_contact" required placeholder="(xxx) xxx-xxxx">
+                                        </div>
+                                        <div class="d-flex gap-2">
+                                            <button type="button" class="btn btn-outline-secondary" onclick="app.compBackToCategory()"><i class="fas fa-arrow-left"></i> Back</button>
+                                            <button type="submit" class="btn btn-primary flex-fill">Register & Continue to Payment →</button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Competition Payment -->
+                        <div id="compPaymentSection" style="display:none;">
+                            <div class="card border-success">
+                                <div class="card-header bg-success text-white text-center">
+                                    <h5 class="mb-0">Complete Payment — <span id="compPayAmount">$30</span></h5>
+                                    <small>Registration ID: <span id="compPayRegId">#---</span></small>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row g-3 mb-3">
+                                        <div class="col-6">
+                                            <div class="card h-100 comp-pay-option" data-method="venmo" onclick="app.selectCompPayment('venmo')" style="cursor:pointer;">
+                                                <div class="card-body text-center py-3">
+                                                    <i class="fas fa-mobile-alt fa-2x text-primary mb-1"></i>
+                                                    <div class="fw-bold">Venmo</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="card h-100 comp-pay-option" data-method="zelle" onclick="app.selectCompPayment('zelle')" style="cursor:pointer;">
+                                                <div class="card-body text-center py-3">
+                                                    <i class="fas fa-university fa-2x text-success mb-1"></i>
+                                                    <div class="fw-bold">Zelle</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div id="compVenmoDetails" style="display:none;" class="alert alert-info">
+                                        <p class="mb-1"><strong>Send payment to:</strong> <span id="compVenmoUser">@monicaradd</span></p>
+                                        <p class="mb-1"><strong>Note:</strong> <span id="compVenmoNote"></span></p>
+                                        <a id="compVenmoLink" href="#" target="_blank" class="btn btn-primary w-100 mt-2">Open Venmo App 💙</a>
+                                        <a id="compVenmoWebLink" href="#" target="_blank" class="d-block text-center mt-1 small">Open Venmo in browser</a>
+                                    </div>
+                                    <div id="compZelleDetails" style="display:none;" class="alert alert-info">
+                                        <p class="mb-1"><strong>Recipient:</strong> <span id="compZelleRecipient"></span></p>
+                                        <p class="mb-1"><strong>Phone:</strong> <span id="compZellePhone"></span></p>
+                                        <p class="mb-1"><strong>Amount:</strong> <span id="compZelleAmount"></span></p>
+                                        <p class="mb-0"><strong>Note:</strong> <span id="compZelleNote"></span></p>
+                                    </div>
+                                    <button class="btn btn-outline-secondary mt-2" onclick="app.compBackToCategory()"><i class="fas fa-arrow-left"></i> Register Another</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- No Courses Message -->
                     <div id="noCoursesMessage" class="text-center py-5" style="display: none;">
                         <i class="fas fa-calendar-times fa-4x text-muted mb-4"></i>
@@ -255,6 +392,6 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="js/email-profile-registration.js?v=6"></script>
+    <script src="js/email-profile-registration.js?v=7"></script>
 </body>
 </html>

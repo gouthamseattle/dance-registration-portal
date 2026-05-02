@@ -19,6 +19,12 @@ class EmailProfileRegistrationApp {
         this.selectedPackage = null;
         this.registrationData = {};
         this.settings = {};
+
+        // Competition state
+        this.compCategory = null;
+        this.compMemberCount = 0;
+        this.compRegistrationId = null;
+        this.compAmount = 0;
         
         this.init();
     }
@@ -311,6 +317,9 @@ class EmailProfileRegistrationApp {
 
         // Categorize and render courses
         this.renderCategorizedCourses();
+
+        // Show competition section if open
+        this.checkCompetitionSection();
 
         this.scrollToTop();
     }
@@ -1526,6 +1535,189 @@ class EmailProfileRegistrationApp {
 
     hideLoading() {
         document.getElementById('loadingOverlay').style.display = 'none';
+    }
+
+    // ===== COMPETITION METHODS =====
+
+    checkCompetitionSection() {
+        const section = document.getElementById('competitionSection');
+        if (!section) return;
+        if (this.settings.competition_registration_open === 'true') {
+            section.style.display = 'block';
+            // Pre-fill emails from current student
+            const soloEmail = document.getElementById('compSoloEmail');
+            const duoEmail = document.getElementById('compDuoEmail');
+            if (soloEmail) soloEmail.value = this.currentEmail || '';
+            if (duoEmail) duoEmail.value = this.currentEmail || '';
+            // Setup form listeners (only once)
+            if (!this._compListenersSet) {
+                this._compListenersSet = true;
+                document.getElementById('compSoloRegForm').addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    this.submitCompRegistration('solo');
+                });
+                document.getElementById('compDuoTrioRegForm').addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    this.submitCompRegistration('duo_trio');
+                });
+            }
+        } else {
+            section.style.display = 'none';
+        }
+    }
+
+    selectCompCategory(cat) {
+        this.compCategory = cat;
+        document.querySelectorAll('.comp-cat-card').forEach(c => c.classList.remove('border-danger', 'bg-light'));
+        const selected = document.querySelector(`[data-comp-cat="${cat}"]`);
+        if (selected) { selected.classList.add('border-danger', 'bg-light'); }
+
+        document.getElementById('compSoloForm').style.display = 'none';
+        document.getElementById('compDuoTrioForm').style.display = 'none';
+        document.getElementById('compPaymentSection').style.display = 'none';
+
+        if (cat === 'solo') {
+            document.getElementById('compSoloForm').style.display = 'block';
+            document.getElementById('compSoloEmail').value = this.currentEmail || '';
+        } else {
+            document.getElementById('compDuoTrioForm').style.display = 'block';
+            document.getElementById('compDuoEmail').value = this.currentEmail || '';
+            // Reset member count
+            this.compMemberCount = 0;
+            document.querySelectorAll('.comp-member-btn').forEach(b => b.classList.remove('btn-primary'));
+            document.querySelectorAll('.comp-member-btn').forEach(b => b.classList.add('btn-outline-primary'));
+            document.getElementById('compDuoTrioRegForm').style.display = 'none';
+        }
+        setTimeout(() => {
+            const el = cat === 'solo' ? document.getElementById('compSoloForm') : document.getElementById('compDuoTrioForm');
+            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 100);
+    }
+
+    compBackToCategory() {
+        document.getElementById('compSoloForm').style.display = 'none';
+        document.getElementById('compDuoTrioForm').style.display = 'none';
+        document.getElementById('compPaymentSection').style.display = 'none';
+        document.getElementById('compCategoryStep').style.display = '';
+        this.compCategory = null;
+        document.querySelectorAll('.comp-cat-card').forEach(c => c.classList.remove('border-danger', 'bg-light'));
+    }
+
+    setCompMemberCount(count) {
+        this.compMemberCount = count;
+        document.querySelectorAll('.comp-member-btn').forEach(b => {
+            b.classList.remove('btn-primary');
+            b.classList.add('btn-outline-primary');
+        });
+        const sel = document.querySelector(`.comp-member-btn[data-count="${count}"]`);
+        if (sel) { sel.classList.remove('btn-outline-primary'); sel.classList.add('btn-primary'); }
+
+        // Generate member name fields
+        const container = document.getElementById('compMemberNameFields');
+        container.innerHTML = '';
+        for (let i = 1; i <= count; i++) {
+            container.innerHTML += `
+                <div class="mb-3">
+                    <label class="form-label">Member ${i} Name *</label>
+                    <input type="text" class="form-control" name="member_${i}" required placeholder="Member ${i} full name">
+                </div>
+            `;
+        }
+        document.getElementById('compDuoTrioRegForm').style.display = 'block';
+    }
+
+    async submitCompRegistration(category) {
+        const form = category === 'solo' ? document.getElementById('compSoloRegForm') : document.getElementById('compDuoTrioRegForm');
+        const submitBtn = form.querySelector('button[type="submit"]');
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Submitting...';
+
+        try {
+            let body = { category };
+            if (category === 'solo') {
+                body.dancer_name = form.dancer_name.value.trim();
+                body.email = form.email.value.trim();
+                body.instagram_id = form.instagram_id.value.trim();
+                body.contact_number = form.contact_number.value.trim();
+                body.total_amount = 30;
+                body.member_count = 1;
+            } else {
+                const names = [];
+                for (let i = 1; i <= this.compMemberCount; i++) {
+                    names.push(form[`member_${i}`].value.trim());
+                }
+                body.team_name = form.team_name.value.trim();
+                body.member_names = names.join(', ');
+                body.member_count = this.compMemberCount;
+                body.poc_email = form.poc_email.value.trim();
+                body.poc_contact = form.poc_contact.value.trim();
+                body.total_amount = this.compMemberCount * 30;
+            }
+
+            const res = await fetch('/api/competition/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Registration failed');
+
+            this.compRegistrationId = data.registrationId;
+            this.compAmount = data.total_amount;
+
+            // Hide forms, show payment
+            document.getElementById('compSoloForm').style.display = 'none';
+            document.getElementById('compDuoTrioForm').style.display = 'none';
+            document.getElementById('compCategoryStep').style.display = 'none';
+            document.getElementById('compPayAmount').textContent = `$${this.compAmount}`;
+            document.getElementById('compPayRegId').textContent = `#${this.compRegistrationId}`;
+            document.getElementById('compPaymentSection').style.display = 'block';
+            document.getElementById('compPaymentSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+        } catch (err) {
+            this.showError(err.message || 'Competition registration failed. Please try again.');
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Register & Continue to Payment →';
+        }
+    }
+
+    async selectCompPayment(method) {
+        document.querySelectorAll('.comp-pay-option').forEach(o => o.classList.remove('border-primary', 'border-success'));
+        document.getElementById('compVenmoDetails').style.display = 'none';
+        document.getElementById('compZelleDetails').style.display = 'none';
+
+        if (method === 'venmo') {
+            document.querySelector('.comp-pay-option[data-method="venmo"]').classList.add('border-primary');
+            try {
+                const res = await fetch('/api/competition/generate-venmo-link', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ registrationId: this.compRegistrationId, amount: this.compAmount })
+                });
+                const data = await res.json();
+                document.getElementById('compVenmoUser').textContent = `@${data.venmoUsername}`;
+                document.getElementById('compVenmoNote').textContent = data.paymentNote;
+                document.getElementById('compVenmoLink').href = data.venmoLink;
+                document.getElementById('compVenmoWebLink').href = data.webLink;
+                document.getElementById('compVenmoDetails').style.display = 'block';
+            } catch (e) { this.showError('Failed to generate Venmo link'); }
+        } else {
+            document.querySelector('.comp-pay-option[data-method="zelle"]').classList.add('border-success');
+            try {
+                const res = await fetch('/api/competition/generate-zelle-payment', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ registrationId: this.compRegistrationId, amount: this.compAmount })
+                });
+                const data = await res.json();
+                document.getElementById('compZelleRecipient').textContent = data.zelleRecipientName;
+                document.getElementById('compZellePhone').textContent = data.zellePhone;
+                document.getElementById('compZelleAmount').textContent = `$${data.amount}`;
+                document.getElementById('compZelleNote').textContent = data.paymentNote;
+                document.getElementById('compZelleDetails').style.display = 'block';
+            } catch (e) { this.showError('Failed to generate Zelle details'); }
+        }
     }
 
     scrollToTop() {
