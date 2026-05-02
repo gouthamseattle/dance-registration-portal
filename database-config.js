@@ -39,13 +39,31 @@ class DatabaseConfig {
 
     async query(sql, params = []) {
         if (this.isProduction) {
-            // PostgreSQL query via pool (auto-reconnect)
-            try {
-                const result = await this.pool.query(sql, params);
-                return result.rows;
-            } catch (error) {
-                console.error('PostgreSQL query error:', error.message);
-                throw error;
+            // PostgreSQL query via pool with retry on connection errors
+            const maxRetries = 2;
+            for (let attempt = 1; attempt <= maxRetries; attempt++) {
+                try {
+                    const result = await this.pool.query(sql, params);
+                    return result.rows;
+                } catch (error) {
+                    const isConnectionError = [
+                        'ECONNREFUSED', 'ECONNRESET', 'EPIPE', 'ETIMEDOUT',
+                        'Connection terminated unexpectedly',
+                        'connection terminated',
+                        'Client has encountered a connection error',
+                        'terminating connection',
+                        'server closed the connection unexpectedly',
+                        'sorry, too many clients already'
+                    ].some(msg => (error.message || '').includes(msg) || (error.code || '') === msg);
+
+                    if (isConnectionError && attempt < maxRetries) {
+                        console.warn(`⚠️ DB connection error (attempt ${attempt}/${maxRetries}), retrying in 1s:`, error.message);
+                        await new Promise(r => setTimeout(r, 1000));
+                        continue;
+                    }
+                    console.error('PostgreSQL query error:', error.message);
+                    throw error;
+                }
             }
         } else {
             // SQLite query

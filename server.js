@@ -5037,6 +5037,16 @@ app.use((req, res) => {
 async function startServer() {
     db = await initializeDatabase(dbConfig);
     
+    // Warmup: run a simple query to ensure Pool connections are hot
+    if (dbConfig.isProduction) {
+        try {
+            await dbConfig.query('SELECT 1 AS warmup');
+            console.log('✅ Database pool warmed up');
+        } catch (e) {
+            console.warn('⚠️ Database warmup query failed:', e.message);
+        }
+    }
+    
     app.listen(PORT, () => {
         console.log(`🎉 Dance Registration Portal running on http://localhost:${PORT}`);
         console.log(`📊 Admin Dashboard: http://localhost:${PORT}/admin`);
