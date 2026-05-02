@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GouMo Annual Showcase & Competition - Registration</title>
+    <link rel="icon" type="image/png" href="/images/ddc-logo.png">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/css/styles.css">
+    <style>
+        .competition-hero {
+            text-align: center;
+            padding: 30px 20px 10px;
+        }
+        .competition-hero h1 {
+            font-size: 2rem;
+            color: #e74c3c;
+            margin-bottom: 5px;
+        }
+        .competition-hero p {
+            color: #aaa;
+            font-size: 0.95rem;
+        }
+        .poster-container {
+            text-align: center;
+            margin: 20px auto;
+            max-width: 500px;
+        }
+        .poster-container img {
+            width: 100%;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+        }
+        .category-selector {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin: 25px 0;
+            flex-wrap: wrap;
+        }
+        .category-btn {
+            padding: 18px 35px;
+            border-radius: 12px;
+            border: 2px solid #444;
+            background: #1a1a2e;
+            color: #fff;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            min-width: 180px;
+        }
+        .category-btn:hover { border-color: #e74c3c; background: #2a1a2e; }
+        .category-btn.active { border-color: #e74c3c; background: #e74c3c; color: #fff; }
+        .category-btn .price { display: block; font-size: 0.85rem; font-weight: 400; color: #ccc; margin-top: 4px; }
+        .category-btn.active .price { color: #fff; }
+        .comp-form-section { display: none; max-width: 550px; margin: 0 auto; }
+        .comp-form-section.active { display: block; }
+        .member-count-selector { display: flex; gap: 10px; margin: 10px 0 15px; }
+        .member-count-btn {
+            flex: 1; padding: 12px; border-radius: 8px; border: 2px solid #444;
+            background: #1a1a2e; color: #fff; font-size: 1rem; cursor: pointer;
+            text-align: center; transition: all 0.3s;
+        }
+        .member-count-btn:hover { border-color: #e74c3c; }
+        .member-count-btn.active { border-color: #e74c3c; background: #e74c3c; }
+        .member-name-field { margin-bottom: 10px; }
+        .amount-display {
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            border: 1px solid #e74c3c;
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            margin: 20px 0;
+        }
+        .amount-display .label { color: #aaa; font-size: 0.9rem; }
+        .amount-display .amount { color: #e74c3c; font-size: 2rem; font-weight: 700; }
+        .amount-display .breakdown { color: #888; font-size: 0.85rem; margin-top: 5px; }
+        .rules-box {
+            background: #1a1a2e;
+            border: 1px solid #333;
+            border-radius: 10px;
+            padding: 18px;
+            margin: 20px auto;
+            max-width: 550px;
+            font-size: 0.88rem;
+            color: #bbb;
+            line-height: 1.6;
+        }
+        .rules-box h3 { color: #e74c3c; margin-bottom: 8px; font-size: 1rem; }
+        .rules-box ul { padding-left: 18px; margin: 5px 0; }
+        .rules-box li { margin-bottom: 4px; }
+        .payment-section { display: none; max-width: 550px; margin: 0 auto; }
+        .payment-section.active { display: block; }
+        .payment-option {
+            display: flex; align-items: center; gap: 15px;
+            padding: 18px; border-radius: 10px; border: 2px solid #333;
+            background: #1a1a2e; cursor: pointer; margin-bottom: 12px; transition: all 0.3s;
+        }
+        .payment-option:hover { border-color: #e74c3c; }
+        .payment-option.selected { border-color: #e74c3c; background: #2a1a2e; }
+        .payment-option .icon { font-size: 2rem; }
+        .payment-option .name { font-weight: 600; font-size: 1.1rem; color: #fff; }
+        .payment-option .desc { font-size: 0.85rem; color: #aaa; }
+        .payment-details { display: none; margin-top: 15px; }
+        .payment-details.active { display: block; }
+        .payment-details .info-box {
+            background: #16213e; border-radius: 10px; padding: 18px;
+            border: 1px solid #333; margin-bottom: 15px;
+        }
+        .payment-details .info-box p { margin: 8px 0; color: #ccc; }
+        .payment-details .info-box .highlight { color: #e74c3c; font-weight: 600; }
+        .success-section { display: none; text-align: center; padding: 40px 20px; max-width: 550px; margin: 0 auto; }
+        .success-section.active { display: block; }
+        .success-icon { font-size: 4rem; margin-bottom: 15px; }
+        .btn-back {
+            display: inline-block; margin-top: 20px; padding: 10px 25px;
+            background: #333; color: #fff; border-radius: 8px; border: none;
+            cursor: pointer; font-size: 0.95rem; text-decoration: none;
+        }
+        .btn-back:hover { background: #444; }
+        .closed-banner {
+            text-align: center; padding: 60px 20px;
+            color: #e74c3c; font-size: 1.2rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo-section">
+                <img src="/images/ddc-logo.png" alt="DDC Logo" class="logo" onerror="this.style.display='none'">
+                <div>
+                    <h1 class="studio-name">GouMo Dance Chronicles</h1>
+                    <p class="studio-tagline">Annual Showcase & Competition</p>
+                </div>
+            </div>
+        </header>
+
+        <div id="closedBanner" class="closed-banner" style="display:none;">
+            <p>🚫 Competition registration is currently closed.</p>
+            <a href="/" class="btn-back">← Back to Main Portal</a>
+        </div>
+
+        <div id="mainContent">
+            <div class="competition-hero">
+                <h1>🏆 Annual Showcase & Competition</h1>
+                <p>All Styles. All Levels. One Stage.</p>
+            </div>
+
+            <!-- Poster -->
+            <div class="poster-container">
+                <img src="/images/competition-poster.jpg" alt="Competition Rules & Regulations" 
+                     onerror="this.style.display='none'">
+            </div>
+
+            <!-- Rules Summary -->
+            <div class="rules-box">
+                <h3>📋 Quick Rules</h3>
+                <ul>
+                    <li>Time Limit: 2-3 minutes per performance</li>
+                    <li>Style & Language: No restrictions</li>
+                    <li>Props: Optional</li>
+                    <li>Routines must be age-appropriate & family-friendly</li>
+                    <li>No glitter, powder, or hazardous materials on stage</li>
+                    <li>In-person performances only (no video auditions)</li>
+                    <li>Same person can register for both Solo and Duo/Trio</li>
+                </ul>
+            </div>
+
+            <!-- Step 1: Category Selection -->
+            <div id="stepCategory">
+                <h2 style="text-align:center; color:#fff; margin-bottom:5px;">Choose Your Category</h2>
+                <p style="text-align:center; color:#888; margin-bottom:15px; font-size:0.9rem;">$30 per person per registration</p>
+                <div class="category-selector">
+                    <button class="category-btn" data-category="solo" onclick="selectCategory('solo')">
+                        🎤 Solo
+                        <span class="price">$30 • 1 dancer</span>
+                    </button>
+                    <button class="category-btn" data-category="duo_trio" onclick="selectCategory('duo_trio')">
+                        👥 Duo / Trio
+                        <span class="price">$60-$90 • 2-3 dancers</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Solo Form -->
+            <div id="soloForm" class="comp-form-section">
+                <h2 style="text-align:center; color:#fff;">Solo Registration</h2>
+                <div class="amount-display">
+                    <div class="label">Registration Fee</div>
+                    <div class="amount">$30</div>
+                    <div class="breakdown">1 dancer × $30</div>
+                </div>
+                <form id="soloRegForm" onsubmit="submitRegistration(event, 'solo')">
+                    <div class="form-group">
+                        <label>Dancer's Name *</label>
+                        <input type="text" name="dancer_name" required placeholder="Full name">
+                    </div>
+                    <div class="form-group">
+                        <label>Email *</label>
+                        <input type="email" name="email" required placeholder="your@email.com">
+                    </div>
+                    <div class="form-group">
+                        <label>Instagram ID</label>
+                        <input type="text" name="instagram_id" placeholder="@yourusername">
+                    </div>
+                    <div class="form-group">
+                        <label>Contact Number *</label>
+                        <input type="tel" name="contact_number" required placeholder="(xxx) xxx-xxxx">
+                    </div>
+                    <button type="submit" class="btn btn-primary" style="width:100%; padding:14px; font-size:1.1rem;">
+                        Register & Continue to Payment →
+                    </button>
+                </form>
+                <button class="btn-back" onclick="goBackToCategory()" style="margin-top:10px;">← Change Category</button>
+            </div>
+
+            <!-- Duo/Trio Form -->
+            <div id="duoTrioForm" class="comp-form-section">
+                <h2 style="text-align:center; color:#fff;">Duo / Trio Registration</h2>
+                
+                <label style="color:#ccc; font-size:0.95rem; margin-bottom:5px; display:block;">Number of Dancers *</label>
+                <div class="member-count-selector">
+                    <button type="button" class="member-count-btn" data-count="2" onclick="setMemberCount(2)">
+                        2 Dancers (Duo)
+                    </button>
+                    <button type="button" class="member-count-btn" data-count="3" onclick="setMemberCount(3)">
+                        3 Dancers (Trio)
+                    </button>
+                </div>
+
+                <div id="duoTrioAmountDisplay" class="amount-display" style="display:none;">
+                    <div class="label">Registration Fee</div>
+                    <div class="amount" id="duoTrioAmount">$60</div>
+                    <div class="breakdown" id="duoTrioBreakdown">2 dancers × $30</div>
+                </div>
+
+                <form id="duoTrioRegForm" onsubmit="submitRegistration(event, 'duo_trio')" style="display:none;">
+                    <div class="form-group">
+                        <label>Team Name *</label>
+                        <input type="text" name="team_name" required placeholder="Your team name">
+                    </div>
+                    <div id="memberNameFields">
+                        <!-- Dynamically generated -->
+                    </div>
+                    <div class="form-group">
+                        <label>POC Email *</label>
+                        <input type="email" name="poc_email" required placeholder="Point of contact email">
+                    </div>
+                    <div class="form-group">
+                        <label>POC Contact Number *</label>
+                        <input type="tel" name="poc_contact" required placeholder="(xxx) xxx-xxxx">
+                    </div>
+                    <button type="submit" class="btn btn-primary" style="width:100%; padding:14px; font-size:1.1rem;">
+                        Register & Continue to Payment →
+                    </button>
+                </form>
+                <button class="btn-back" onclick="goBackToCategory()" style="margin-top:10px;">← Change Category</button>
+            </div>
+
+            <!-- Payment Section -->
+            <div id="paymentSection" class="payment-section">
+                <h2 style="text-align:center; color:#fff;">Complete Payment</h2>
+                <div class="amount-display">
+                    <div class="label">Amount Due</div>
+                    <div class="amount" id="paymentAmount">$30</div>
+                    <div class="breakdown" id="paymentBreakdown"></div>
+                </div>
+                <p style="text-align:center; color:#aaa; margin-bottom:20px; font-size:0.9rem;">
+                    Registration ID: <span id="paymentRegId" style="color:#e74c3c; font-weight:600;">#---</span>
+                </p>
+                <div class="payment-option" onclick="selectPayment('venmo')">
+                    <div class="icon">💙</div>
+                    <div>
+                        <div class="name">Venmo</div>
+                        <div class="desc">Pay instantly via Venmo</div>
+                    </div>
+                </div>
+                <div class="payment-option" onclick="selectPayment('zelle')">
+                    <div class="icon">💜</div>
+                    <div>
+                        <div class="name">Zelle</div>
+                        <div class="desc">Pay via Zelle bank transfer</div>
+                    </div>
+                </div>
+
+                <!-- Venmo Details -->
+                <div id="venmoDetails" class="payment-details">
+                    <div class="info-box">
+                        <p><strong>Step 1:</strong> Click the button below to open Venmo</p>
+                        <p><strong>Step 2:</strong> Send payment to <span class="highlight" id="venmoUsername">@monicaradd</span></p>
+                        <p><strong>Step 3:</strong> Use this note: <span class="highlight" id="venmoNote"></span></p>
+                        <p style="color:#888; font-size:0.85rem;">Admin will confirm your payment within 24 hours</p>
+                    </div>
+                    <a id="venmoLink" href="#" target="_blank" class="btn btn-primary" style="display:block; text-align:center; padding:14px; font-size:1.1rem; text-decoration:none;">
+                        Open Venmo App 💙
+                    </a>
+                    <a id="venmoWebLink" href="#" target="_blank" style="display:block; text-align:center; color:#aaa; margin-top:8px; font-size:0.85rem;">
+                        Open Venmo in browser instead
+                    </a>
+                </div>
+
+                <!-- Zelle Details -->
+                <div id="zelleDetails" class="payment-details">
+                    <div class="info-box">
+                        <p><strong>Recipient:</strong> <span class="highlight" id="zelleRecipient"></span></p>
+                        <p><strong>Phone:</strong> <span class="highlight" id="zellePhone"></span></p>
+                        <p><strong>Amount:</strong> <span class="highlight" id="zelleAmount"></span></p>
+                        <p><strong>Note:</strong> <span class="highlight" id="zelleNote"></span></p>
+                        <p style="color:#888; font-size:0.85rem;">Open your banking app and send via Zelle using the info above</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Success Section -->
+            <div id="successSection" class="success-section">
+                <div class="success-icon">🎉</div>
+                <h2 style="color:#fff;">Registration Submitted!</h2>
+                <p style="color:#aaa;">Your competition registration has been received. Please complete your payment to confirm your spot.</p>
+                <p style="color:#888; font-size:0.9rem; margin-top:10px;">Registration ID: <span id="successRegId" style="color:#e74c3c; font-weight:600;"></span></p>
+                <a href="/competition.html" class="btn-back">Register Another Entry</a>
+                <a href="/" class="btn-back" style="margin-left:10px;">← Back to Main Portal</a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    let selectedCategory = null;
+    let memberCount = 0;
+    let currentRegistrationId = null;
+    let currentAmount = 0;
+
+    // Check if competition registration is open
+    async function checkRegistrationOpen() {
+        try {
+            const res = await fetch('/api/settings');
+            const settings = await res.json();
+            if (settings.competition_registration_open === 'false') {
+                document.getElementById('mainContent').style.display = 'none';
+                document.getElementById('closedBanner').style.display = 'block';
+            }
+        } catch(e) { console.warn('Could not check settings:', e); }
+    }
+    checkRegistrationOpen();
+
+    function selectCategory(cat) {
+        selectedCategory = cat;
+        document.querySelectorAll('.category-btn').forEach(b => b.classList.remove('active'));
+        document.querySelector(`[data-category="${cat}"]`).classList.add('active');
+
+        document.getElementById('soloForm').classList.remove('active');
+        document.getElementById('duoTrioForm').classList.remove('active');
+        document.getElementById('paymentSection').classList.remove('active');
+
+        if (cat === 'solo') {
+            document.getElementById('soloForm').classList.add('active');
+        } else {
+            document.getElementById('duoTrioForm').classList.add('active');
+            // Reset member count
+            memberCount = 0;
+            document.querySelectorAll('.member-count-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById('duoTrioAmountDisplay').style.display = 'none';
+            document.getElementById('duoTrioRegForm').style.display = 'none';
+        }
+        // Scroll to form
+        setTimeout(() => {
+            const el = cat === 'solo' ? document.getElementById('soloForm') : document.getElementById('duoTrioForm');
+            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 100);
+    }
+
+    function setMemberCount(count) {
+        memberCount = count;
+        document.querySelectorAll('.member-count-btn').forEach(b => b.classList.remove('active'));
+        document.querySelector(`[data-count="${count}"]`).classList.add('active');
+
+        const amount = count * 30;
+        document.getElementById('duoTrioAmount').textContent = `$${amount}`;
+        document.getElementById('duoTrioBreakdown').textContent = `${count} dancers × $30`;
+        document.getElementById('duoTrioAmountDisplay').style.display = 'block';
+
+        // Generate member name fields
+        const container = document.getElementById('memberNameFields');
+        container.innerHTML = '';
+        for (let i = 1; i <= count; i++) {
+            container.innerHTML += `
+                <div class="form-group member-name-field">
+                    <label>Member ${i} Name *</label>
+                    <input type="text" name="member_${i}" required placeholder="Member ${i} full name">
+                </div>
+            `;
+        }
+        document.getElementById('duoTrioRegForm').style.display = 'block';
+    }
+
+    function goBackToCategory() {
+        document.getElementById('soloForm').classList.remove('active');
+        document.getElementById('duoTrioForm').classList.remove('active');
+        document.getElementById('paymentSection').classList.remove('active');
+        selectedCategory = null;
+        document.querySelectorAll('.category-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById('stepCategory').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    async function submitRegistration(e, category) {
+        e.preventDefault();
+        const form = e.target;
+        const submitBtn = form.querySelector('button[type="submit"]');
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Submitting...';
+
+        try {
+            let body = { category };
+            if (category === 'solo') {
+                body.dancer_name = form.dancer_name.value.trim();
+                body.email = form.email.value.trim();
+                body.instagram_id = form.instagram_id.value.trim();
+                body.contact_number = form.contact_number.value.trim();
+                body.total_amount = 30;
+                body.member_count = 1;
+            } else {
+                const names = [];
+                for (let i = 1; i <= memberCount; i++) {
+                    names.push(form[`member_${i}`].value.trim());
+                }
+                body.team_name = form.team_name.value.trim();
+                body.member_names = names.join(', ');
+                body.member_count = memberCount;
+                body.poc_email = form.poc_email.value.trim();
+                body.poc_contact = form.poc_contact.value.trim();
+                body.total_amount = memberCount * 30;
+            }
+
+            const res = await fetch('/api/competition/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Registration failed');
+
+            currentRegistrationId = data.registrationId;
+            currentAmount = data.total_amount;
+
+            // Show payment section
+            document.getElementById('soloForm').classList.remove('active');
+            document.getElementById('duoTrioForm').classList.remove('active');
+            document.getElementById('stepCategory').style.display = 'none';
+
+            document.getElementById('paymentAmount').textContent = `$${currentAmount}`;
+            document.getElementById('paymentBreakdown').textContent = category === 'solo' 
+                ? '1 dancer × $30' : `${memberCount} dancers × $30`;
+            document.getElementById('paymentRegId').textContent = `#${currentRegistrationId}`;
+            document.getElementById('paymentSection').classList.add('active');
+            document.getElementById('paymentSection').scrollIntoView({ behavior: 'smooth' });
+
+        } catch(err) {
+            alert(err.message || 'Registration failed. Please try again.');
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Register & Continue to Payment →';
+        }
+    }
+
+    async function selectPayment(method) {
+        document.querySelectorAll('.payment-option').forEach(o => o.classList.remove('selected'));
+        document.querySelectorAll('.payment-details').forEach(d => d.classList.remove('active'));
+
+        if (method === 'venmo') {
+            document.querySelectorAll('.payment-option')[0].classList.add('selected');
+            try {
+                const res = await fetch('/api/competition/generate-venmo-link', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ registrationId: currentRegistrationId, amount: currentAmount })
+                });
+                const data = await res.json();
+                document.getElementById('venmoUsername').textContent = `@${data.venmoUsername}`;
+                document.getElementById('venmoNote').textContent = data.paymentNote;
+                document.getElementById('venmoLink').href = data.venmoLink;
+                document.getElementById('venmoWebLink').href = data.webLink;
+                document.getElementById('venmoDetails').classList.add('active');
+            } catch(e) { alert('Failed to generate Venmo link'); }
+
+        } else if (method === 'zelle') {
+            document.querySelectorAll('.payment-option')[1].classList.add('selected');
+            try {
+                const res = await fetch('/api/competition/generate-zelle-payment', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ registrationId: currentRegistrationId, amount: currentAmount })
+                });
+                const data = await res.json();
+                document.getElementById('zelleRecipient').textContent = data.zelleRecipientName;
+                document.getElementById('zellePhone').textContent = data.zellePhone;
+                document.getElementById('zelleAmount').textContent = `$${data.amount}`;
+                document.getElementById('zelleNote').textContent = data.paymentNote;
+                document.getElementById('zelleDetails').classList.add('active');
+            } catch(e) { alert('Failed to generate Zelle details'); }
+        }
+    }
+    </script>
+</body>
+</html>

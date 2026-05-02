@@ -108,6 +108,12 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a class="nav-link" href="#" data-section="competition">
+                            <i class="fas fa-trophy"></i>
+                            Competition
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a class="nav-link" href="#" data-section="settings">
                             <i class="fas fa-cog"></i>
                             Settings
@@ -701,6 +707,64 @@
                         <div class="text-center py-4">
                             <div class="spinner-border text-primary" role="status">
                                 <span class="visually-hidden">Loading choreographies...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Competition Section -->
+        <div id="competitionSection" class="content-section" style="display: none;">
+            <div class="row">
+                <div class="col-12">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h2><i class="fas fa-trophy text-primary"></i> Competition Registrations</h2>
+                        <div class="btn-group">
+                            <div class="form-check form-switch me-3 d-flex align-items-center">
+                                <input class="form-check-input" type="checkbox" id="competitionRegToggle">
+                                <label class="form-check-label ms-2" for="competitionRegToggle" id="competitionRegStatus">Closed</label>
+                            </div>
+                            <button class="btn btn-outline-primary" onclick="admin.loadCompetitionRegistrations()">
+                                <i class="fas fa-sync"></i> Refresh
+                            </button>
+                            <button class="btn btn-success" onclick="admin.exportCompetitionRegistrations()">
+                                <i class="fas fa-download"></i> Export CSV
+                            </button>
+                            <a href="/competition" target="_blank" class="btn btn-outline-info">
+                                <i class="fas fa-external-link-alt"></i> View Page
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="row mb-3">
+                <div class="col-md-4">
+                    <select class="form-select" id="compCategoryFilter" onchange="admin.loadCompetitionRegistrations()">
+                        <option value="">All Categories</option>
+                        <option value="solo">Solo</option>
+                        <option value="duo_trio">Duo/Trio</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <select class="form-select" id="compStatusFilter" onchange="admin.loadCompetitionRegistrations()">
+                        <option value="">All Statuses</option>
+                        <option value="pending">Pending</option>
+                        <option value="completed">Paid</option>
+                        <option value="canceled">Canceled</option>
+                    </select>
+                </div>
+                <div class="col-md-4 text-end">
+                    <span class="badge bg-primary fs-6" id="compTotalCount">0 registrations</span>
+                    <span class="badge bg-success fs-6 ms-1" id="compTotalRevenue">$0</span>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-body">
+                            <div id="competitionTable">
+                                <div class="text-center py-4 text-muted">Loading competition registrations...</div>
                             </div>
                         </div>
                     </div>

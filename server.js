@@ -58,6 +58,11 @@ app.get('/admin', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
 
+// Serve competition registration page
+app.get('/competition', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'competition.html'));
+});
+
 // API Routes
 
 // Admin Authentication
@@ -4915,6 +4920,98 @@ app.delete('/api/admin/clear-all-courses', requireAuth, asyncHandler(async (req,
         console.error('❌ Error clearing courses:', error);
         res.status(500).json({ error: 'Failed to clear courses', details: error.message });
     }
+}));
+
+// ==============================
+// Competition Registration APIs
+// ==============================
+app.post('/api/competition/register', asyncHandler(async (req, res) => {
+    const { category, dancer_name, email, instagram_id, contact_number,
+            team_name, member_names, member_count, poc_email, poc_contact, total_amount } = req.body;
+    const setting = await dbConfig.get('SELECT setting_value FROM system_settings WHERE setting_key = $1', ['competition_registration_open']);
+    if (setting && setting.setting_value !== 'true') return res.status(400).json({ error: 'Competition registration is currently closed' });
+    if (!category || !['solo','duo_trio'].includes(category)) return res.status(400).json({ error: 'Invalid category' });
+    if (category === 'solo') {
+        if (!dancer_name || !email || !contact_number) return res.status(400).json({ error: 'Solo requires dancer name, email, contact number' });
+        if (Number(total_amount) !== 30) return res.status(400).json({ error: 'Solo amount must be $30' });
+    } else {
+        if (!team_name || !member_names || !poc_email || !poc_contact || !member_count) return res.status(400).json({ error: 'Duo/Trio requires team name, member names, POC email, POC contact, member count' });
+        const mc = Number(member_count);
+        if (mc < 2 || mc > 3) return res.status(400).json({ error: 'Duo/Trio must have 2 or 3 members' });
+        if (Number(total_amount) !== mc * 30) return res.status(400).json({ error: `Amount must be $${mc*30}` });
+    }
+    const result = await dbConfig.run(`INSERT INTO competition_registrations (category,dancer_name,email,instagram_id,contact_number,team_name,member_names,member_count,poc_email,poc_contact,total_amount,payment_status) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'pending') ${dbConfig.isProduction?'RETURNING id':''}`,
+        [category,dancer_name||null,email||null,instagram_id||null,contact_number||null,team_name||null,member_names||null,Number(member_count)||1,poc_email||null,poc_contact||null,Number(total_amount)]);
+    const regId = dbConfig.isProduction ? result[0]?.id : result.lastID;
+    console.log('🏆 Competition registration created', { id: regId, category, email: email||poc_email });
+    res.json({ success: true, registrationId: regId, category, total_amount: Number(total_amount) });
+}));
+
+app.post('/api/competition/generate-venmo-link', asyncHandler(async (req, res) => {
+    const { registrationId, amount } = req.body;
+    if (!registrationId || !amount) return res.status(400).json({ error: 'Registration ID and amount required' });
+    const venmoSetting = await dbConfig.get('SELECT setting_value FROM system_settings WHERE setting_key = $1', ['venmo_username']);
+    const venmoUsername = venmoSetting ? venmoSetting.setting_value : 'monicaradd';
+    const paymentNote = `Competition Registration #${registrationId} - GouMo Annual Showcase`;
+    const venmoLink = `venmo://paycharge?txn=pay&recipients=${venmoUsername}&amount=${amount}&note=${encodeURIComponent(paymentNote)}`;
+    const webLink = `https://venmo.com/${venmoUsername}?txn=pay&amount=${amount}&note=${encodeURIComponent(paymentNote)}`;
+    await dbConfig.run('UPDATE competition_registrations SET payment_method=$1, updated_at=CURRENT_TIMESTAMP WHERE id=$2', ['venmo', registrationId]);
+    res.json({ success: true, venmoLink, webLink, paymentNote, venmoUsername });
+}));
+
+app.post('/api/competition/generate-zelle-payment', asyncHandler(async (req, res) => {
+    const { registrationId, amount } = req.body;
+    if (!registrationId || !amount) return res.status(400).json({ error: 'Registration ID and amount required' });
+    const zn = await dbConfig.get('SELECT setting_value FROM system_settings WHERE setting_key=$1', ['zelle_recipient_name']);
+    const zp = await dbConfig.get('SELECT setting_value FROM system_settings WHERE setting_key=$1', ['zelle_phone']);
+    const zelleRecipientName = zn ? zn.setting_value : 'Monica Radhakrishnan';
+    const zellePhone = zp ? zp.setting_value : '4252159818';
+    const paymentNote = `Competition Registration #${registrationId} - GouMo Annual Showcase`;
+    await dbConfig.run('UPDATE competition_registrations SET payment_method=$1, updated_at=CURRENT_TIMESTAMP WHERE id=$2', ['zelle', registrationId]);
+    res.json({ success: true, zelleRecipientName, zellePhone, paymentNote, amount: parseFloat(amount).toFixed(2) });
+}));
+
+app.get('/api/admin/competition/registrations', requireAuth, asyncHandler(async (req, res) => {
+    const { category, payment_status } = req.query;
+    let query = 'SELECT * FROM competition_registrations'; const params = []; const conditions = [];
+    if (category) { conditions.push('category=$'+(params.length+1)); params.push(category); }
+    if (payment_status) { conditions.push('payment_status=$'+(params.length+1)); params.push(payment_status); }
+    if (conditions.length) query += ' WHERE '+conditions.join(' AND ');
+    query += ' ORDER BY created_at DESC';
+    res.json(await dbConfig.all(query, params));
+}));
+
+app.put('/api/admin/competition/registrations/:id/confirm-payment', requireAuth, asyncHandler(async (req, res) => {
+    await dbConfig.run('UPDATE competition_registrations SET payment_status=\'completed\', updated_at=CURRENT_TIMESTAMP WHERE id=$1', [req.params.id]);
+    res.json({ success: true });
+}));
+
+app.put('/api/admin/competition/registrations/:id/cancel', requireAuth, asyncHandler(async (req, res) => {
+    const { reason } = req.body || {};
+    await dbConfig.run('UPDATE competition_registrations SET payment_status=\'canceled\', canceled_at=CURRENT_TIMESTAMP, canceled_by=$1, cancellation_reason=$2, updated_at=CURRENT_TIMESTAMP WHERE id=$3', [req.session.adminId||null, reason||null, req.params.id]);
+    res.json({ success: true });
+}));
+
+app.put('/api/admin/competition/registrations/:id/uncancel', requireAuth, asyncHandler(async (req, res) => {
+    await dbConfig.run('UPDATE competition_registrations SET payment_status=\'pending\', canceled_at=NULL, canceled_by=NULL, cancellation_reason=NULL, updated_at=CURRENT_TIMESTAMP WHERE id=$1', [req.params.id]);
+    res.json({ success: true });
+}));
+
+app.get('/api/admin/competition/registrations/export', requireAuth, asyncHandler(async (req, res) => {
+    const { category, payment_status } = req.query;
+    let query = 'SELECT * FROM competition_registrations'; const params = []; const conditions = [];
+    if (category) { conditions.push('category=$'+(params.length+1)); params.push(category); }
+    if (payment_status) { conditions.push('payment_status=$'+(params.length+1)); params.push(payment_status); }
+    if (conditions.length) query += ' WHERE '+conditions.join(' AND ');
+    query += ' ORDER BY created_at DESC';
+    const rows = await dbConfig.all(query, params);
+    const esc=(v)=>{if(v===null||v===undefined)return '';const s=String(v);return(s.includes(',')||s.includes('\n')||s.includes('"'))?`"${s.replace(/"/g,'""')}"`:s;};
+    const headers=['ID','Category','Name/Team','Email','Instagram','Contact','Members','Amount','Payment Method','Status','Date'];
+    const lines=[headers.join(',')];
+    for(const r of rows){const n=r.category==='solo'?(r.dancer_name||''):(r.team_name||'');const e=r.category==='solo'?(r.email||''):(r.poc_email||'');const c=r.category==='solo'?(r.contact_number||''):(r.poc_contact||'');const m=r.category==='duo_trio'?(r.member_names||''):'';lines.push([esc('#'+r.id),esc(r.category==='solo'?'Solo':'Duo/Trio'),esc(n),esc(e),esc(r.instagram_id||''),esc(c),esc(m),esc(r.total_amount),esc(r.payment_method||''),esc(r.payment_status),esc(new Date(r.created_at).toLocaleDateString())].join(','));}
+    res.setHeader('Content-Type','text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition',`attachment; filename="competition-registrations-${new Date().toISOString().slice(0,10)}.csv"`);
+    res.send(lines.join('\n'));
 }));
 
 // Error handling middleware

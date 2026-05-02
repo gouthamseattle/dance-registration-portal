@@ -65,6 +65,9 @@ async function ensureSchema(dbConfig) {
         // Ensure student profile and access control columns exist
         await ensureStudentProfileColumns(dbConfig);
         
+        // Ensure competition registrations table exists
+        await ensureCompetitionRegistrationsTable(dbConfig);
+        
         console.log('✅ Schema updates completed');
     } catch (error) {
         console.error('❌ Schema update failed:', error);
@@ -356,6 +359,63 @@ async function ensureStudentProfileColumns(dbConfig) {
         console.log('✅ Ensured student profile and access control columns exist');
     } catch (e) {
         console.log('ℹ️ Student profile columns check skipped:', e.message || e);
+    }
+}
+
+async function ensureCompetitionRegistrationsTable(dbConfig) {
+    try {
+        if (dbConfig.isProduction) {
+            await dbConfig.run(`
+                CREATE TABLE IF NOT EXISTS competition_registrations (
+                    id SERIAL PRIMARY KEY,
+                    category VARCHAR(10) NOT NULL CHECK (category IN ('solo', 'duo_trio')),
+                    dancer_name VARCHAR(255),
+                    email VARCHAR(255),
+                    instagram_id VARCHAR(255),
+                    contact_number VARCHAR(50),
+                    team_name VARCHAR(255),
+                    member_names TEXT,
+                    member_count INTEGER DEFAULT 1,
+                    poc_email VARCHAR(255),
+                    poc_contact VARCHAR(50),
+                    total_amount DECIMAL(10,2) NOT NULL,
+                    payment_status VARCHAR(20) DEFAULT 'pending',
+                    payment_method VARCHAR(10),
+                    canceled_at TIMESTAMP,
+                    canceled_by INTEGER,
+                    cancellation_reason TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            `);
+        } else {
+            await dbConfig.run(`
+                CREATE TABLE IF NOT EXISTS competition_registrations (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    category TEXT NOT NULL,
+                    dancer_name TEXT,
+                    email TEXT,
+                    instagram_id TEXT,
+                    contact_number TEXT,
+                    team_name TEXT,
+                    member_names TEXT,
+                    member_count INTEGER DEFAULT 1,
+                    poc_email TEXT,
+                    poc_contact TEXT,
+                    total_amount REAL NOT NULL,
+                    payment_status TEXT DEFAULT 'pending',
+                    payment_method TEXT,
+                    canceled_at TEXT,
+                    canceled_by INTEGER,
+                    cancellation_reason TEXT,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            `);
+        }
+        console.log('✅ Ensured competition_registrations table exists');
+    } catch (e) {
+        console.log('ℹ️ competition_registrations table check skipped:', e.message || e);
     }
 }
 

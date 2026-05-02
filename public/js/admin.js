@@ -254,6 +254,10 @@ class AdminDashboard {
             case 'waitlist':
                 this.loadWaitlistManagement();
                 break;
+            case 'competition':
+                this.loadCompetitionRegistrations();
+                this.loadCompetitionToggle();
+                break;
             case 'settings':
                 this.loadSettings();
                 break;
@@ -4585,6 +4589,176 @@ Questions? Reply to this message`;
             console.error('Error deleting package:', error);
             this.showError('Failed to delete package');
         }
+    }
+
+    // =========================
+    // Competition Management
+    // =========================
+
+    async loadCompetitionToggle() {
+        try {
+            const res = await this.apiFetch('/api/settings');
+            const settings = await res.json();
+            const toggle = document.getElementById('competitionRegToggle');
+            const label = document.getElementById('competitionRegStatus');
+            if (toggle && label) {
+                const isOpen = settings.competition_registration_open === 'true';
+                toggle.checked = isOpen;
+                label.textContent = isOpen ? 'Open' : 'Closed';
+                label.className = `form-check-label ms-2 ${isOpen ? 'text-success' : 'text-danger'}`;
+                
+                if (!toggle._wired) {
+                    toggle._wired = true;
+                    toggle.addEventListener('change', async (e) => {
+                        try {
+                            await this.apiFetch('/api/settings', {
+                                method: 'PUT',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ competition_registration_open: e.target.checked.toString() })
+                            });
+                            label.textContent = e.target.checked ? 'Open' : 'Closed';
+                            label.className = `form-check-label ms-2 ${e.target.checked ? 'text-success' : 'text-danger'}`;
+                            this.showSuccess(`Competition registration ${e.target.checked ? 'opened' : 'closed'}`);
+                        } catch (err) {
+                            e.target.checked = !e.target.checked;
+                            this.showError('Failed to toggle competition registration');
+                        }
+                    });
+                }
+            }
+        } catch (e) {
+            console.warn('Failed to load competition toggle:', e);
+        }
+    }
+
+    async loadCompetitionRegistrations() {
+        const container = document.getElementById('competitionTable');
+        if (!container) return;
+        
+        const category = document.getElementById('compCategoryFilter')?.value || '';
+        const status = document.getElementById('compStatusFilter')?.value || '';
+        
+        const params = new URLSearchParams();
+        if (category) params.set('category', category);
+        if (status) params.set('payment_status', status);
+        
+        try {
+            const res = await this.apiFetch(`/api/admin/competition/registrations?${params.toString()}`);
+            const regs = await res.json();
+            
+            // Update counts
+            const countEl = document.getElementById('compTotalCount');
+            const revenueEl = document.getElementById('compTotalRevenue');
+            if (countEl) countEl.textContent = `${regs.length} registrations`;
+            const totalRev = regs.filter(r => r.payment_status === 'completed').reduce((s, r) => s + Number(r.total_amount || 0), 0);
+            if (revenueEl) revenueEl.textContent = `$${totalRev}`;
+            
+            if (regs.length === 0) {
+                container.innerHTML = '<div class="text-center py-4 text-muted"><i class="fas fa-trophy fa-3x mb-3"></i><h5>No Competition Registrations</h5><p>Registrations will appear here once participants sign up.</p></div>';
+                return;
+            }
+            
+            container.innerHTML = `
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Category</th>
+                                <th>Name / Team</th>
+                                <th>Contact</th>
+                                <th>Members</th>
+                                <th>Amount</th>
+                                <th>Payment</th>
+                                <th>Status</th>
+                                <th>Date</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${regs.map(r => {
+                                const isSolo = r.category === 'solo';
+                                const name = isSolo ? (r.dancer_name || '') : (r.team_name || '');
+                                const email = isSolo ? (r.email || '') : (r.poc_email || '');
+                                const contact = isSolo ? (r.contact_number || '') : (r.poc_contact || '');
+                                const members = isSolo ? '' : (r.member_names || '');
+                                const catBadge = isSolo ? '<span class="badge bg-info">Solo</span>' : '<span class="badge bg-warning">Duo/Trio</span>';
+                                return `<tr>
+                                    <td><code>#${r.id}</code></td>
+                                    <td>${catBadge}</td>
+                                    <td><strong>${name}</strong>${r.instagram_id ? `<br><small class="text-muted">@${r.instagram_id}</small>` : ''}</td>
+                                    <td><small>${email}<br>${contact}</small></td>
+                                    <td><small>${members || '—'}</small></td>
+                                    <td><strong>$${r.total_amount}</strong></td>
+                                    <td>${this.getPaymentMethodBadge(r.payment_method)}</td>
+                                    <td><span class="status-badge status-${r.payment_status}">${r.payment_status}</span></td>
+                                    <td><small>${new Date(r.created_at).toLocaleDateString()}</small></td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            ${r.payment_status === 'pending' ? `<button class="btn btn-success" onclick="admin.confirmCompPayment(${r.id})" title="Confirm Payment"><i class="fas fa-check"></i></button>` : ''}
+                                            ${r.payment_status === 'canceled' ? `<button class="btn btn-outline-secondary" onclick="admin.uncancelCompRegistration(${r.id})" title="Restore"><i class="fas fa-undo"></i></button>` : `<button class="btn btn-outline-danger" onclick="admin.cancelCompRegistration(${r.id})" title="Cancel"><i class="fas fa-ban"></i></button>`}
+                                        </div>
+                                    </td>
+                                </tr>`;
+                            }).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        } catch (e) {
+            console.error('Failed to load competition registrations:', e);
+            container.innerHTML = '<div class="alert alert-danger">Failed to load competition registrations</div>';
+        }
+    }
+
+    async confirmCompPayment(id) {
+        try {
+            const res = await this.apiFetch(`/api/admin/competition/registrations/${id}/confirm-payment`, { method: 'PUT' });
+            if (res.ok) {
+                this.showSuccess('Competition payment confirmed');
+                this.loadCompetitionRegistrations();
+            } else {
+                this.showError('Failed to confirm payment');
+            }
+        } catch (e) { this.showError('Failed to confirm payment'); }
+    }
+
+    async cancelCompRegistration(id) {
+        const reason = prompt('Cancellation reason (optional):') || '';
+        try {
+            const res = await this.apiFetch(`/api/admin/competition/registrations/${id}/cancel`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ reason })
+            });
+            if (res.ok) {
+                this.showSuccess('Competition registration canceled');
+                this.loadCompetitionRegistrations();
+            } else {
+                this.showError('Failed to cancel registration');
+            }
+        } catch (e) { this.showError('Failed to cancel registration'); }
+    }
+
+    async uncancelCompRegistration(id) {
+        try {
+            const res = await this.apiFetch(`/api/admin/competition/registrations/${id}/uncancel`, { method: 'PUT' });
+            if (res.ok) {
+                this.showSuccess('Competition registration restored');
+                this.loadCompetitionRegistrations();
+            } else {
+                this.showError('Failed to restore registration');
+            }
+        } catch (e) { this.showError('Failed to restore registration'); }
+    }
+
+    exportCompetitionRegistrations() {
+        const category = document.getElementById('compCategoryFilter')?.value || '';
+        const status = document.getElementById('compStatusFilter')?.value || '';
+        const params = new URLSearchParams();
+        if (category) params.set('category', category);
+        if (status) params.set('payment_status', status);
+        window.open(`/api/admin/competition/registrations/export?${params.toString()}`, '_blank');
     }
 
     showHistoricalHelp() {
