@@ -1568,9 +1568,10 @@ class EmailProfileRegistrationApp {
 
     selectCompCategory(cat) {
         this.compCategory = cat;
+        document.querySelectorAll('.comp-cat-card-v2').forEach(c => c.classList.remove('selected'));
         document.querySelectorAll('.comp-cat-card').forEach(c => c.classList.remove('border-danger', 'bg-light'));
         const selected = document.querySelector(`[data-comp-cat="${cat}"]`);
-        if (selected) { selected.classList.add('border-danger', 'bg-light'); }
+        if (selected) { selected.classList.add('selected', 'border-danger', 'bg-light'); }
 
         document.getElementById('compSoloForm').style.display = 'none';
         document.getElementById('compDuoTrioForm').style.display = 'none';
