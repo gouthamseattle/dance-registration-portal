@@ -400,10 +400,30 @@ resetRegistration() {
 - Seamless multi-course registration experience
 
 ### Commits (Latest)
+- `7d544f7` — Remove sub-labels from card features + DATABASE_URL auto-detect fallback (May 2026)
+- `a339cea` — Card features: 2-3 MIN, ANY STYLE, ANY LANGUAGE on both cards + DATABASE_URL auto-detect
+- `c185f73` — Add DB connection retry logic (5 attempts, 3s delay) to prevent startup crashes
 - `4a7ca78` — Fix Register Another Class button and add registration status badges to email-profile system
 - `a55df10` — Add registration status data to check-student-profile API endpoint
-- `45ddfb5` — Show slot times on cards and form; add fallback to course-level times; fix duplicate variable declarations
-- `75511bb` — Compute schedule_info on server from slots (include start/end times and dates) and cache-bust registration.js
-- `0ab7057` — Fix re-selection bug: numeric ID matching, stale data guard, cache-bust registration.js to v=48
-- `5e8f249` — Suppress spurious selection error toast; add in-progress guards; robust field toggling; cache-bust to v=49
-- `a450d07` — Attendance UI visibility: stronger contrast for student names and radio columns; add gridlines and column tint; increase radio size; cache-bust admin-styles.css to v=7
+
+### Competition Registration API (May 2026)
+**New Endpoints**:
+- `POST /api/competition/register` — Create solo or duo/trio registration
+- `POST /api/competition/generate-venmo-link` — Generate Venmo payment link
+- `POST /api/competition/generate-zelle-payment` — Generate Zelle payment info
+- `POST /api/competition/confirm-payment-submitted` — User confirms payment sent
+- `GET /api/admin/competition/registrations` — List with filters (category, payment_status)
+- `PUT /api/admin/competition/registrations/:id/confirm-payment` — Admin confirms
+- `PUT /api/admin/competition/registrations/:id/cancel` — Admin cancels
+- `PUT /api/admin/competition/registrations/:id/uncancel` — Admin uncancels
+- `GET /api/admin/competition/registrations/export` — CSV export
+
+**Database Table**: `competition_registrations`
+- Separate from `registrations` table
+- Fields: category, dancer_name, email, instagram_id, contact_number, team_name, member_names, member_count, poc_email, poc_contact, total_amount, payment_status, payment_method
+- Auto-created via `ensureCompetitionRegistrationsTable()` in schema migration
+
+### Database Resilience (May 2026)
+- `database-config.js`: `isProduction = NODE_ENV === 'production' || !!DATABASE_URL` — prevents SQLite fallback if NODE_ENV missing
+- `database/initialize.js`: 5-attempt retry with 3s delay for DB connection on startup
+- Startup diagnostic logging: NODE_ENV, DATABASE_URL status, isProduction flag

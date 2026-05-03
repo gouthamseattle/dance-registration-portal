@@ -56,8 +56,9 @@ course_pricing (id, course_slot_id, pricing_type, price, created_at)
 ```javascript
 class DatabaseConfig {
     constructor() {
-        this.isProduction = process.env.NODE_ENV === 'production';
-        // Automatically selects SQLite or PostgreSQL
+        // Auto-detect PostgreSQL from DATABASE_URL as fallback if NODE_ENV is missing
+        this.isProduction = process.env.NODE_ENV === 'production' || !!process.env.DATABASE_URL;
+        // Logs environment detection for diagnostics
     }
     
     async connect() {
@@ -66,7 +67,28 @@ class DatabaseConfig {
 }
 ```
 
-**Rationale**: Enables seamless development-to-production workflow without code changes.
+**Rationale**: Enables seamless development-to-production workflow. The `DATABASE_URL` fallback prevents catastrophic SQLite fallback if `NODE_ENV` goes missing in Railway (recurring issue diagnosed May 2026).
+
+### Database Connection Resilience Pattern
+```javascript
+// database/initialize.js - Retry logic for startup
+async function initializeDatabase(dbConfig) {
+    const maxRetries = 5;
+    const retryDelay = 3000;
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+            const db = await dbConfig.connect();
+            await ensureSchema(dbConfig);
+            return db;
+        } catch (error) {
+            if (attempt < maxRetries) await new Promise(r => setTimeout(r, retryDelay));
+            else process.exit(1);
+        }
+    }
+}
+```
+
+**Rationale**: Railway PostgreSQL can have transient connectivity blips during container startup. Without retries, a single failure would call `process.exit(1)` and permanently kill the server.
 
 ### Session Management
 ```javascript

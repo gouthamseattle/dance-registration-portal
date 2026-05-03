@@ -1,57 +1,79 @@
 # Active Context
 
-## Current Focus: Choreography Packages on Student Portal (Completed March 3, 2026)
+## Current Focus: Competition Registration Feature (May 2026)
 
-### What Was Done
-- **Problem**: Student registration portal displayed individual choreography courses as separate cards (Face Card, Sajni Re, AA23 Theme @ $25 each). Admin had created choreography packages via admin dashboard but student portal wasn't fetching/displaying them.
-- **Solution Implemented**:
-  1. Created public `GET /api/dance-series` endpoint (no auth) returning active packages with courses, pricing, schedule info, savings calculations
-  2. Filtered choreography courses (`course_type = 'choreography'`) from `GET /api/courses` so they no longer appear as individual cards
-  3. Added "Choreography Batches" section to `index.html` with 4-step interactive flow
-  4. Added full choreography selection flow to `registration.js`:
-     - Step 1: Track selection cards (Slot 1, Slot 2, Both Slots)
-     - Step 2: Best Value package cards with auto-select, savings display, and click-to-toggle
-     - Step 3: Individual choreography checkboxes with song/movie/language metadata and prices
-     - Step 4: Live pricing summary with "Continue to Registration" button
-  5. Registration proceeds with synthetic course object carrying package/selection metadata
-- **Key files changed**: `server.js`, `public/index.html`, `public/js/registration.js`
-- **Deployed**: Pushed to main, Railway deployment triggered
+### What Was Done (May 3, 2026)
 
-### Previous Admin-Side Fixes (Same Session)
-- Fixed server-side data format mismatch for choreography package save/display in admin dashboard
-- Added missing `case 'packages'` in admin.js `showSection()` switch
+#### Production Server Crash Fix
+- **Problem**: Server was down — admin portal returned "Internal server error", student portal showed "Registration closed"
+- **Root Cause**: `NODE_ENV` environment variable was missing from Railway dashboard variables. Without it, `dbConfig.isProduction` was `false`, causing the server to use SQLite instead of PostgreSQL. Since the Railway container has no SQLite database file, all queries failed with "no such table: admin_users"
+- **Immediate Fix**: User added `NODE_ENV=production` in Railway dashboard → server came back up
+- **Preventive Code Fix**: Updated `database-config.js` to auto-detect PostgreSQL:
+  ```javascript
+  this.isProduction = process.env.NODE_ENV === 'production' || !!process.env.DATABASE_URL;
+  ```
+  Now even if `NODE_ENV` gets cleared, the presence of `DATABASE_URL` will trigger PostgreSQL mode
+- **Additional**: Added startup diagnostic logging showing NODE_ENV, DATABASE_URL status, and isProduction flag
+- **DB Retry Logic**: Added 5-attempt retry with 3s delay in `database/initialize.js` to handle transient connection failures
 
-## Choreography Feature - Full Status
+#### Competition Registration UI Updates
+- **Card features updated**: Both Solo and Duo/Trio category cards now display:
+  - 2–3 MIN (stopwatch icon)
+  - ANY STYLE (music icon)  
+  - ANY LANGUAGE (globe icon)
+  - Removed "PERFORMANCE", "WELCOME" sub-labels from all feature icons
 
-### Completed Components
-- ✅ **Database Schema**: `dance_series`, `dance_series_courses` tables with choreography columns on `courses`
-- ✅ **Admin Choreography Creation**: Form with song/movie/language/series_slot fields
-- ✅ **Admin Series/Package Management**: CRUD endpoints + UI (packages tab)
-- ✅ **Admin Package Save/Display**: Fixed format mismatch bug + missing navigation handler
-- ✅ **Public API**: `GET /api/dance-series` endpoint for student portal
-- ✅ **Student Portal Display**: Packages shown as interactive track → package → checkbox → summary flow
-- ✅ **Choreography Filtering**: Individual choreography courses hidden from `/api/courses`
+### Competition Feature — Current State
 
-### Architecture Decisions
-- **Public endpoint**: `/api/dance-series` returns packages + all choreography courses (no auth needed)
-- **Filtering**: Choreography courses excluded from `/api/courses` via `course_type != 'choreography'` condition
-- **Registration flow**: Synthetic course object created from package/individual selections, carries `_choreo_package`, `_choreo_course_ids`, `_choreo_total` metadata
-- **CSS**: Injected dynamically via `injectChoreographyStyles()` at app init
+#### Completed Components
+- ✅ **Database Schema**: `competition_registrations` table with solo/duo_trio categories
+- ✅ **Backend API Endpoints**:
+  - `POST /api/competition/register` — Create registration
+  - `POST /api/competition/generate-venmo-link` — Venmo payment
+  - `POST /api/competition/generate-zelle-payment` — Zelle payment
+  - `POST /api/competition/confirm-payment-submitted` — User confirms payment
+  - `GET /api/admin/competition/registrations` — Admin view (with filters)
+  - `PUT /api/admin/competition/registrations/:id/confirm-payment` — Admin confirms
+  - `PUT /api/admin/competition/registrations/:id/cancel` — Admin cancels
+  - `PUT /api/admin/competition/registrations/:id/uncancel` — Admin uncancels
+  - `GET /api/admin/competition/registrations/export` — CSV export
+- ✅ **Student Portal UI**: Competition section in `email-profile.html` with:
+  - Banner, event details, collapsible rules
+  - Premium category cards (Solo $30, Duo/Trio $60-$90)
+  - Solo form (name, email, Instagram, contact)
+  - Duo/Trio form (team name, 2-3 member names, POC email/contact)
+  - Payment flow (Venmo/Zelle) with confirmation
+- ✅ **Admin Portal**: Competition registrations tab with filters, confirm/cancel, CSV export
+- ✅ **Competition section visibility**: Controlled by `competition_registration_open` system setting
+
+#### Architecture Decisions
+- Separate `competition_registrations` table (not reusing `registrations`)
+- $30 per person pricing — solo=$30, duo=$60, trio=$90
+- Competition section shows alongside regular class registration
+- System setting `competition_registration_open` controls visibility
+
+### Previous Work: Choreography Packages (Completed March 2026)
+- Public `GET /api/dance-series` endpoint for student portal
+- Choreography courses filtered from `/api/courses` 
+- 4-step interactive selection flow on student portal
+- Admin series/package management CRUD
 
 ## Current System State
 
 ### Working Systems
 - ✅ Admin portal operational in production
 - ✅ Student registration flows functional (multi-week, drop-in, crew practice, choreography packages)
-- ✅ Database initialization with schema migrations
+- ✅ Competition registration (Solo + Duo/Trio) with payment flow
+- ✅ Database initialization with schema migrations + retry logic
 - ✅ Modular codebase structure
 - ✅ Email confirmations active
-- ✅ Choreography packages displayed on student portal
+- ✅ DATABASE_URL auto-detection prevents SQLite fallback in production
 
 ### Module Structure
 ```
 database/
-  initialize.js     # DB setup, migrations, schema updates
+  initialize.js     # DB setup, migrations, schema updates (with retry logic)
+database-config.js  # DB abstraction (auto-detects PostgreSQL from DATABASE_URL)
 middleware/
   auth.js          # asyncHandler, requireAuth helpers
 utils/
@@ -61,3 +83,10 @@ utils/
 scripts/
   archive/         # Historical one-time scripts with README
 ```
+
+### Key Files for Competition Feature
+- `public/email-profile.html` — Competition UI (cards, forms, payment)
+- `public/js/email-profile-registration.js` — Competition JS logic
+- `server.js` — Competition API endpoints
+- `database/initialize.js` — `competition_registrations` table schema
+- `public/css/styles.css` — Competition CSS styles
