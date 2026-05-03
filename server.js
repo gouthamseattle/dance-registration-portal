@@ -4486,6 +4486,52 @@ app.post('/api/admin/test-email-transport', requireAuth, asyncHandler(async (req
 }));
 
 /**
+ * Admin: Send a test email to verify SendGrid is working
+ * POST /api/admin/send-test-email
+ * Body: { to: "email@example.com" }
+ */
+app.post('/api/admin/send-test-email', requireAuth, asyncHandler(async (req, res) => {
+    const { to } = req.body;
+    if (!to) return res.status(400).json({ error: 'Recipient email (to) is required' });
+
+    try {
+        // Check SendGrid API key
+        if (!process.env.SENDGRID_API_KEY) {
+            return res.json({ success: false, error: 'SENDGRID_API_KEY environment variable is not set' });
+        }
+
+        // Check if email notifications are enabled
+        const setting = await dbConfig.get('SELECT setting_value FROM system_settings WHERE setting_key = $1', ['email_notifications_enabled']);
+        const emailEnabled = setting && setting.setting_value === 'true';
+        if (!emailEnabled) {
+            return res.json({ success: false, error: 'Email notifications are disabled in Settings. Enable them first.' });
+        }
+
+        // Try to send a real test email
+        await sendRegistrationConfirmationEmail(to, {
+            courseName: 'TEST - Email Verification',
+            scheduleInfo: 'This is a test email from your admin dashboard',
+            amount: '0.00',
+            registrationId: 'TEST',
+            studentName: 'Admin Test'
+        });
+
+        console.log('✅ Test email sent successfully to:', to);
+        res.json({ success: true, message: `Test email sent to ${to}. Check inbox and spam folder.` });
+    } catch (error) {
+        console.error('❌ Test email failed:', error);
+        // Return the full error details for diagnosis
+        res.json({
+            success: false,
+            error: error.message || String(error),
+            code: error.code,
+            statusCode: error.statusCode,
+            response: error.response?.body ? JSON.stringify(error.response.body) : undefined
+        });
+    }
+}));
+
+/**
  * Admin debug: fetch raw course slots (practice_date, etc.)
  */
 app.get('/api/admin/debug/course-slots/:courseId', requireAuth, asyncHandler(async (req, res) => {

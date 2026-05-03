@@ -4695,7 +4695,7 @@ Questions? Reply to this message`;
                                     <td><small>${new Date(r.created_at).toLocaleDateString()}</small></td>
                                     <td>
                                         <div class="btn-group btn-group-sm">
-                                            ${r.payment_status === 'pending' ? `<button class="btn btn-success" onclick="admin.confirmCompPayment(${r.id})" title="Confirm Payment"><i class="fas fa-check"></i></button>` : ''}
+                                            ${(r.payment_status === 'pending' || r.payment_status === 'payment_submitted') ? `<button class="btn btn-success" onclick="admin.confirmCompPayment(${r.id})" title="Confirm Payment"><i class="fas fa-check"></i></button>` : ''}
                                             ${r.payment_status === 'canceled' ? `<button class="btn btn-outline-secondary" onclick="admin.uncancelCompRegistration(${r.id})" title="Restore"><i class="fas fa-undo"></i></button>` : `<button class="btn btn-outline-danger" onclick="admin.cancelCompRegistration(${r.id})" title="Cancel"><i class="fas fa-ban"></i></button>`}
                                         </div>
                                     </td>
