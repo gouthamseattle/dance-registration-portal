@@ -2587,18 +2587,18 @@ select:-webkit-autofill:active {
     inset: 0;
     background-size: cover;
     background-repeat: no-repeat;
-    opacity: 0.32;
-    filter: grayscale(100%) contrast(1.35) brightness(0.85);
+    opacity: 0.36;
+    filter: grayscale(100%) contrast(1.4) brightness(0.95);
     pointer-events: none;
     z-index: 0;
     transition: opacity 300ms ease;
 }
 
 .comp-cat-card-v2:hover .comp-cat-card-bg {
-    opacity: 0.38;
+    opacity: 0.42;
 }
 
-/* Solo card BG — dancer on the left */
+/* Solo card BG — breakdancer on the left */
 .comp-cat-solo-bg {
     background-image: url("/images/solo-dancer.jpg");
     background-position: left center;
@@ -2616,9 +2616,9 @@ select:-webkit-autofill:active {
     position: absolute;
     inset: 0;
     background: linear-gradient(to right,
-        rgba(3,7,12,0.18) 0%,
-        rgba(3,7,12,0.65) 42%,
-        rgba(3,7,12,0.95) 100%);
+        rgba(3,7,12,0.10) 0%,
+        rgba(3,7,12,0.50) 38%,
+        rgba(3,7,12,0.92) 100%);
     z-index: 1;
     pointer-events: none;
     border-radius: 18px;
@@ -2629,9 +2629,9 @@ select:-webkit-autofill:active {
     position: absolute;
     inset: 0;
     background: linear-gradient(to left,
-        rgba(3,7,12,0.18) 0%,
-        rgba(3,7,12,0.65) 42%,
-        rgba(3,7,12,0.95) 100%);
+        rgba(3,7,12,0.10) 0%,
+        rgba(3,7,12,0.50) 38%,
+        rgba(3,7,12,0.92) 100%);
     z-index: 1;
     pointer-events: none;
     border-radius: 18px;
