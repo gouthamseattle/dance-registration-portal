@@ -10,25 +10,36 @@ const DatabaseConfig = require('../database-config');
  * @returns {Promise<object>} - Connected database instance
  */
 async function initializeDatabase(dbConfig) {
-    try {
-        const db = await dbConfig.connect();
-        console.log('✅ Database initialized successfully');
+    const maxRetries = 5;
+    const retryDelay = 3000; // 3 seconds between retries
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+            const db = await dbConfig.connect();
+            console.log(`✅ Database initialized successfully (attempt ${attempt}/${maxRetries})`);
 
-        // Ensure all schema updates are applied
-        await ensureSchema(dbConfig);
-        
-        // Run background migration if in production
-        if (process.env.NODE_ENV === 'production') {
-            const { migrateToPostgres } = require('../scripts/migrate-to-postgres');
-            migrateToPostgres()
-                .then(() => console.log('✅ Background migration completed'))
-                .catch((err) => console.error('❌ Background migration failed:', err));
+            // Ensure all schema updates are applied
+            await ensureSchema(dbConfig);
+            
+            // Run background migration if in production
+            if (process.env.NODE_ENV === 'production') {
+                const { migrateToPostgres } = require('../scripts/migrate-to-postgres');
+                migrateToPostgres()
+                    .then(() => console.log('✅ Background migration completed'))
+                    .catch((err) => console.error('❌ Background migration failed:', err));
+            }
+            
+            return db;
+        } catch (error) {
+            console.error(`❌ Database initialization attempt ${attempt}/${maxRetries} failed:`, error.message);
+            if (attempt < maxRetries) {
+                console.log(`🔄 Retrying in ${retryDelay / 1000}s...`);
+                await new Promise(r => setTimeout(r, retryDelay));
+            } else {
+                console.error('❌ All database connection attempts failed. Exiting.');
+                process.exit(1);
+            }
         }
-        
-        return db;
-    } catch (error) {
-        console.error('❌ Database initialization failed:', error);
-        process.exit(1);
     }
 }
 
