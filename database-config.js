@@ -4,9 +4,10 @@ const path = require('path');
 
 class DatabaseConfig {
     constructor() {
-        this.isProduction = process.env.NODE_ENV === 'production';
+        this.isProduction = process.env.NODE_ENV === 'production' || !!process.env.DATABASE_URL;
         this.db = null;
         this.pool = null;
+        console.log(`🔧 DatabaseConfig: NODE_ENV=${process.env.NODE_ENV}, DATABASE_URL=${process.env.DATABASE_URL ? 'SET' : 'NOT SET'}, isProduction=${this.isProduction}`);
     }
 
     async connect() {
