@@ -2586,31 +2586,55 @@ select:-webkit-autofill:active {
     position: absolute;
     inset: 0;
     background-size: cover;
-    background-position: center;
-    opacity: 0.15;
-    filter: grayscale(100%) contrast(1.2) brightness(0.8);
+    background-repeat: no-repeat;
+    opacity: 0.32;
+    filter: grayscale(100%) contrast(1.35) brightness(0.85);
     pointer-events: none;
+    z-index: 0;
     transition: opacity 300ms ease;
 }
 
 .comp-cat-card-v2:hover .comp-cat-card-bg {
-    opacity: 0.2;
+    opacity: 0.38;
 }
 
-/* Solo card BG — dancer silhouette, gradient dark from left */
+/* Solo card BG — dancer on the left */
 .comp-cat-solo-bg {
-    background-image: 
-        linear-gradient(to right, rgba(3,7,12,0.2), rgba(3,7,12,0.95)),
-        url("/images/solo-dancer.jpg");
-    background-position: center;
+    background-image: url("/images/solo-dancer.jpg");
+    background-position: left center;
 }
 
-/* Duo card BG — group dancers, gradient dark from right */
+/* Duo card BG — group dancers on the right */
 .comp-cat-duo-bg {
-    background-image: 
-        linear-gradient(to left, rgba(3,7,12,0.2), rgba(3,7,12,0.95)),
-        url("/images/group-dancers.jpg");
-    background-position: center;
+    background-image: url("/images/group-dancers.jpg");
+    background-position: right center;
+}
+
+/* Directional gradient overlays — image visible on outer side, fades toward text */
+.comp-cat-solo::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to right,
+        rgba(3,7,12,0.18) 0%,
+        rgba(3,7,12,0.65) 42%,
+        rgba(3,7,12,0.95) 100%);
+    z-index: 1;
+    pointer-events: none;
+    border-radius: 18px;
+}
+
+.comp-cat-duo::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to left,
+        rgba(3,7,12,0.18) 0%,
+        rgba(3,7,12,0.65) 42%,
+        rgba(3,7,12,0.95) 100%);
+    z-index: 1;
+    pointer-events: none;
+    border-radius: 18px;
 }
 
 /* Card content */
