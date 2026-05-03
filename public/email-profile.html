@@ -6,7 +6,7 @@
     <title>Dance Class Registration</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <link href="css/styles.css?v=55" rel="stylesheet">
+    <link href="css/styles.css?v=56-comp-ui" rel="stylesheet">
 </head>
 <body>
     <!-- Loading Overlay -->
@@ -218,28 +218,103 @@
 
                     <!-- Competition Section -->
                     <div id="competitionSection" class="mb-5" style="display: none;">
-                        <div class="section-header mb-3">
-                            <h4><i class="fas fa-trophy text-danger me-2"></i>🏆 Annual Showcase & Competition</h4>
-                            <p class="text-muted mb-0">All Styles. All Levels. One Stage. — $30 per person</p>
+                        
+                        <!-- Competition Banner -->
+                        <div class="comp-banner">
+                            <div class="comp-banner-title">🏆 Annual Showcase & Competition</div>
+                            <div class="comp-banner-subtitle">Rules & Regulations</div>
+                            <div class="comp-banner-tagline">All Styles · All Levels · One Stage</div>
+                        </div>
+
+                        <!-- Rules & Info (Collapsible) -->
+                        <div class="comp-rules-container">
+                            <button class="comp-rules-toggle" onclick="this.classList.toggle('collapsed'); document.getElementById('compRulesBody').style.display = this.classList.contains('collapsed') ? 'none' : 'block';">
+                                <span><i class="fas fa-scroll me-2" style="color:#e74c3c;"></i> Competition Rules & Categories</span>
+                                <i class="fas fa-chevron-down chevron"></i>
+                            </button>
+                            <div id="compRulesBody" class="comp-rules-body">
+                                <!-- Solo & Duo/Trio Category Rules -->
+                                <div class="comp-rules-grid">
+                                    <div class="comp-rule-card">
+                                        <h6>🎤 Solo Category</h6>
+                                        <ul>
+                                            <li>One registration per person</li>
+                                            <li>Time Limit: 2-3 minutes</li>
+                                            <li>Style: No restrictions</li>
+                                            <li>Language: No restrictions</li>
+                                            <li>Props: Optional</li>
+                                        </ul>
+                                    </div>
+                                    <div class="comp-rule-card">
+                                        <h6>👥 Duo/Trio Category</h6>
+                                        <ul>
+                                            <li>Team Size: 2-3 people</li>
+                                            <li>One registration per person</li>
+                                            <li>Time Limit: 2-3 minutes</li>
+                                            <li>Style: No restrictions</li>
+                                            <li>Language: No restrictions</li>
+                                            <li>Props: Optional</li>
+                                        </ul>
+                                    </div>
+                                </div>
+
+                                <!-- General Rules -->
+                                <div class="comp-general-rules">
+                                    <h6><i class="fas fa-info-circle me-1"></i> General Rules</h6>
+                                    <ul>
+                                        <li>Contestants are encouraged to create their own choreography</li>
+                                        <li>In-house instructors should not be involved in choreography</li>
+                                        <li>Same person can register for both solo and duo/trio</li>
+                                        <li>Semi-Finals held if registrations exceed 10 per category</li>
+                                        <li>No video auditions — in-person performances only</li>
+                                        <li>Routines must be age-appropriate & family-friendly</li>
+                                        <li>No glitter or powder allowed on stage</li>
+                                        <li>No hazardous materials</li>
+                                    </ul>
+                                </div>
+
+                                <!-- Music Selection -->
+                                <div class="comp-music-note">
+                                    <div class="icon">🎵</div>
+                                    <div class="text">
+                                        <strong style="color:#ccc;">Music Selection:</strong> Provide your final song selection by <strong style="color:#e74c3c;">November 30</strong>. 
+                                        Submit final edited audio for semi-finals and finals by <strong style="color:#e74c3c;">January 31, 2025</strong>. 
+                                        If another contestant selects the same song, we will inform you.
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
                         <!-- Category Selector -->
+                        <h5 class="text-center mb-1" style="color:#fff; font-weight:700;">Choose Your Category</h5>
+                        <p class="text-center mb-3" style="color:#888; font-size:0.85rem;">$30 per person per registration</p>
+                        
                         <div id="compCategoryStep" class="row justify-content-center mb-3">
                             <div class="col-md-5 mb-2">
                                 <div class="card comp-cat-card h-100" data-comp-cat="solo" onclick="app.selectCompCategory('solo')" style="cursor:pointer;">
-                                    <div class="card-body text-center py-4">
-                                        <i class="fas fa-user fa-2x text-info mb-2"></i>
+                                    <div class="card-body text-center">
+                                        <div class="cat-icon"><i class="fas fa-user"></i></div>
                                         <h5>Solo</h5>
-                                        <p class="text-muted mb-0 small">$30 • 1 dancer</p>
+                                        <p class="cat-price mb-2">$30 • 1 dancer</p>
+                                        <div class="cat-details">
+                                            <span class="cat-detail-chip">2-3 min</span>
+                                            <span class="cat-detail-chip">Any style</span>
+                                            <span class="cat-detail-chip">Props OK</span>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
                             <div class="col-md-5 mb-2">
                                 <div class="card comp-cat-card h-100" data-comp-cat="duo_trio" onclick="app.selectCompCategory('duo_trio')" style="cursor:pointer;">
-                                    <div class="card-body text-center py-4">
-                                        <i class="fas fa-users fa-2x text-warning mb-2"></i>
+                                    <div class="card-body text-center">
+                                        <div class="cat-icon"><i class="fas fa-users"></i></div>
                                         <h5>Duo / Trio</h5>
-                                        <p class="text-muted mb-0 small">$60-$90 • 2-3 dancers</p>
+                                        <p class="cat-price mb-2">$60-$90 • 2-3 dancers</p>
+                                        <div class="cat-details">
+                                            <span class="cat-detail-chip">2-3 min</span>
+                                            <span class="cat-detail-chip">Any style</span>
+                                            <span class="cat-detail-chip">$30/person</span>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -247,24 +322,29 @@
 
                         <!-- Solo Form -->
                         <div id="compSoloForm" style="display:none;">
-                            <div class="card">
-                                <div class="card-header"><h5 class="mb-0"><i class="fas fa-user text-info me-2"></i>Solo Registration — $30</h5></div>
+                            <div class="card comp-form-card">
+                                <div class="card-header"><h5 class="mb-0"><i class="fas fa-user me-2" style="color:#00d4ff;"></i>Solo Registration</h5></div>
                                 <div class="card-body">
+                                    <div class="comp-fee-badge">
+                                        <div class="fee-label">Registration Fee</div>
+                                        <div class="fee-amount">$30</div>
+                                        <div class="fee-breakdown">1 dancer × $30</div>
+                                    </div>
                                     <form id="compSoloRegForm">
                                         <div class="mb-3">
-                                            <label class="form-label">Dancer's Name *</label>
+                                            <label class="form-label"><i class="fas fa-user me-1" style="color:#e74c3c;"></i> Dancer's Name *</label>
                                             <input type="text" class="form-control" name="dancer_name" required placeholder="Full name">
                                         </div>
                                         <div class="mb-3">
-                                            <label class="form-label">Email *</label>
-                                            <input type="email" class="form-control" name="email" id="compSoloEmail" required>
+                                            <label class="form-label"><i class="fas fa-envelope me-1" style="color:#e74c3c;"></i> Email *</label>
+                                            <input type="email" class="form-control" name="email" id="compSoloEmail" required placeholder="your@email.com">
                                         </div>
                                         <div class="mb-3">
-                                            <label class="form-label">Instagram ID</label>
+                                            <label class="form-label"><i class="fab fa-instagram me-1" style="color:#e74c3c;"></i> Instagram ID</label>
                                             <input type="text" class="form-control" name="instagram_id" placeholder="@yourusername">
                                         </div>
                                         <div class="mb-3">
-                                            <label class="form-label">Contact Number *</label>
+                                            <label class="form-label"><i class="fas fa-phone me-1" style="color:#e74c3c;"></i> Contact Number *</label>
                                             <input type="tel" class="form-control" name="contact_number" required placeholder="(xxx) xxx-xxxx">
                                         </div>
                                         <div class="d-flex gap-2">
@@ -278,26 +358,26 @@
 
                         <!-- Duo/Trio Form -->
                         <div id="compDuoTrioForm" style="display:none;">
-                            <div class="card">
-                                <div class="card-header"><h5 class="mb-0"><i class="fas fa-users text-warning me-2"></i>Duo / Trio Registration</h5></div>
+                            <div class="card comp-form-card">
+                                <div class="card-header"><h5 class="mb-0"><i class="fas fa-users me-2" style="color:#f59e0b;"></i>Duo / Trio Registration</h5></div>
                                 <div class="card-body">
-                                    <label class="form-label">Number of Dancers *</label>
+                                    <label class="form-label"><i class="fas fa-hashtag me-1" style="color:#e74c3c;"></i> Number of Dancers *</label>
                                     <div class="d-flex gap-2 mb-3">
                                         <button type="button" class="btn btn-outline-primary flex-fill comp-member-btn" data-count="2" onclick="app.setCompMemberCount(2)">2 Dancers (Duo) — $60</button>
                                         <button type="button" class="btn btn-outline-primary flex-fill comp-member-btn" data-count="3" onclick="app.setCompMemberCount(3)">3 Dancers (Trio) — $90</button>
                                     </div>
                                     <form id="compDuoTrioRegForm" style="display:none;">
                                         <div class="mb-3">
-                                            <label class="form-label">Team Name *</label>
+                                            <label class="form-label"><i class="fas fa-tag me-1" style="color:#e74c3c;"></i> Team Name *</label>
                                             <input type="text" class="form-control" name="team_name" required placeholder="Your team name">
                                         </div>
                                         <div id="compMemberNameFields"></div>
                                         <div class="mb-3">
-                                            <label class="form-label">POC Email *</label>
-                                            <input type="email" class="form-control" name="poc_email" id="compDuoEmail" required>
+                                            <label class="form-label"><i class="fas fa-envelope me-1" style="color:#e74c3c;"></i> POC Email *</label>
+                                            <input type="email" class="form-control" name="poc_email" id="compDuoEmail" required placeholder="Point of contact email">
                                         </div>
                                         <div class="mb-3">
-                                            <label class="form-label">POC Contact Number *</label>
+                                            <label class="form-label"><i class="fas fa-phone me-1" style="color:#e74c3c;"></i> POC Contact Number *</label>
                                             <input type="tel" class="form-control" name="poc_contact" required placeholder="(xxx) xxx-xxxx">
                                         </div>
                                         <div class="d-flex gap-2">

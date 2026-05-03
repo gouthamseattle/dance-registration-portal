@@ -2227,3 +2227,467 @@ select:-webkit-autofill:active {
         font-size: 2.5rem;
     }
 }
+
+/* =====================================================
+   COMPETITION SECTION STYLES
+   ===================================================== */
+
+/* Competition Banner */
+.comp-banner {
+    background: linear-gradient(135deg, #0d0d1a 0%, #1a0a0a 50%, #0d0d1a 100%);
+    border: 1px solid rgba(231, 76, 60, 0.3);
+    border-radius: var(--radius-lg);
+    padding: 30px 25px;
+    margin-bottom: 24px;
+    position: relative;
+    overflow: hidden;
+}
+
+.comp-banner::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, transparent, #e74c3c, #ff6b35, #e74c3c, transparent);
+}
+
+.comp-banner-title {
+    font-family: var(--font-display);
+    font-size: 1.6rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    background: linear-gradient(135deg, #e74c3c, #ff6b35);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    text-align: center;
+    margin-bottom: 4px;
+}
+
+.comp-banner-subtitle {
+    text-align: center;
+    color: #888;
+    font-size: 0.85rem;
+    letter-spacing: 1px;
+    margin-bottom: 0;
+}
+
+.comp-banner-tagline {
+    text-align: center;
+    font-family: var(--font-display);
+    font-size: 0.75rem;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: #e74c3c;
+    margin-top: 12px;
+    margin-bottom: 0;
+}
+
+/* Competition Rules Container */
+.comp-rules-container {
+    background: linear-gradient(135deg, #111118 0%, #1a1020 100%);
+    border: 1px solid rgba(231, 76, 60, 0.15);
+    border-radius: var(--radius-md);
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.comp-rules-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    color: #fff;
+    font-weight: 600;
+    font-size: 0.95rem;
+    padding: 0;
+    background: none;
+    border: none;
+    width: 100%;
+}
+
+.comp-rules-toggle i.chevron {
+    transition: transform 0.3s ease;
+    color: #e74c3c;
+}
+
+.comp-rules-toggle.collapsed i.chevron {
+    transform: rotate(-90deg);
+}
+
+.comp-rules-body {
+    margin-top: 15px;
+}
+
+.comp-rules-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+    margin-bottom: 15px;
+}
+
+@media (max-width: 576px) {
+    .comp-rules-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.comp-rule-card {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(231, 76, 60, 0.12);
+    border-radius: var(--radius-sm);
+    padding: 14px;
+}
+
+.comp-rule-card h6 {
+    font-family: var(--font-display);
+    font-size: 0.7rem;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: #e74c3c;
+    margin-bottom: 8px;
+    font-weight: 700;
+}
+
+.comp-rule-card ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.comp-rule-card ul li {
+    color: #bbb;
+    font-size: 0.82rem;
+    padding: 3px 0;
+    padding-left: 14px;
+    position: relative;
+    line-height: 1.4;
+}
+
+.comp-rule-card ul li::before {
+    content: '•';
+    color: #e74c3c;
+    position: absolute;
+    left: 0;
+    font-weight: bold;
+}
+
+.comp-general-rules {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: var(--radius-sm);
+    padding: 14px;
+    margin-bottom: 15px;
+}
+
+.comp-general-rules h6 {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #e74c3c;
+    margin-bottom: 8px;
+}
+
+.comp-general-rules ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px 15px;
+}
+
+@media (max-width: 576px) {
+    .comp-general-rules ul {
+        grid-template-columns: 1fr;
+    }
+}
+
+.comp-general-rules ul li {
+    color: #999;
+    font-size: 0.78rem;
+    padding-left: 14px;
+    position: relative;
+    line-height: 1.5;
+}
+
+.comp-general-rules ul li::before {
+    content: '•';
+    color: #555;
+    position: absolute;
+    left: 0;
+}
+
+.comp-music-note {
+    background: rgba(231, 76, 60, 0.06);
+    border: 1px solid rgba(231, 76, 60, 0.15);
+    border-radius: var(--radius-sm);
+    padding: 12px 14px;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+}
+
+.comp-music-note .icon {
+    font-size: 1.2rem;
+    color: #e74c3c;
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.comp-music-note .text {
+    color: #999;
+    font-size: 0.78rem;
+    line-height: 1.5;
+}
+
+/* Competition Category Cards */
+.comp-cat-card {
+    background: linear-gradient(135deg, #111118 0%, #1a1020 100%) !important;
+    border: 2px solid rgba(255, 255, 255, 0.08) !important;
+    border-radius: var(--radius-md) !important;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    overflow: hidden;
+    position: relative;
+}
+
+.comp-cat-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+    transition: all 0.3s ease;
+}
+
+.comp-cat-card:hover {
+    border-color: rgba(231, 76, 60, 0.5) !important;
+    transform: translateY(-4px);
+    box-shadow: 0 8px 30px rgba(231, 76, 60, 0.15);
+}
+
+.comp-cat-card:hover::before {
+    background: linear-gradient(90deg, transparent, #e74c3c, transparent);
+}
+
+.comp-cat-card .card-body {
+    padding: 28px 20px !important;
+}
+
+.comp-cat-card .cat-icon {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 12px;
+    font-size: 1.5rem;
+}
+
+.comp-cat-card[data-comp-cat="solo"] .cat-icon {
+    background: linear-gradient(135deg, rgba(0, 212, 255, 0.15), rgba(0, 212, 255, 0.05));
+    color: #00d4ff;
+    border: 1px solid rgba(0, 212, 255, 0.2);
+}
+
+.comp-cat-card[data-comp-cat="duo_trio"] .cat-icon {
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(245, 158, 11, 0.05));
+    color: #f59e0b;
+    border: 1px solid rgba(245, 158, 11, 0.2);
+}
+
+.comp-cat-card h5 {
+    color: #fff;
+    font-weight: 700;
+    font-size: 1.15rem;
+    margin-bottom: 6px;
+}
+
+.comp-cat-card .cat-price {
+    color: #aaa;
+    font-size: 0.85rem;
+    margin-bottom: 12px;
+}
+
+.comp-cat-card .cat-details {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.comp-cat-card .cat-detail-chip {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 20px;
+    padding: 4px 12px;
+    font-size: 0.72rem;
+    color: #888;
+}
+
+.comp-cat-card.selected {
+    border-color: #e74c3c !important;
+    box-shadow: 0 0 25px rgba(231, 76, 60, 0.2);
+}
+
+.comp-cat-card.selected::before {
+    background: linear-gradient(90deg, transparent, #e74c3c, #ff6b35, #e74c3c, transparent);
+    height: 3px;
+}
+
+/* Competition Forms */
+.comp-form-card {
+    background: linear-gradient(135deg, #111118 0%, #1a1020 100%);
+    border: 1px solid rgba(231, 76, 60, 0.2);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+}
+
+.comp-form-card .card-header {
+    background: linear-gradient(135deg, rgba(231, 76, 60, 0.1), rgba(231, 76, 60, 0.05));
+    border-bottom: 1px solid rgba(231, 76, 60, 0.15);
+    padding: 16px 20px;
+}
+
+.comp-form-card .card-header h5 {
+    color: #fff;
+    font-weight: 600;
+    margin-bottom: 0;
+}
+
+.comp-form-card .card-body {
+    padding: 24px 20px;
+}
+
+.comp-form-card .form-control,
+.comp-form-card .form-select {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #fff;
+    border-radius: var(--radius-sm);
+}
+
+.comp-form-card .form-control:focus,
+.comp-form-card .form-select:focus {
+    border-color: #e74c3c;
+    box-shadow: 0 0 0 2px rgba(231, 76, 60, 0.15);
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.comp-form-card .form-control::placeholder {
+    color: #555;
+}
+
+.comp-form-card .form-label {
+    color: #ccc;
+    font-weight: 500;
+    font-size: 0.88rem;
+}
+
+.comp-form-card .btn-primary {
+    background: linear-gradient(135deg, #e74c3c, #c0392b);
+    border: none;
+    font-weight: 600;
+    padding: 12px 20px;
+}
+
+.comp-form-card .btn-primary:hover {
+    background: linear-gradient(135deg, #ff5a4a, #e74c3c);
+    box-shadow: 0 4px 15px rgba(231, 76, 60, 0.3);
+}
+
+/* Duo/Trio Member Count Buttons */
+.comp-member-btn {
+    border-radius: var(--radius-sm) !important;
+    padding: 14px !important;
+    font-weight: 600 !important;
+    transition: all 0.3s ease !important;
+}
+
+.comp-member-btn.active,
+.comp-member-btn.btn-primary {
+    background: linear-gradient(135deg, #e74c3c, #c0392b) !important;
+    border-color: #e74c3c !important;
+    color: #fff !important;
+}
+
+/* Competition Payment */
+.comp-pay-card {
+    background: linear-gradient(135deg, #0a1a0a 0%, #111118 100%);
+    border: 1px solid rgba(39, 174, 96, 0.3);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+}
+
+.comp-pay-card .card-header {
+    background: linear-gradient(135deg, rgba(39, 174, 96, 0.15), rgba(39, 174, 96, 0.05));
+    border-bottom: 1px solid rgba(39, 174, 96, 0.2);
+}
+
+.comp-pay-option {
+    transition: all 0.3s ease !important;
+    border: 2px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+.comp-pay-option:hover {
+    border-color: rgba(231, 76, 60, 0.4) !important;
+    transform: translateY(-2px);
+}
+
+.comp-pay-option.selected {
+    border-color: #e74c3c !important;
+    background: rgba(231, 76, 60, 0.08) !important;
+}
+
+/* Registration Fee Display */
+.comp-fee-badge {
+    background: linear-gradient(135deg, rgba(231, 76, 60, 0.12), rgba(231, 76, 60, 0.04));
+    border: 1px solid rgba(231, 76, 60, 0.2);
+    border-radius: var(--radius-sm);
+    padding: 12px 16px;
+    text-align: center;
+    margin-bottom: 16px;
+}
+
+.comp-fee-badge .fee-label {
+    color: #888;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.comp-fee-badge .fee-amount {
+    color: #e74c3c;
+    font-size: 1.8rem;
+    font-weight: 800;
+    font-family: var(--font-display);
+}
+
+.comp-fee-badge .fee-breakdown {
+    color: #666;
+    font-size: 0.78rem;
+}
+
+/* Competition section responsive */
+@media (max-width: 576px) {
+    .comp-banner {
+        padding: 20px 15px;
+    }
+    .comp-banner-title {
+        font-size: 1.1rem;
+        letter-spacing: 1px;
+    }
+    .comp-cat-card .card-body {
+        padding: 20px 15px !important;
+    }
+    .comp-cat-card .cat-icon {
+        width: 50px;
+        height: 50px;
+        font-size: 1.2rem;
+    }
+}
