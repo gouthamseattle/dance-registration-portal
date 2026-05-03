@@ -17,10 +17,14 @@ class DatabaseConfig {
                 ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false,
                 max: 10,
                 idleTimeoutMillis: 30000,
-                connectionTimeoutMillis: 5000
+                connectionTimeoutMillis: 5000,
+                keepAlive: true,
+                keepAliveInitialDelayMillis: 10000
             });
             this.pool.on('error', (err) => {
                 console.error('⚠️ PostgreSQL pool idle-client error:', err.message);
+                // Force pool to remove stale connections so next query gets a fresh one
+                console.log('🔄 Pool will create fresh connections on next query');
             });
             // Verify connectivity
             const testClient = await this.pool.connect();
@@ -40,7 +44,7 @@ class DatabaseConfig {
     async query(sql, params = []) {
         if (this.isProduction) {
             // PostgreSQL query via pool with retry on connection errors
-            const maxRetries = 2;
+            const maxRetries = 3;
             for (let attempt = 1; attempt <= maxRetries; attempt++) {
                 try {
                     const result = await this.pool.query(sql, params);
