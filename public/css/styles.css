@@ -2587,9 +2587,8 @@ select:-webkit-autofill:active {
     inset: 0;
     background-size: cover;
     background-position: center;
-    opacity: 0.14;
-    filter: grayscale(100%) brightness(0.7);
-    mix-blend-mode: screen;
+    opacity: 0.15;
+    filter: grayscale(100%) contrast(1.2) brightness(0.8);
     pointer-events: none;
     transition: opacity 300ms ease;
 }
@@ -2598,20 +2597,20 @@ select:-webkit-autofill:active {
     opacity: 0.2;
 }
 
-/* Solo card BG — dancer silhouette on left */
+/* Solo card BG — dancer silhouette, gradient dark from left */
 .comp-cat-solo-bg {
     background-image: 
-        linear-gradient(to right, rgba(3,7,12,0.15), rgba(3,7,12,0.95)),
+        linear-gradient(to right, rgba(3,7,12,0.2), rgba(3,7,12,0.95)),
         url("/images/solo-dancer.jpg");
-    background-position: left center;
+    background-position: center;
 }
 
-/* Duo card BG — group silhouette on right */
+/* Duo card BG — group dancers, gradient dark from right */
 .comp-cat-duo-bg {
     background-image: 
-        linear-gradient(to left, rgba(3,7,12,0.15), rgba(3,7,12,0.95)),
+        linear-gradient(to left, rgba(3,7,12,0.2), rgba(3,7,12,0.95)),
         url("/images/group-dancers.jpg");
-    background-position: right center;
+    background-position: center;
 }
 
 /* Card content */
