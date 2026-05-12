@@ -4987,6 +4987,17 @@ app.post('/api/competition/register', asyncHandler(async (req, res) => {
         }
     }
 
+    // Check if duo/trio registration is closed (waitlist mode)
+    let duoTrioWaitlist = false;
+    if (category === 'duo_trio') {
+        const duoTrioSetting = await dbConfig.get('SELECT setting_value FROM system_settings WHERE setting_key = $1', ['competition_duotrio_registration_open']);
+        if (duoTrioSetting && duoTrioSetting.setting_value === 'false') {
+            duoTrioWaitlist = true;
+        }
+    }
+
+    const isWaitlisted = soloWaitlist || duoTrioWaitlist;
+
     if (category === 'solo') {
         if (!dancer_name || !email || !contact_number) return res.status(400).json({ error: 'Solo requires dancer name, email, contact number' });
         if (!soloWaitlist && Number(total_amount) !== 30) return res.status(400).json({ error: 'Solo amount must be $30' });
@@ -4994,11 +5005,11 @@ app.post('/api/competition/register', asyncHandler(async (req, res) => {
         if (!team_name || !member_names || !poc_email || !poc_contact || !member_count) return res.status(400).json({ error: 'Duo/Trio requires team name, member names, POC email, POC contact, member count' });
         const mc = Number(member_count);
         if (mc < 2 || mc > 3) return res.status(400).json({ error: 'Duo/Trio must have 2 or 3 members' });
-        if (Number(total_amount) !== mc * 30) return res.status(400).json({ error: `Amount must be $${mc*30}` });
+        if (!duoTrioWaitlist && Number(total_amount) !== mc * 30) return res.status(400).json({ error: `Amount must be $${mc*30}` });
     }
 
-    const paymentStatus = soloWaitlist ? 'waitlisted' : 'pending';
-    const finalAmount = soloWaitlist ? 0 : Number(total_amount);
+    const paymentStatus = isWaitlisted ? 'waitlisted' : 'pending';
+    const finalAmount = isWaitlisted ? 0 : Number(total_amount);
 
     const result = await dbConfig.run(`INSERT INTO competition_registrations (category,dancer_name,email,instagram_id,contact_number,team_name,member_names,member_count,poc_email,poc_contact,total_amount,payment_status) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) ${dbConfig.isProduction?'RETURNING id':''}`,
         [category,dancer_name||null,email||null,instagram_id||null,contact_number||null,team_name||null,member_names||null,Number(member_count)||1,poc_email||null,poc_contact||null,finalAmount,paymentStatus]);

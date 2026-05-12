@@ -1546,7 +1546,9 @@ class EmailProfileRegistrationApp {
             section.style.display = 'block';
             // Check solo waitlist mode
             this.compSoloWaitlistMode = (this.settings.competition_solo_registration_open === 'false');
+            this.compDuoTrioWaitlistMode = (this.settings.competition_duotrio_registration_open === 'false');
             console.log('Competition solo waitlist mode:', this.compSoloWaitlistMode, '(setting:', this.settings.competition_solo_registration_open, ')');
+            console.log('Competition duo/trio waitlist mode:', this.compDuoTrioWaitlistMode, '(setting:', this.settings.competition_duotrio_registration_open, ')');
             // Pre-fill emails from current student
             const soloEmail = document.getElementById('compSoloEmail');
             const duoEmail = document.getElementById('compDuoEmail');
@@ -1607,6 +1609,13 @@ class EmailProfileRegistrationApp {
         } else {
             document.getElementById('compDuoTrioForm').style.display = 'block';
             document.getElementById('compDuoEmail').value = this.currentEmail || '';
+            // Handle duo/trio waitlist mode
+            const duoTrioWaitlistBanner = document.getElementById('compDuoTrioWaitlistBanner');
+            if (this.compDuoTrioWaitlistMode) {
+                if (duoTrioWaitlistBanner) duoTrioWaitlistBanner.style.display = 'block';
+            } else {
+                if (duoTrioWaitlistBanner) duoTrioWaitlistBanner.style.display = 'none';
+            }
             // Reset member count
             this.compMemberCount = 0;
             document.querySelectorAll('.comp-member-btn').forEach(b => b.classList.remove('btn-primary'));
@@ -1649,6 +1658,25 @@ class EmailProfileRegistrationApp {
             `;
         }
         document.getElementById('compDuoTrioRegForm').style.display = 'block';
+
+        // Update duo/trio submit button for waitlist mode
+        const duoTrioSubmitBtn = document.querySelector('#compDuoTrioRegForm button[type="submit"]');
+        if (this.compDuoTrioWaitlistMode) {
+            if (duoTrioSubmitBtn) {
+                duoTrioSubmitBtn.textContent = '⏳ Join Waitlist';
+                duoTrioSubmitBtn.style.background = 'linear-gradient(135deg, #f39c12, #e67e22)';
+                duoTrioSubmitBtn.style.border = 'none';
+            }
+            // Hide fee display if it exists
+            const feeDisplay = document.getElementById('compDuoTrioFeeDisplay');
+            if (feeDisplay) feeDisplay.style.display = 'none';
+        } else {
+            if (duoTrioSubmitBtn) {
+                duoTrioSubmitBtn.textContent = 'Register & Continue to Payment →';
+                duoTrioSubmitBtn.style.background = '';
+                duoTrioSubmitBtn.style.border = '';
+            }
+        }
     }
 
     async submitCompRegistration(category) {
@@ -1710,7 +1738,7 @@ class EmailProfileRegistrationApp {
             this.showError(err.message || 'Competition registration failed. Please try again.');
         } finally {
             submitBtn.disabled = false;
-            if (this.compSoloWaitlistMode && category === 'solo') {
+            if ((this.compSoloWaitlistMode && category === 'solo') || (this.compDuoTrioWaitlistMode && category === 'duo_trio')) {
                 submitBtn.textContent = '⏳ Join Waitlist';
             } else {
                 submitBtn.textContent = 'Register & Continue to Payment →';
@@ -1781,7 +1809,7 @@ class EmailProfileRegistrationApp {
                 <div class="card-body text-center py-5">
                     <div style="font-size:4rem; margin-bottom:15px;">⏳</div>
                     <h3 style="color:#f39c12;">Added to Waitlist!</h3>
-                    <p class="text-muted">You've been added to the solo competition waitlist. We'll reach out if a spot opens up!</p>
+                    <p class="text-muted">You've been added to the ${this.compCategory === 'duo_trio' ? 'Duo/Trio' : 'Solo'} competition waitlist. We'll reach out if a spot opens up!</p>
                     <p class="text-muted small">Registration ID: <strong style="color:#e74c3c;">#${this.compRegistrationId}</strong></p>
                     <div class="alert alert-warning mt-3 text-start" style="max-width:400px; margin:0 auto;">
                         <p style="font-weight:600; margin-bottom:8px;">⏳ What happens next?</p>

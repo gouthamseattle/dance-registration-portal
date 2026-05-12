@@ -4655,6 +4655,35 @@ Questions? Reply to this message`;
                     });
                 }
             }
+
+            // Duo/Trio registration toggle
+            const duoTrioToggle = document.getElementById('competitionDuoTrioToggle');
+            const duoTrioLabel = document.getElementById('competitionDuoTrioStatus');
+            if (duoTrioToggle && duoTrioLabel) {
+                const duoTrioOpen = settings.competition_duotrio_registration_open !== 'false';
+                duoTrioToggle.checked = duoTrioOpen;
+                duoTrioLabel.textContent = duoTrioOpen ? 'Duo/Trio: Open' : 'Duo/Trio: Waitlist';
+                duoTrioLabel.className = `form-check-label ms-2 ${duoTrioOpen ? 'text-success' : 'text-warning'}`;
+
+                if (!duoTrioToggle._wired) {
+                    duoTrioToggle._wired = true;
+                    duoTrioToggle.addEventListener('change', async (e) => {
+                        try {
+                            await this.apiFetch('/api/settings', {
+                                method: 'PUT',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ competition_duotrio_registration_open: e.target.checked.toString() })
+                            });
+                            duoTrioLabel.textContent = e.target.checked ? 'Duo/Trio: Open' : 'Duo/Trio: Waitlist';
+                            duoTrioLabel.className = `form-check-label ms-2 ${e.target.checked ? 'text-success' : 'text-warning'}`;
+                            this.showSuccess(`Duo/Trio registration ${e.target.checked ? 'opened' : 'set to waitlist mode'}`);
+                        } catch (err) {
+                            e.target.checked = !e.target.checked;
+                            this.showError('Failed to toggle Duo/Trio registration');
+                        }
+                    });
+                }
+            }
         } catch (e) {
             console.warn('Failed to load competition toggle:', e);
         }
