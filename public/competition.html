@@ -363,12 +363,16 @@
     let currentRegistrationId = null;
     let currentAmount = 0;
     let soloWaitlistMode = false;
+    let settingsLoaded = false;
 
     // Check if competition registration is open + solo status
     async function checkRegistrationOpen() {
+        // Disable category buttons until settings load
+        document.querySelectorAll('.category-btn').forEach(b => { b.disabled = true; b.style.opacity = '0.5'; });
         try {
             const res = await fetch('/api/settings');
             const settings = await res.json();
+            console.log('Competition settings loaded:', JSON.stringify(settings));
             if (settings.competition_registration_open !== 'true') {
                 document.getElementById('mainContent').style.display = 'none';
                 document.getElementById('closedBanner').style.display = 'block';
@@ -377,12 +381,22 @@
             // Check solo registration status
             if (settings.competition_solo_registration_open === 'false') {
                 soloWaitlistMode = true;
+                console.log('Solo waitlist mode ENABLED');
+            } else {
+                console.log('Solo registration open (setting value:', settings.competition_solo_registration_open, ')');
             }
         } catch(e) { console.warn('Could not check settings:', e); }
+        settingsLoaded = true;
+        // Re-enable category buttons
+        document.querySelectorAll('.category-btn').forEach(b => { b.disabled = false; b.style.opacity = '1'; });
     }
     checkRegistrationOpen();
 
     function selectCategory(cat) {
+        if (!settingsLoaded) {
+            console.warn('Settings not yet loaded, ignoring category click');
+            return;
+        }
         selectedCategory = cat;
         document.querySelectorAll('.category-btn').forEach(b => b.classList.remove('active'));
         document.querySelector(`[data-category="${cat}"]`).classList.add('active');
