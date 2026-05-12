@@ -1544,6 +1544,9 @@ class EmailProfileRegistrationApp {
         if (!section) return;
         if (this.settings.competition_registration_open === 'true') {
             section.style.display = 'block';
+            // Check solo waitlist mode
+            this.compSoloWaitlistMode = (this.settings.competition_solo_registration_open === 'false');
+            console.log('Competition solo waitlist mode:', this.compSoloWaitlistMode, '(setting:', this.settings.competition_solo_registration_open, ')');
             // Pre-fill emails from current student
             const soloEmail = document.getElementById('compSoloEmail');
             const duoEmail = document.getElementById('compDuoEmail');
@@ -1580,6 +1583,27 @@ class EmailProfileRegistrationApp {
         if (cat === 'solo') {
             document.getElementById('compSoloForm').style.display = 'block';
             document.getElementById('compSoloEmail').value = this.currentEmail || '';
+            // Handle solo waitlist mode
+            const waitlistBanner = document.getElementById('compSoloWaitlistBanner');
+            const feeDisplay = document.getElementById('compSoloFeeDisplay');
+            const soloSubmitBtn = document.querySelector('#compSoloRegForm button[type="submit"]');
+            if (this.compSoloWaitlistMode) {
+                if (waitlistBanner) waitlistBanner.style.display = 'block';
+                if (feeDisplay) feeDisplay.style.display = 'none';
+                if (soloSubmitBtn) {
+                    soloSubmitBtn.textContent = '⏳ Join Waitlist';
+                    soloSubmitBtn.style.background = 'linear-gradient(135deg, #f39c12, #e67e22)';
+                    soloSubmitBtn.style.border = 'none';
+                }
+            } else {
+                if (waitlistBanner) waitlistBanner.style.display = 'none';
+                if (feeDisplay) feeDisplay.style.display = '';
+                if (soloSubmitBtn) {
+                    soloSubmitBtn.textContent = 'Register & Continue to Payment →';
+                    soloSubmitBtn.style.background = '';
+                    soloSubmitBtn.style.border = '';
+                }
+            }
         } else {
             document.getElementById('compDuoTrioForm').style.display = 'block';
             document.getElementById('compDuoEmail').value = this.currentEmail || '';
@@ -1666,20 +1690,31 @@ class EmailProfileRegistrationApp {
             this.compRegistrationId = data.registrationId;
             this.compAmount = data.total_amount;
 
-            // Hide forms, show payment
+            // Hide forms
             document.getElementById('compSoloForm').style.display = 'none';
             document.getElementById('compDuoTrioForm').style.display = 'none';
             document.getElementById('compCategoryStep').style.display = 'none';
-            document.getElementById('compPayAmount').textContent = `$${this.compAmount}`;
-            document.getElementById('compPayRegId').textContent = `#${this.compRegistrationId}`;
-            document.getElementById('compPaymentSection').style.display = 'block';
-            document.getElementById('compPaymentSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+            // If waitlisted, skip payment and show waitlist success
+            if (data.waitlisted) {
+                this.showCompWaitlistSuccess();
+            } else {
+                // Normal payment flow
+                document.getElementById('compPayAmount').textContent = `$${this.compAmount}`;
+                document.getElementById('compPayRegId').textContent = `#${this.compRegistrationId}`;
+                document.getElementById('compPaymentSection').style.display = 'block';
+                document.getElementById('compPaymentSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
 
         } catch (err) {
             this.showError(err.message || 'Competition registration failed. Please try again.');
         } finally {
             submitBtn.disabled = false;
-            submitBtn.textContent = 'Register & Continue to Payment →';
+            if (this.compSoloWaitlistMode && category === 'solo') {
+                submitBtn.textContent = '⏳ Join Waitlist';
+            } else {
+                submitBtn.textContent = 'Register & Continue to Payment →';
+            }
         }
     }
 
@@ -1723,6 +1758,47 @@ class EmailProfileRegistrationApp {
         // Show the confirm payment button
         const confirmBtn = document.getElementById('compConfirmPaymentBtn');
         if (confirmBtn) confirmBtn.style.display = 'block';
+    }
+
+    showCompWaitlistSuccess() {
+        // Hide payment section if visible
+        document.getElementById('compPaymentSection').style.display = 'none';
+        
+        // Reuse the payment section area to show waitlist success
+        const paySection = document.getElementById('compPaymentSection');
+        const parent = paySection.parentElement;
+        
+        // Create or update waitlist success element
+        let wlSuccess = document.getElementById('compWaitlistSuccess');
+        if (!wlSuccess) {
+            wlSuccess = document.createElement('div');
+            wlSuccess.id = 'compWaitlistSuccess';
+            parent.insertBefore(wlSuccess, paySection.nextSibling);
+        }
+        
+        wlSuccess.innerHTML = `
+            <div class="card border-warning">
+                <div class="card-body text-center py-5">
+                    <div style="font-size:4rem; margin-bottom:15px;">⏳</div>
+                    <h3 style="color:#f39c12;">Added to Waitlist!</h3>
+                    <p class="text-muted">You've been added to the solo competition waitlist. We'll reach out if a spot opens up!</p>
+                    <p class="text-muted small">Registration ID: <strong style="color:#e74c3c;">#${this.compRegistrationId}</strong></p>
+                    <div class="alert alert-warning mt-3 text-start" style="max-width:400px; margin:0 auto;">
+                        <p style="font-weight:600; margin-bottom:8px;">⏳ What happens next?</p>
+                        <p class="small mb-1">• You're on the waitlist — no payment needed right now</p>
+                        <p class="small mb-1">• If a spot opens up, we'll contact you via email/phone</p>
+                        <p class="small mb-0">• Payment will be collected only if you get a confirmed spot</p>
+                    </div>
+                    <div class="mt-4">
+                        <button class="btn btn-outline-secondary me-2" onclick="app.compBackToCategory(); document.getElementById('compWaitlistSuccess').style.display='none'; document.getElementById('compCategoryStep').style.display='';">
+                            <i class="fas fa-arrow-left"></i> Register Another
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+        wlSuccess.style.display = 'block';
+        wlSuccess.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
     async confirmCompPaymentCompleted() {
