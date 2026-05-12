@@ -4626,6 +4626,35 @@ Questions? Reply to this message`;
                     });
                 }
             }
+
+            // Solo registration toggle
+            const soloToggle = document.getElementById('competitionSoloToggle');
+            const soloLabel = document.getElementById('competitionSoloStatus');
+            if (soloToggle && soloLabel) {
+                const soloOpen = settings.competition_solo_registration_open !== 'false';
+                soloToggle.checked = soloOpen;
+                soloLabel.textContent = soloOpen ? 'Solo: Open' : 'Solo: Waitlist';
+                soloLabel.className = `form-check-label ms-2 ${soloOpen ? 'text-success' : 'text-warning'}`;
+
+                if (!soloToggle._wired) {
+                    soloToggle._wired = true;
+                    soloToggle.addEventListener('change', async (e) => {
+                        try {
+                            await this.apiFetch('/api/settings', {
+                                method: 'PUT',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ competition_solo_registration_open: e.target.checked.toString() })
+                            });
+                            soloLabel.textContent = e.target.checked ? 'Solo: Open' : 'Solo: Waitlist';
+                            soloLabel.className = `form-check-label ms-2 ${e.target.checked ? 'text-success' : 'text-warning'}`;
+                            this.showSuccess(`Solo registration ${e.target.checked ? 'opened' : 'set to waitlist mode'}`);
+                        } catch (err) {
+                            e.target.checked = !e.target.checked;
+                            this.showError('Failed to toggle solo registration');
+                        }
+                    });
+                }
+            }
         } catch (e) {
             console.warn('Failed to load competition toggle:', e);
         }
@@ -4693,7 +4722,7 @@ Questions? Reply to this message`;
                                     <td><span class="status-badge status-${r.payment_status}">${r.payment_status}</span></td>
                                     <td>
                                         <div class="btn-group btn-group-sm">
-                                            ${(r.payment_status === 'pending' || r.payment_status === 'payment_submitted') ? `<button class="btn btn-success" onclick="admin.confirmCompPayment(${r.id})" title="Confirm Payment"><i class="fas fa-check"></i></button>` : ''}
+                                            ${(r.payment_status === 'pending' || r.payment_status === 'payment_submitted' || r.payment_status === 'waitlisted') ? `<button class="btn btn-success" onclick="admin.confirmCompPayment(${r.id})" title="Confirm Payment"><i class="fas fa-check"></i></button>` : ''}
                                             ${r.payment_status === 'canceled' ? `<button class="btn btn-outline-secondary" onclick="admin.uncancelCompRegistration(${r.id})" title="Restore"><i class="fas fa-undo"></i></button>` : `<button class="btn btn-outline-danger" onclick="admin.cancelCompRegistration(${r.id})" title="Cancel"><i class="fas fa-ban"></i></button>`}
                                         </div>
                                     </td>

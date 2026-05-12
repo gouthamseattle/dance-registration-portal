@@ -4973,24 +4973,38 @@ app.delete('/api/admin/clear-all-courses', requireAuth, asyncHandler(async (req,
 // ==============================
 app.post('/api/competition/register', asyncHandler(async (req, res) => {
     const { category, dancer_name, email, instagram_id, contact_number,
-            team_name, member_names, member_count, poc_email, poc_contact, total_amount } = req.body;
+            team_name, member_names, member_count, poc_email, poc_contact, total_amount, is_waitlist } = req.body;
     const setting = await dbConfig.get('SELECT setting_value FROM system_settings WHERE setting_key = $1', ['competition_registration_open']);
     if (setting && setting.setting_value !== 'true') return res.status(400).json({ error: 'Competition registration is currently closed' });
     if (!category || !['solo','duo_trio'].includes(category)) return res.status(400).json({ error: 'Invalid category' });
+
+    // Check if solo registration is closed (waitlist mode)
+    let soloWaitlist = false;
+    if (category === 'solo') {
+        const soloSetting = await dbConfig.get('SELECT setting_value FROM system_settings WHERE setting_key = $1', ['competition_solo_registration_open']);
+        if (soloSetting && soloSetting.setting_value === 'false') {
+            soloWaitlist = true;
+        }
+    }
+
     if (category === 'solo') {
         if (!dancer_name || !email || !contact_number) return res.status(400).json({ error: 'Solo requires dancer name, email, contact number' });
-        if (Number(total_amount) !== 30) return res.status(400).json({ error: 'Solo amount must be $30' });
+        if (!soloWaitlist && Number(total_amount) !== 30) return res.status(400).json({ error: 'Solo amount must be $30' });
     } else {
         if (!team_name || !member_names || !poc_email || !poc_contact || !member_count) return res.status(400).json({ error: 'Duo/Trio requires team name, member names, POC email, POC contact, member count' });
         const mc = Number(member_count);
         if (mc < 2 || mc > 3) return res.status(400).json({ error: 'Duo/Trio must have 2 or 3 members' });
         if (Number(total_amount) !== mc * 30) return res.status(400).json({ error: `Amount must be $${mc*30}` });
     }
-    const result = await dbConfig.run(`INSERT INTO competition_registrations (category,dancer_name,email,instagram_id,contact_number,team_name,member_names,member_count,poc_email,poc_contact,total_amount,payment_status) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'pending') ${dbConfig.isProduction?'RETURNING id':''}`,
-        [category,dancer_name||null,email||null,instagram_id||null,contact_number||null,team_name||null,member_names||null,Number(member_count)||1,poc_email||null,poc_contact||null,Number(total_amount)]);
+
+    const paymentStatus = soloWaitlist ? 'waitlisted' : 'pending';
+    const finalAmount = soloWaitlist ? 0 : Number(total_amount);
+
+    const result = await dbConfig.run(`INSERT INTO competition_registrations (category,dancer_name,email,instagram_id,contact_number,team_name,member_names,member_count,poc_email,poc_contact,total_amount,payment_status) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) ${dbConfig.isProduction?'RETURNING id':''}`,
+        [category,dancer_name||null,email||null,instagram_id||null,contact_number||null,team_name||null,member_names||null,Number(member_count)||1,poc_email||null,poc_contact||null,finalAmount,paymentStatus]);
     const regId = dbConfig.isProduction ? result[0]?.id : result.lastID;
-    console.log('🏆 Competition registration created', { id: regId, category, email: email||poc_email });
-    res.json({ success: true, registrationId: regId, category, total_amount: Number(total_amount) });
+    console.log('🏆 Competition registration created', { id: regId, category, email: email||poc_email, waitlisted: soloWaitlist });
+    res.json({ success: true, registrationId: regId, category, total_amount: finalAmount, waitlisted: soloWaitlist });
 }));
 
 app.post('/api/competition/generate-venmo-link', asyncHandler(async (req, res) => {

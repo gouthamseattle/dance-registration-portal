@@ -705,6 +705,15 @@ h2 i {
 }
 
 /* Canceled status */
+.status-waitlisted {
+    background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
+    color: white;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
 .status-canceled {
     background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
     color: white;

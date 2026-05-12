@@ -123,6 +123,18 @@
             text-align: center; padding: 60px 20px;
             color: #e74c3c; font-size: 1.2rem;
         }
+        .waitlist-banner {
+            background: linear-gradient(135deg, #1a1a2e, #2d1b00);
+            border: 2px solid #f39c12;
+            border-radius: 12px;
+            padding: 18px;
+            margin: 15px 0;
+            text-align: center;
+            color: #f39c12;
+        }
+        .waitlist-banner h4 { margin: 0 0 8px; font-size: 1.1rem; }
+        .waitlist-banner p { margin: 0; color: #ddd; font-size: 0.9rem; }
+        .waitlist-success { color: #f39c12; }
     </style>
 </head>
 <body>
@@ -188,7 +200,11 @@
             <!-- Solo Form -->
             <div id="soloForm" class="comp-form-section">
                 <h2 style="text-align:center; color:#fff;">Solo Registration</h2>
-                <div class="amount-display">
+                <div id="soloWaitlistBanner" class="waitlist-banner" style="display:none;">
+                    <h4>⏳ Solo Slots Are Full</h4>
+                    <p>You can still register below and you'll be added to the waitlist. We'll contact you if a spot opens up!</p>
+                </div>
+                <div id="soloAmountDisplay" class="amount-display">
                     <div class="label">Registration Fee</div>
                     <div class="amount">$30</div>
                     <div class="breakdown">1 dancer × $30</div>
@@ -346,8 +362,9 @@
     let memberCount = 0;
     let currentRegistrationId = null;
     let currentAmount = 0;
+    let soloWaitlistMode = false;
 
-    // Check if competition registration is open
+    // Check if competition registration is open + solo status
     async function checkRegistrationOpen() {
         try {
             const res = await fetch('/api/settings');
@@ -355,6 +372,11 @@
             if (settings.competition_registration_open !== 'true') {
                 document.getElementById('mainContent').style.display = 'none';
                 document.getElementById('closedBanner').style.display = 'block';
+                return;
+            }
+            // Check solo registration status
+            if (settings.competition_solo_registration_open === 'false') {
+                soloWaitlistMode = true;
             }
         } catch(e) { console.warn('Could not check settings:', e); }
     }
@@ -370,6 +392,20 @@
         document.getElementById('paymentSection').classList.remove('active');
 
         if (cat === 'solo') {
+            // Show/hide waitlist UI based on solo status
+            if (soloWaitlistMode) {
+                document.getElementById('soloWaitlistBanner').style.display = 'block';
+                document.getElementById('soloAmountDisplay').style.display = 'none';
+                const soloBtn = document.querySelector('#soloRegForm button[type="submit"]');
+                soloBtn.textContent = '⏳ Join Waitlist';
+                soloBtn.style.background = 'linear-gradient(135deg, #f39c12, #e67e22)';
+            } else {
+                document.getElementById('soloWaitlistBanner').style.display = 'none';
+                document.getElementById('soloAmountDisplay').style.display = 'block';
+                const soloBtn = document.querySelector('#soloRegForm button[type="submit"]');
+                soloBtn.textContent = 'Register & Continue to Payment →';
+                soloBtn.style.background = '';
+            }
             document.getElementById('soloForm').classList.add('active');
         } else {
             document.getElementById('duoTrioForm').classList.add('active');
@@ -459,23 +495,51 @@
             currentRegistrationId = data.registrationId;
             currentAmount = data.total_amount;
 
-            // Show payment section
+            // Hide forms
             document.getElementById('soloForm').classList.remove('active');
             document.getElementById('duoTrioForm').classList.remove('active');
             document.getElementById('stepCategory').style.display = 'none';
 
-            document.getElementById('paymentAmount').textContent = `$${currentAmount}`;
-            document.getElementById('paymentBreakdown').textContent = category === 'solo' 
-                ? '1 dancer × $30' : `${memberCount} dancers × $30`;
-            document.getElementById('paymentRegId').textContent = `#${currentRegistrationId}`;
-            document.getElementById('paymentSection').classList.add('active');
-            document.getElementById('paymentSection').scrollIntoView({ behavior: 'smooth' });
+            // If waitlisted, skip payment and show waitlist success
+            if (data.waitlisted) {
+                document.getElementById('successSection').querySelector('.success-icon').textContent = '⏳';
+                document.getElementById('successSection').querySelector('h2').textContent = 'Added to Waitlist!';
+                document.getElementById('successSection').querySelector('h2').style.color = '#f39c12';
+                document.getElementById('successSection').querySelector('p').textContent = 
+                    "You've been added to the solo waitlist. We'll reach out if a spot opens up!";
+                document.getElementById('successRegId').textContent = `#${currentRegistrationId}`;
+                // Update the "what happens next" box for waitlist
+                const nextBox = document.getElementById('successSection').querySelector('[style*="border:1px solid #27ae60"]');
+                if (nextBox) {
+                    nextBox.style.borderColor = '#f39c12';
+                    nextBox.innerHTML = `
+                        <p style="color:#f39c12; font-weight:600; margin-bottom:8px;">⏳ What happens next?</p>
+                        <p style="color:#bbb; font-size:0.9rem; margin:4px 0;">• You're on the waitlist — no payment needed right now</p>
+                        <p style="color:#bbb; font-size:0.9rem; margin:4px 0;">• If a spot opens up, we'll contact you via email/phone</p>
+                        <p style="color:#bbb; font-size:0.9rem; margin:4px 0;">• Payment will be collected only if you get a confirmed spot</p>
+                    `;
+                }
+                document.getElementById('successSection').classList.add('active');
+                document.getElementById('successSection').scrollIntoView({ behavior: 'smooth' });
+            } else {
+                // Normal payment flow
+                document.getElementById('paymentAmount').textContent = `$${currentAmount}`;
+                document.getElementById('paymentBreakdown').textContent = category === 'solo' 
+                    ? '1 dancer × $30' : `${memberCount} dancers × $30`;
+                document.getElementById('paymentRegId').textContent = `#${currentRegistrationId}`;
+                document.getElementById('paymentSection').classList.add('active');
+                document.getElementById('paymentSection').scrollIntoView({ behavior: 'smooth' });
+            }
 
         } catch(err) {
             alert(err.message || 'Registration failed. Please try again.');
         } finally {
             submitBtn.disabled = false;
-            submitBtn.textContent = 'Register & Continue to Payment →';
+            if (soloWaitlistMode && category === 'solo') {
+                submitBtn.textContent = '⏳ Join Waitlist';
+            } else {
+                submitBtn.textContent = 'Register & Continue to Payment →';
+            }
         }
     }
 
