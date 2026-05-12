@@ -4671,7 +4671,6 @@ Questions? Reply to this message`;
                                 <th>Amount</th>
                                 <th>Payment</th>
                                 <th>Status</th>
-                                <th>Date</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
@@ -4692,7 +4691,6 @@ Questions? Reply to this message`;
                                     <td><strong>$${r.total_amount}</strong></td>
                                     <td>${this.getPaymentMethodBadge(r.payment_method)}</td>
                                     <td><span class="status-badge status-${r.payment_status}">${r.payment_status}</span></td>
-                                    <td><small>${new Date(r.created_at).toLocaleDateString()}</small></td>
                                     <td>
                                         <div class="btn-group btn-group-sm">
                                             ${(r.payment_status === 'pending' || r.payment_status === 'payment_submitted') ? `<button class="btn btn-success" onclick="admin.confirmCompPayment(${r.id})" title="Confirm Payment"><i class="fas fa-check"></i></button>` : ''}
