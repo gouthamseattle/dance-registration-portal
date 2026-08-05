@@ -3021,7 +3021,7 @@ app.post('/api/admin/waitlist/:id/notify', requireAuth, asyncHandler(async (req,
         const setting = await dbConfig.get('SELECT setting_value FROM system_settings WHERE setting_key = $1', ['email_notifications_enabled']);
         const emailEnabled = setting && setting.setting_value === 'true';
 
-        if (emailEnabled && (process.env.RESEND_API_KEY || process.env.SENDGRID_API_KEY)) {
+        if (emailEnabled && (process.env.GMAIL_USER || process.env.EMAIL_USER)) {
             // Get course pricing and schedule info for email
             const { schedule_info } = await fetchCourseWithSlots(dbConfig, waitlistEntry.course_id);
             
@@ -3182,7 +3182,7 @@ app.post('/api/admin/waitlists/notify', requireAuth, asyncHandler(async (req, re
                 const setting = await dbConfig.get('SELECT setting_value FROM system_settings WHERE setting_key = $1', ['email_notifications_enabled']);
                 const emailEnabled = setting && setting.setting_value === 'true';
 
-                if (emailEnabled && (process.env.RESEND_API_KEY || process.env.SENDGRID_API_KEY)) {
+                if (emailEnabled && (process.env.GMAIL_USER || process.env.EMAIL_USER)) {
                     const { schedule_info } = await fetchCourseWithSlots(dbConfig, waitlistEntry.course_id);
                     
                     const courseSlots = await dbConfig.all(`
@@ -3406,7 +3406,7 @@ app.post('/api/admin/courses/:courseId/waitlist/notify-next', requireAuth, async
             const setting = await dbConfig.get('SELECT setting_value FROM system_settings WHERE setting_key = $1', ['email_notifications_enabled']);
             const emailEnabled = setting && setting.setting_value === 'true';
 
-            if (emailEnabled && (process.env.RESEND_API_KEY || process.env.SENDGRID_API_KEY)) {
+            if (emailEnabled && (process.env.GMAIL_USER || process.env.EMAIL_USER)) {
                 const { schedule_info } = await fetchCourseWithSlots(dbConfig, courseId);
                 
                 const courseSlots = await dbConfig.all(`
@@ -4499,8 +4499,8 @@ app.post('/api/admin/send-test-email', requireAuth, asyncHandler(async (req, res
 
     try {
         // Check email API key
-        if (!(process.env.RESEND_API_KEY || process.env.SENDGRID_API_KEY)) {
-            return res.json({ success: false, error: 'Email API key (RESEND_API_KEY) is not configured' });
+        if (!(process.env.GMAIL_USER || process.env.EMAIL_USER)) {
+            return res.json({ success: false, error: 'Gmail SMTP is not configured (GMAIL_USER / GMAIL_APP_PASSWORD)' });
         }
 
         // Check if email notifications are enabled

@@ -2384,7 +2384,7 @@ module.exports = function registerRoutes(app, deps) {
             const setting = await dbConfig.get('SELECT setting_value FROM system_settings WHERE setting_key = $1', ['email_notifications_enabled']);
             const emailEnabled = setting && setting.setting_value === 'true';
 
-            if (emailEnabled && (process.env.RESEND_API_KEY || process.env.SENDGRID_API_KEY)) {
+            if (emailEnabled && (process.env.GMAIL_USER || process.env.EMAIL_USER)) {
                 // Get course pricing and schedule info for email
                 const { schedule_info } = await fetchCourseWithSlots(dbConfig, waitlistEntry.course_id);
 
@@ -2545,7 +2545,7 @@ module.exports = function registerRoutes(app, deps) {
                     const setting = await dbConfig.get('SELECT setting_value FROM system_settings WHERE setting_key = $1', ['email_notifications_enabled']);
                     const emailEnabled = setting && setting.setting_value === 'true';
 
-                    if (emailEnabled && (process.env.RESEND_API_KEY || process.env.SENDGRID_API_KEY)) {
+                    if (emailEnabled && (process.env.GMAIL_USER || process.env.EMAIL_USER)) {
                         const { schedule_info } = await fetchCourseWithSlots(dbConfig, waitlistEntry.course_id);
 
                         const courseSlots = await dbConfig.all(`
@@ -2769,7 +2769,7 @@ module.exports = function registerRoutes(app, deps) {
                 const setting = await dbConfig.get('SELECT setting_value FROM system_settings WHERE setting_key = $1', ['email_notifications_enabled']);
                 const emailEnabled = setting && setting.setting_value === 'true';
 
-                if (emailEnabled && (process.env.RESEND_API_KEY || process.env.SENDGRID_API_KEY)) {
+                if (emailEnabled && (process.env.GMAIL_USER || process.env.EMAIL_USER)) {
                     const { schedule_info } = await fetchCourseWithSlots(dbConfig, courseId);
 
                     const courseSlots = await dbConfig.all(`
