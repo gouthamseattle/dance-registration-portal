@@ -1,16 +1,17 @@
-const sgMail = require('@sendgrid/mail');
+const { Resend } = require('resend');
 
-// Initialize SendGrid with API key
-if (process.env.SENDGRID_API_KEY) {
-  sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+// Initialize Resend client
+let resend;
+if (process.env.RESEND_API_KEY) {
+  resend = new Resend(process.env.RESEND_API_KEY);
 } else {
-  console.warn('⚠️ SENDGRID_API_KEY not found in environment variables');
+  console.warn('⚠️ RESEND_API_KEY not found in environment variables');
 }
 
 // Safe debug logger (no secrets). Enable with EMAIL_DEBUG=true
 function dbg(...args) {
   if (process.env.EMAIL_DEBUG === 'true') {
-    console.log('📧 SendGrid:', ...args);
+    console.log('📧 Resend:', ...args);
   }
 }
 
@@ -24,29 +25,24 @@ function buildFromAddress() {
     EMAIL_USER
   } = process.env;
 
-  // Use new SendGrid environment variables first
-  const email = FROM_EMAIL || EMAIL_FROM_ADDRESS || EMAIL_USER;
   const name = FROM_NAME || EMAIL_FROM_NAME || 'GouMo Dance Chronicles';
 
+  // If EMAIL_FROM is set as a full string like "Name <email>", use it
   if (EMAIL_FROM) return EMAIL_FROM;
-  
-  if (email && name) {
-    return { email, name };
-  }
-  
-  if (email) {
-    return { email, name: 'GouMo Dance Chronicles' };
-  }
 
-  // Fallback to hardcoded values if env vars not set
-  return { 
-    email: 'goumodnzchronicles@gmail.com', 
-    name: 'GouMo Dance Chronicles' 
-  };
+  // Use configured email or Resend default
+  const email = FROM_EMAIL || EMAIL_FROM_ADDRESS || EMAIL_USER || 'onboarding@resend.dev';
+  
+  return `${name} <${email}>`;
+}
+
+function getReplyTo() {
+  const from = process.env.FROM_EMAIL || process.env.EMAIL_FROM_ADDRESS || process.env.EMAIL_USER;
+  return process.env.REPLY_TO || from || undefined;
 }
 
 /**
- * Sends a registration confirmation email using SendGrid.
+ * Sends a registration confirmation email using Resend.
  * @param {string} to - Recipient email
  * @param {Object} data - Email payload
  * @param {string} data.courseName
@@ -56,8 +52,8 @@ function buildFromAddress() {
  * @param {string} [data.studentName]
  */
 async function sendRegistrationConfirmationEmail(to, data = {}) {
-  if (!process.env.SENDGRID_API_KEY) {
-    throw new Error('SendGrid API key is not configured. Please set SENDGRID_API_KEY environment variable.');
+  if (!resend) {
+    throw new Error('Resend API key is not configured. Please set RESEND_API_KEY environment variable.');
   }
 
   const {
@@ -150,14 +146,8 @@ async function sendRegistrationConfirmationEmail(to, data = {}) {
                   <p style="margin:0 0 8px; color:#6c757d; font-size:13px; line-height:1.4;">
                     This email was sent because you registered for a dance class with GouMo Dance Chronicles.
                   </p>
-                  <p style="margin:0 0 8px; color:#6c757d; font-size:12px;">
-                    <a href="mailto:${buildFromAddress().email}?subject=Unsubscribe%20Request" 
-                       style="color:#6c757d; text-decoration:underline;">
-                      Unsubscribe from future emails
-                    </a>
-                  </p>
                   <p style="margin:0; color:#adb5bd; font-size:11px;">
-                    © 2024 GouMo Dance Chronicles. All rights reserved.
+                    &copy; 2024 GouMo Dance Chronicles. All rights reserved.
                   </p>
                 </td>
               </tr>
@@ -190,53 +180,41 @@ Follow us on social media: @goumo_dancechronicles
 
 ---
 This email was sent because you registered for a dance class with GouMo Dance Chronicles.
-To unsubscribe from future emails, reply with "UNSUBSCRIBE" in the subject line.
 
 © 2024 GouMo Dance Chronicles. All rights reserved.
 `.trim();
 
-  const msg = {
-    to,
+  const emailParams = {
     from,
+    to: [to],
     subject,
     html,
     text,
-    replyTo: process.env.REPLY_TO || from.email,
-    // Improved deliverability headers
-    headers: {
-      'List-Unsubscribe': `mailto:${buildFromAddress().email}?subject=Unsubscribe%20Request`,
-      'X-Entity-Ref-ID': `registration-${registrationId || 'unknown'}`,
-    },
-    trackingSettings: {
-      clickTracking: {
-        enable: false
-      },
-      openTracking: {
-        enable: false
-      }
-    },
-    mailSettings: {
-      sandboxMode: {
-        enable: false
-      }
-    }
   };
+
+  const replyTo = getReplyTo();
+  if (replyTo) {
+    emailParams.reply_to = replyTo;
+  }
 
   dbg('sending email', {
     to,
-    from: from.email,
+    from,
     subject,
     hasScheduleInfo: !!scheduleInfo,
     registrationId
   });
 
   try {
-    await sgMail.send(msg);
-    dbg('✅ Email sent successfully via SendGrid');
+    const { data: result, error } = await resend.emails.send(emailParams);
+    if (error) {
+      throw new Error(error.message || JSON.stringify(error));
+    }
+    dbg('✅ Email sent successfully via Resend', result);
     console.log('✅ Registration confirmation email sent to:', to);
   } catch (error) {
-    dbg('❌ SendGrid error:', error.message || error);
-    console.error('❌ Failed to send email via SendGrid:', error.message || error);
+    dbg('❌ Resend error:', error.message || error);
+    console.error('❌ Failed to send email via Resend:', error.message || error);
     throw error;
   }
 }
@@ -251,29 +229,26 @@ function escapeHtml(str) {
 }
 
 async function verifyEmailTransport() {
-  if (!process.env.SENDGRID_API_KEY) {
-    throw new Error('SendGrid API key is not configured');
+  if (!process.env.RESEND_API_KEY) {
+    throw new Error('Resend API key is not configured');
   }
 
-  // SendGrid doesn't have a direct "verify" method like nodemailer
-  // We'll do a basic API key validation by checking if it's properly formatted
-  const apiKey = process.env.SENDGRID_API_KEY;
+  const apiKey = process.env.RESEND_API_KEY;
   
-  if (!apiKey.startsWith('SG.')) {
-    throw new Error('Invalid SendGrid API key format');
+  if (!apiKey.startsWith('re_')) {
+    throw new Error('Invalid Resend API key format (should start with re_)');
   }
 
-  dbg('✅ SendGrid API key format appears valid');
-  return { success: true, message: 'SendGrid API key format is valid' };
+  dbg('✅ Resend API key format appears valid');
+  return { success: true, message: 'Resend API key format is valid' };
 }
 
 /**
- * Sends email using SendGrid (replaces the SMTP fallback method)
- * Maintains the same function signature for compatibility
+ * Sends a registration cancellation email using Resend
  */
 async function sendRegistrationCancellationEmail(to, data = {}) {
-  if (!process.env.SENDGRID_API_KEY) {
-    throw new Error('SendGrid API key is not configured. Please set SENDGRID_API_KEY environment variable.');
+  if (!resend) {
+    throw new Error('Resend API key is not configured. Please set RESEND_API_KEY environment variable.');
   }
 
   const {
@@ -366,14 +341,8 @@ async function sendRegistrationCancellationEmail(to, data = {}) {
                   <p style="margin:0 0 8px; color:#6c757d; font-size:13px; line-height:1.4;">
                     This email was sent regarding your dance class registration with GouMo Dance Chronicles.
                   </p>
-                  <p style="margin:0 0 8px; color:#6c757d; font-size:12px;">
-                    <a href="mailto:${buildFromAddress().email}?subject=Unsubscribe%20Request" 
-                       style="color:#6c757d; text-decoration:underline;">
-                      Unsubscribe from future emails
-                    </a>
-                  </p>
                   <p style="margin:0; color:#adb5bd; font-size:11px;">
-                    © 2024 GouMo Dance Chronicles. All rights reserved.
+                    &copy; 2024 GouMo Dance Chronicles. All rights reserved.
                   </p>
                 </td>
               </tr>
@@ -396,63 +365,50 @@ If this cancellation was a mistake or you have questions, please reply to this e
 
 ---
 This email was sent regarding your dance class registration with GouMo Dance Chronicles.
-To unsubscribe from future emails, reply with "UNSUBSCRIBE" in the subject line.
 
 © 2024 GouMo Dance Chronicles. All rights reserved.
   `.trim();
 
-  const msg = {
-    to,
+  const emailParams = {
     from,
+    to: [to],
     subject,
     html,
     text,
-    replyTo: process.env.REPLY_TO || from.email,
-    headers: {
-      'List-Unsubscribe': `mailto:${buildFromAddress().email}?subject=Unsubscribe%20Request`,
-      'X-Entity-Ref-ID': `registration-cancel-${registrationId || 'unknown'}`,
-    },
-    trackingSettings: {
-      clickTracking: { enable: false },
-      openTracking: { enable: false }
-    },
-    mailSettings: { sandboxMode: { enable: false } }
   };
+
+  const replyTo = getReplyTo();
+  if (replyTo) {
+    emailParams.reply_to = replyTo;
+  }
 
   dbg('sending cancellation email', {
     to,
-    from: from.email,
+    from,
     subject,
     registrationId
   });
 
   try {
-    await sgMail.send(msg);
-    dbg('✅ Cancellation email sent successfully via SendGrid');
+    const { data: result, error } = await resend.emails.send(emailParams);
+    if (error) {
+      throw new Error(error.message || JSON.stringify(error));
+    }
+    dbg('✅ Cancellation email sent successfully via Resend', result);
     console.log('✅ Registration cancellation email sent to:', to);
   } catch (error) {
-    dbg('❌ SendGrid cancellation error:', error.message || error);
-    console.error('❌ Failed to send cancellation email via SendGrid:', error.message || error);
+    dbg('❌ Resend cancellation error:', error.message || error);
+    console.error('❌ Failed to send cancellation email via Resend:', error.message || error);
     throw error;
   }
 }
 
 /**
  * Sends a waitlist notification email when a spot becomes available
- * @param {string} to - Recipient email
- * @param {Object} data - Email payload
- * @param {string} data.courseName
- * @param {string} [data.scheduleInfo]
- * @param {number|string} data.amount
- * @param {string} [data.studentName]
- * @param {number} data.position - Waitlist position
- * @param {string} data.registrationUrl - Secure registration link
- * @param {string} data.expiresAt - ISO string for expiration
- * @param {number} [data.expiresHours] - Hours until expiration (default 48)
  */
 async function sendWaitlistNotificationEmail(to, data = {}) {
-  if (!process.env.SENDGRID_API_KEY) {
-    throw new Error('SendGrid API key is not configured. Please set SENDGRID_API_KEY environment variable.');
+  if (!resend) {
+    throw new Error('Resend API key is not configured. Please set RESEND_API_KEY environment variable.');
   }
 
   const {
@@ -498,7 +454,7 @@ async function sendWaitlistNotificationEmail(to, data = {}) {
               <!-- Header -->
               <tr>
                 <td style="padding:30px 30px 20px; text-align:center; background-color:#28a745; border-radius:8px 8px 0 0;">
-                  <h1 style="margin:0; color:#ffffff; font-size:26px; font-weight:bold;">🎉 Spot Available!</h1>
+                  <h1 style="margin:0; color:#ffffff; font-size:26px; font-weight:bold;">Spot Available!</h1>
                   <p style="margin:8px 0 0; color:#d4edda; font-size:14px;">GouMo Dance Chronicles</p>
                 </td>
               </tr>
@@ -516,7 +472,7 @@ async function sendWaitlistNotificationEmail(to, data = {}) {
 
                   <!-- Urgent Action Required -->
                   <div style="margin:24px 0; padding:20px; background:#fff3cd; border-left:4px solid #ffc107; border-radius:6px;">
-                    <h3 style="margin:0 0 12px; color:#856404; font-size:18px; font-weight:bold;">⏰ Act Fast!</h3>
+                    <h3 style="margin:0 0 12px; color:#856404; font-size:18px; font-weight:bold;">Act Fast!</h3>
                     <p style="margin:0 0 12px; color:#856404; font-size:16px; line-height:1.4;">
                       You have <strong>${expiresHours} hours</strong> to secure your spot. This offer expires on:
                     </p>
@@ -555,7 +511,7 @@ async function sendWaitlistNotificationEmail(to, data = {}) {
                   <div style="text-align:center; margin:30px 0;">
                     <a href="${registrationUrl}" 
                        style="display:inline-block; padding:16px 32px; background-color:#28a745; color:#ffffff; text-decoration:none; font-weight:bold; font-size:18px; border-radius:6px; text-align:center;">
-                      🚀 Register Now &amp; Pay
+                      Register Now &amp; Pay
                     </a>
                   </div>
 
@@ -593,14 +549,8 @@ async function sendWaitlistNotificationEmail(to, data = {}) {
                   <p style="margin:0 0 8px; color:#6c757d; font-size:13px; line-height:1.4;">
                     This email was sent because you joined our waitlist for ${escapeHtml(courseName || 'Dance Class')}.
                   </p>
-                  <p style="margin:0 0 8px; color:#6c757d; font-size:12px;">
-                    <a href="mailto:${buildFromAddress().email}?subject=Unsubscribe%20Request" 
-                       style="color:#6c757d; text-decoration:underline;">
-                      Unsubscribe from future emails
-                    </a>
-                  </p>
                   <p style="margin:0; color:#adb5bd; font-size:11px;">
-                    © 2024 GouMo Dance Chronicles. All rights reserved.
+                    &copy; 2024 GouMo Dance Chronicles. All rights reserved.
                   </p>
                 </td>
               </tr>
@@ -612,13 +562,13 @@ async function sendWaitlistNotificationEmail(to, data = {}) {
     </html>`;
 
   const text = `
-🎉 Spot Available! 
+Spot Available! 
 
 Hi ${studentName || 'Student'},
 
 Great news! A spot has opened up in ${courseName || 'Dance Class'} and you're next on the waitlist!
 
-⏰ ACT FAST! You have ${expiresHours} hours to secure your spot.
+ACT FAST! You have ${expiresHours} hours to secure your spot.
 This offer expires on: ${expirationDisplay}
 
 Class Details:
@@ -626,7 +576,7 @@ ${scheduleInfo ? `Schedule: ${scheduleInfo}` : ''}
 ${safeAmount ? `Price: $${safeAmount}` : ''}
 Your Waitlist Position: #${position || 'Next'}
 
-🚀 REGISTER NOW: ${registrationUrl}
+REGISTER NOW: ${registrationUrl}
 
 IMPORTANT:
 - This link is unique to you and expires in ${expiresHours} hours
@@ -639,34 +589,26 @@ Follow us on social media: @goumo_dancechronicles
 
 ---
 This email was sent because you joined our waitlist for ${courseName || 'Dance Class'}.
-To unsubscribe from future emails, reply with "UNSUBSCRIBE" in the subject line.
 
 © 2024 GouMo Dance Chronicles. All rights reserved.
   `.trim();
 
-  const msg = {
-    to,
+  const emailParams = {
     from,
+    to: [to],
     subject,
     html,
     text,
-    replyTo: process.env.REPLY_TO || from.email,
-    headers: {
-      'List-Unsubscribe': `mailto:${buildFromAddress().email}?subject=Unsubscribe%20Request`,
-      'X-Entity-Ref-ID': `waitlist-notification-${Date.now()}`,
-      'X-Priority': '1', // High priority
-      'Importance': 'high'
-    },
-    trackingSettings: {
-      clickTracking: { enable: false },
-      openTracking: { enable: false }
-    },
-    mailSettings: { sandboxMode: { enable: false } }
   };
+
+  const replyTo = getReplyTo();
+  if (replyTo) {
+    emailParams.reply_to = replyTo;
+  }
 
   dbg('sending waitlist notification email', {
     to,
-    from: from.email,
+    from,
     subject,
     courseName,
     position,
@@ -674,28 +616,28 @@ To unsubscribe from future emails, reply with "UNSUBSCRIBE" in the subject line.
   });
 
   try {
-    await sgMail.send(msg);
-    dbg('✅ Waitlist notification email sent successfully via SendGrid');
+    const { data: result, error } = await resend.emails.send(emailParams);
+    if (error) {
+      throw new Error(error.message || JSON.stringify(error));
+    }
+    dbg('✅ Waitlist notification email sent successfully via Resend', result);
     console.log('✅ Waitlist notification email sent to:', to);
   } catch (error) {
-    dbg('❌ SendGrid waitlist notification error:', error.message || error);
-    console.error('❌ Failed to send waitlist notification email via SendGrid:', error.message || error);
+    dbg('❌ Resend waitlist notification error:', error.message || error);
+    console.error('❌ Failed to send waitlist notification email via Resend:', error.message || error);
     throw error;
   }
 }
 
 async function sendEmailWithFallback(to, data) {
-  // This function now uses SendGrid instead of SMTP fallback
-  // but maintains the same signature for compatibility
   return await sendRegistrationConfirmationEmail(to, data);
 }
 
-// Legacy function for compatibility (some code might still reference this)
+// Legacy function for compatibility
 function getTransporter() {
   return {
     verify: verifyEmailTransport,
     sendMail: async (options) => {
-      // Convert nodemailer-style options to SendGrid format
       const data = {
         courseName: 'Dance Class',
         scheduleInfo: '',

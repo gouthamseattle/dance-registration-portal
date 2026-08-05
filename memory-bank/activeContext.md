@@ -1,5 +1,20 @@
 # Active Context
 
+## Recent Changes (August 2026)
+### Fix: Student Registration Portal showing stale/empty choreography slots
+- **Problem**: New dance series not showing up in student portal; old inactive slots (Slot 1, Slot 2, Both Slots) still displayed with "0 choreographies"
+- **Root Causes**:
+  1. `email-profile-registration.js` always rendered all 3 track cards regardless of whether courses existed in those slots
+  2. `/api/dance-series` returned series with 0 active courses (stale/empty series)
+  3. Type coercion issue: `series_slot` strict comparison (`===`) could fail if DB returned string vs number
+- **Fixes Applied**:
+  1. Made track cards conditional — only show Slot 1/Slot 2/Both when courses exist
+  2. Added `Number()` coercion for `series_slot` filtering
+  3. Added server-side filter to exclude series with `course_count === 0`
+  4. Auto-select track when only one slot has courses
+  5. Bumped cache version to v=9
+
+
 ## Current Focus: Competition Registration Feature (May 2026)
 
 ### What Was Done (May 3, 2026)

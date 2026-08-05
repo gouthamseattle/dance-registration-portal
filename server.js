@@ -3021,7 +3021,7 @@ app.post('/api/admin/waitlist/:id/notify', requireAuth, asyncHandler(async (req,
         const setting = await dbConfig.get('SELECT setting_value FROM system_settings WHERE setting_key = $1', ['email_notifications_enabled']);
         const emailEnabled = setting && setting.setting_value === 'true';
 
-        if (emailEnabled && process.env.SENDGRID_API_KEY) {
+        if (emailEnabled && (process.env.RESEND_API_KEY || process.env.SENDGRID_API_KEY)) {
             // Get course pricing and schedule info for email
             const { schedule_info } = await fetchCourseWithSlots(dbConfig, waitlistEntry.course_id);
             
@@ -3182,7 +3182,7 @@ app.post('/api/admin/waitlists/notify', requireAuth, asyncHandler(async (req, re
                 const setting = await dbConfig.get('SELECT setting_value FROM system_settings WHERE setting_key = $1', ['email_notifications_enabled']);
                 const emailEnabled = setting && setting.setting_value === 'true';
 
-                if (emailEnabled && process.env.SENDGRID_API_KEY) {
+                if (emailEnabled && (process.env.RESEND_API_KEY || process.env.SENDGRID_API_KEY)) {
                     const { schedule_info } = await fetchCourseWithSlots(dbConfig, waitlistEntry.course_id);
                     
                     const courseSlots = await dbConfig.all(`
@@ -3406,7 +3406,7 @@ app.post('/api/admin/courses/:courseId/waitlist/notify-next', requireAuth, async
             const setting = await dbConfig.get('SELECT setting_value FROM system_settings WHERE setting_key = $1', ['email_notifications_enabled']);
             const emailEnabled = setting && setting.setting_value === 'true';
 
-            if (emailEnabled && process.env.SENDGRID_API_KEY) {
+            if (emailEnabled && (process.env.RESEND_API_KEY || process.env.SENDGRID_API_KEY)) {
                 const { schedule_info } = await fetchCourseWithSlots(dbConfig, courseId);
                 
                 const courseSlots = await dbConfig.all(`
@@ -4498,9 +4498,9 @@ app.post('/api/admin/send-test-email', requireAuth, asyncHandler(async (req, res
     if (!to) return res.status(400).json({ error: 'Recipient email (to) is required' });
 
     try {
-        // Check SendGrid API key
-        if (!process.env.SENDGRID_API_KEY) {
-            return res.json({ success: false, error: 'SENDGRID_API_KEY environment variable is not set' });
+        // Check email API key
+        if (!(process.env.RESEND_API_KEY || process.env.SENDGRID_API_KEY)) {
+            return res.json({ success: false, error: 'Email API key (RESEND_API_KEY) is not configured' });
         }
 
         // Check if email notifications are enabled
