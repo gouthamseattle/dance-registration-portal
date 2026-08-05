@@ -437,9 +437,9 @@ class EmailProfileRegistrationApp {
             return;
         }
 
-        // Group by series_slot
-        const slot1Courses = allChoreos.filter(c => (c.series_slot || c.package_slot_number) === 1);
-        const slot2Courses = allChoreos.filter(c => (c.series_slot || c.package_slot_number) === 2);
+        // Group by series_slot (use Number() to avoid string vs number mismatch)
+        const slot1Courses = allChoreos.filter(c => Number(c.series_slot || c.package_slot_number) === 1);
+        const slot2Courses = allChoreos.filter(c => Number(c.series_slot || c.package_slot_number) === 2);
 
         // Get schedule info from first course in each slot
         const getSlotSchedule = (courses) => {
@@ -504,12 +504,23 @@ class EmailProfileRegistrationApp {
         // === BUILD HTML ===
         let html = '';
 
+        const hasSlot1 = slot1Courses.length > 0;
+        const hasSlot2 = slot2Courses.length > 0;
+        const hasBoth = hasSlot1 && hasSlot2;
+
+        // Determine column sizing based on how many track cards to show
+        const trackCardCount = (hasSlot1 ? 1 : 0) + (hasSlot2 ? 1 : 0) + (hasBoth ? 1 : 0);
+        const colSize = trackCardCount === 1 ? '6' : (trackCardCount === 2 ? '6' : '4');
+
         // STEP 1: Choose Your Track
         html += `
         <div id="choreoStep1" class="mb-4">
             <h5 class="mb-3"><span class="badge bg-primary rounded-pill me-2">1</span>Choose Your Track</h5>
-            <div class="row g-3">
-                <div class="col-md-4">
+            <div class="row g-3">`;
+
+        if (hasSlot1) {
+            html += `
+                <div class="col-md-${colSize}">
                     <div class="card h-100 border-primary track-card" id="trackCard1" onclick="app.selectTrack(1)" style="cursor:pointer;">
                         <div class="card-body text-center">
                             <div class="mb-2"><i class="fas fa-music fa-2x text-primary"></i></div>
@@ -519,8 +530,12 @@ class EmailProfileRegistrationApp {
                             ${slot1PkgPrice > 0 ? `<span class="badge bg-primary">Package: $${slot1PkgPrice}</span>` : ''}
                         </div>
                     </div>
-                </div>
-                <div class="col-md-4">
+                </div>`;
+        }
+
+        if (hasSlot2) {
+            html += `
+                <div class="col-md-${colSize}">
                     <div class="card h-100 border-info track-card" id="trackCard2" onclick="app.selectTrack(2)" style="cursor:pointer;">
                         <div class="card-body text-center">
                             <div class="mb-2"><i class="fas fa-music fa-2x text-info"></i></div>
@@ -530,8 +545,12 @@ class EmailProfileRegistrationApp {
                             ${slot2PkgPrice > 0 ? `<span class="badge bg-info">Package: $${slot2PkgPrice}</span>` : ''}
                         </div>
                     </div>
-                </div>
-                <div class="col-md-4">
+                </div>`;
+        }
+
+        if (hasBoth) {
+            html += `
+                <div class="col-md-${colSize}">
                     <div class="card h-100 border-warning track-card" id="trackCardBoth" onclick="app.selectTrack('both')" style="cursor:pointer;">
                         <div class="card-body text-center">
                             <div class="mb-2"><i class="fas fa-fire fa-2x text-warning"></i></div>
@@ -541,7 +560,16 @@ class EmailProfileRegistrationApp {
                             ${combinedPkgPrice > 0 ? `<span class="badge bg-warning text-dark">Package: $${combinedPkgPrice}</span>` : ''}
                         </div>
                     </div>
-                </div>
+                </div>`;
+        }
+
+        // If only one slot exists and no "both" option, auto-select that slot
+        if (trackCardCount === 1) {
+            const autoTrack = hasSlot1 ? 1 : 2;
+            setTimeout(() => this.selectTrack(autoTrack), 100);
+        }
+
+        html += `
             </div>
         </div>`;
 

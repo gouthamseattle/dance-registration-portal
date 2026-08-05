@@ -1382,9 +1382,12 @@ app.get('/api/dance-series', asyncHandler(async (req, res) => {
         };
     }));
 
-    // 5. Return packages and all choreography courses
+    // 5. Filter out series with no active courses (stale/empty series)
+    const nonEmptySeries = seriesWithCourses.filter(s => s.course_count > 0);
+
+    // 6. Return packages and all choreography courses
     res.json({
-        packages: seriesWithCourses,
+        packages: nonEmptySeries,
         courses: coursesWithDetails
     });
 }));
