@@ -4121,7 +4121,8 @@ app.put('/api/admin/registrations/:id/confirm-payment', requireAuth, asyncHandle
         // Compute schedule_info consistently with courses endpoint
         const { schedule_info } = await fetchCourseWithSlots(dbConfig, reg.course_id);
 
-        // Send email using SendGrid
+        // Send confirmation email via Gmail SMTP
+        console.log('📧 Attempting to send confirmation email to:', reg.email, '| GMAIL_USER configured:', !!process.env.GMAIL_USER);
         sendRegistrationConfirmationEmail(reg.email, {
             courseName: reg.course_name,
             scheduleInfo: schedule_info,
@@ -4131,7 +4132,7 @@ app.put('/api/admin/registrations/:id/confirm-payment', requireAuth, asyncHandle
         }).then(() => {
             console.log('✉️  Sent confirmation email to:', reg.email);
         }).catch(err => {
-            console.error('❌ Error sending confirmation email:', err);
+            console.error('❌ Error sending confirmation email:', err.message, err.stack);
         });
 
         return res.json({ success: true, message: 'Payment confirmed successfully', email_queued: true });
