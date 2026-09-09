@@ -569,6 +569,32 @@ class EmailProfileRegistrationApp {
             setTimeout(() => this.selectTrack(autoTrack), 100);
         }
 
+        // If NO slots have courses (all courses have null series_slot),
+        // skip track selection and show all choreographies directly
+        if (trackCardCount === 0 && allChoreos.length > 0) {
+            setTimeout(() => {
+                // Hide the empty track selection step
+                const step1El = document.getElementById('choreoStep1');
+                if (step1El) step1El.style.display = 'none';
+
+                // Set state for all courses
+                this._choreoState.selectedTrack = 'all';
+                this._choreoState.visibleCourses = allChoreos;
+                this._choreoState.trackPkgPrice = 0;
+
+                // Show Step 2 with all courses
+                document.getElementById('choreoStep2').style.display = 'block';
+                const listEl = document.getElementById('choreoCheckboxList');
+                listEl.innerHTML = this._buildChoreoCheckboxes(allChoreos);
+
+                // Show Step 3 summary
+                document.getElementById('choreoStep3').style.display = 'block';
+                document.getElementById('summaryTrack').textContent = 'Available Choreographies';
+
+                this.updateChoreoPricing();
+            }, 100);
+        }
+
         html += `
             </div>
         </div>`;

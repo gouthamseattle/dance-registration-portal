@@ -1537,7 +1537,7 @@ app.post('/api/register-series-package', asyncHandler(async (req, res) => {
                 student_id, course_id, payment_amount, payment_status, special_requests
             ) VALUES ($1, $2, $3, 'pending', $4)
             ${dbConfig.isProduction ? 'RETURNING id' : ''}
-        `, [student.id, sc.course_id, perCourseAmount, special_requests || `Series package: ${series.name}`]);
+        `, [student.id, sc.course_id, perCourseAmount, special_requests || `Series package: ${series ? series.name : 'Choreography'}`]);
 
         let regId;
         if (dbConfig.isProduction) {
@@ -1559,7 +1559,7 @@ app.post('/api/register-series-package', asyncHandler(async (req, res) => {
         registrationIds,
         studentId: student.id,
         seriesId: series_id,
-        packageName: series.name
+        packageName: series ? series.name : seriesName
     });
 }));
 
