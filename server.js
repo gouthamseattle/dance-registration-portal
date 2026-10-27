@@ -50,7 +50,7 @@ app.use(session({
 
 // Serve main registration page
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+    res.sendFile(path.join(__dirname, 'public', 'home.html'));
 });
 
 // Serve admin dashboard
@@ -164,7 +164,9 @@ app.put('/api/settings', requireAuth, asyncHandler(async (req, res) => {
 
 // Courses
 app.get('/api/courses', asyncHandler(async (req, res) => {
-    const { active_only, student_email } = req.query;
+    // include_crew=true: the public home page lists crew-only classes too (shown with a "Crew only" label).
+    // Eligibility is still enforced when a student actually registers.
+    const { active_only, student_email, include_crew } = req.query;
     
     let query = `
         SELECT c.*,
@@ -201,8 +203,8 @@ app.get('/api/courses', asyncHandler(async (req, res) => {
     }
     
     // Filter courses based on student access level
-    if (studentType === 'crew_member') {
-        // Crew members can access all courses
+    if (studentType === 'crew_member' || (include_crew === 'true' && !student_email)) {
+        // Crew members can access all courses (and the public listing shows them all)
         conditions.push('(c.required_student_type = \'any\' OR c.required_student_type = \'crew_member\')');
     } else {
         // General students can only access courses open to all

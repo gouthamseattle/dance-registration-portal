@@ -17,6 +17,8 @@ class EmailProfileRegistrationApp {
         this.selectedCourse = null;
         this.registrationData = {};
         this.settings = {};
+        // Class chosen on the home page (?course=ID): skip the class list and go straight to it.
+        this.preselectCourseId = new URLSearchParams(window.location.search).get('course');
         
         this.init();
     }
@@ -128,7 +130,11 @@ class EmailProfileRegistrationApp {
                     return;
                 }
 
-                this.showWelcomeBack();
+                if (this.preselectCourseId) {
+                    this.showAvailableCourses();
+                } else {
+                    this.showWelcomeBack();
+                }
             } else {
                 // New student - show profile creation
                 this.showProfileCreation();
@@ -306,6 +312,16 @@ class EmailProfileRegistrationApp {
 
         // Categorize and render courses
         this.renderCategorizedCourses();
+
+        if (this.preselectCourseId) {
+            const id = this.preselectCourseId;
+            this.preselectCourseId = null;
+            if (this.eligibleCourses.some(c => String(c.id) === String(id))) {
+                this.selectCourse(id);
+                return;
+            }
+            this.showError('That class is for crew members only. Here are the classes open to you.');
+        }
 
         this.scrollToTop();
     }
