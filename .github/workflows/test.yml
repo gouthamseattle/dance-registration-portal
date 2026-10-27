@@ -50,7 +50,7 @@ jobs:
           # Failing tests plus server-side errors, shown on the run's summary page
           {
             grep -E "^not ok|^# (pass|fail)" test-output.txt || true
-            grep -E -A12 "^\s+not ok" test-output.txt | grep -vE "^\s+at |stack:|duration_ms|location:|failureType|code:" || true
+            grep -E -A15 "not ok" test-output.txt | grep -vE "^\s+at |stack:|duration_ms|location:|failureType|code:" || true
             grep -E "❌|Error:|error:" test-output.txt | grep -v "^\s*at " | sort -u | head -40 || true
           } | head -c 20000 > summary.txt
           echo "::error title=Test failures::$(sed ':a;N;$!ba;s/%/%25/g;s/\r/%0D/g;s/\n/%0A/g' summary.txt)"
