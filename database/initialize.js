@@ -55,9 +55,6 @@ async function ensureSchema(dbConfig) {
         // Ensure practice_date column exists on course_slots
         await ensurePracticeDateColumn(dbConfig);
         
-        // Ensure attendance tables exist
-        await ensureAttendanceTables(dbConfig);
-        
         // Ensure waitlist table exists
         await ensureWaitlistTable(dbConfig);
         
@@ -73,14 +70,8 @@ async function ensureSchema(dbConfig) {
         // Ensure choreography columns exist on courses
         await ensureChoreographyColumns(dbConfig);
         
-        // Ensure dance_series tables exist
-        await ensureDanceSeriesTables(dbConfig);
-        
         // Ensure student profile and access control columns exist
         await ensureStudentProfileColumns(dbConfig);
-        
-        // Ensure competition registrations table exists
-        await ensureCompetitionRegistrationsTable(dbConfig);
         
         console.log('✅ Schema updates completed');
     } catch (error) {
@@ -102,68 +93,6 @@ async function ensurePracticeDateColumn(dbConfig) {
     }
 }
 
-async function ensureAttendanceTables(dbConfig) {
-    try {
-        if (dbConfig.isProduction) {
-            await dbConfig.run(`
-                CREATE TABLE IF NOT EXISTS class_sessions (
-                    id SERIAL PRIMARY KEY,
-                    course_id INTEGER NOT NULL,
-                    session_date DATE NOT NULL,
-                    start_time TEXT,
-                    end_time TEXT,
-                    location TEXT,
-                    notes TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            `);
-            await dbConfig.run(`
-                CREATE TABLE IF NOT EXISTS attendance_records (
-                    id SERIAL PRIMARY KEY,
-                    session_id INTEGER NOT NULL,
-                    student_id INTEGER NOT NULL,
-                    status TEXT CHECK (status IN ('present','absent','late')) NOT NULL,
-                    marked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    marked_by INTEGER
-                )
-            `);
-            await dbConfig.run(`
-                CREATE UNIQUE INDEX IF NOT EXISTS attendance_unique_session_student
-                ON attendance_records(session_id, student_id)
-            `);
-        } else {
-            await dbConfig.run(`
-                CREATE TABLE IF NOT EXISTS class_sessions (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    course_id INTEGER NOT NULL,
-                    session_date TEXT NOT NULL,
-                    start_time TEXT,
-                    end_time TEXT,
-                    location TEXT,
-                    notes TEXT,
-                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-                )
-            `);
-            await dbConfig.run(`
-                CREATE TABLE IF NOT EXISTS attendance_records (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    session_id INTEGER NOT NULL,
-                    student_id INTEGER NOT NULL,
-                    status TEXT NOT NULL,
-                    marked_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    marked_by INTEGER
-                )
-            `);
-            await dbConfig.run(`
-                CREATE UNIQUE INDEX IF NOT EXISTS attendance_unique_session_student
-                ON attendance_records(session_id, student_id)
-            `);
-        }
-        console.log('✅ Ensured attendance tables exist');
-    } catch (e) {
-        console.log('ℹ️ Attendance tables check skipped:', e.message || e);
-    }
-}
 
 async function ensureWaitlistTable(dbConfig) {
     try {
@@ -282,78 +211,6 @@ async function ensureChoreographyColumns(dbConfig) {
     }
 }
 
-async function ensureDanceSeriesTables(dbConfig) {
-    try {
-        if (dbConfig.isProduction) {
-            await dbConfig.run(`
-                CREATE TABLE IF NOT EXISTS dance_series (
-                    id SERIAL PRIMARY KEY,
-                    name VARCHAR(255) NOT NULL,
-                    description TEXT,
-                    is_active BOOLEAN DEFAULT TRUE,
-                    slot1_package_price DECIMAL(10,2),
-                    slot2_package_price DECIMAL(10,2),
-                    combined_package_price DECIMAL(10,2),
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            `);
-            // Migration: add updated_at if table already exists without it
-            await dbConfig.run(`ALTER TABLE dance_series ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP`);
-            // Migration: add is_hidden for soft-delete support
-            await dbConfig.run(`ALTER TABLE dance_series ADD COLUMN IF NOT EXISTS is_hidden BOOLEAN DEFAULT FALSE`);
-            await dbConfig.run(`
-                CREATE TABLE IF NOT EXISTS dance_series_courses (
-                    id SERIAL PRIMARY KEY,
-                    series_id INTEGER NOT NULL,
-                    course_id INTEGER NOT NULL,
-                    slot_number INTEGER NOT NULL,
-                    position INTEGER NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (series_id) REFERENCES dance_series(id) ON DELETE CASCADE,
-                    FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE
-                )
-            `);
-            await dbConfig.run(`
-                CREATE UNIQUE INDEX IF NOT EXISTS dance_series_courses_unique
-                ON dance_series_courses(series_id, course_id)
-            `);
-        } else {
-            await dbConfig.run(`
-                CREATE TABLE IF NOT EXISTS dance_series (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    name TEXT NOT NULL,
-                    description TEXT,
-                    is_active INTEGER DEFAULT 1,
-                    slot1_package_price REAL,
-                    slot2_package_price REAL,
-                    combined_package_price REAL,
-                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-                )
-            `);
-            await dbConfig.run(`
-                CREATE TABLE IF NOT EXISTS dance_series_courses (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    series_id INTEGER NOT NULL,
-                    course_id INTEGER NOT NULL,
-                    slot_number INTEGER NOT NULL,
-                    position INTEGER NOT NULL,
-                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (series_id) REFERENCES dance_series(id) ON DELETE CASCADE,
-                    FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE
-                )
-            `);
-            await dbConfig.run(`
-                CREATE UNIQUE INDEX IF NOT EXISTS dance_series_courses_unique
-                ON dance_series_courses(series_id, course_id)
-            `);
-        }
-        console.log('✅ Ensured dance_series tables exist');
-    } catch (e) {
-        console.log('ℹ️ dance_series tables check skipped:', e.message || e);
-    }
-}
 
 async function ensureStudentProfileColumns(dbConfig) {
     try {
@@ -376,62 +233,6 @@ async function ensureStudentProfileColumns(dbConfig) {
     }
 }
 
-async function ensureCompetitionRegistrationsTable(dbConfig) {
-    try {
-        if (dbConfig.isProduction) {
-            await dbConfig.run(`
-                CREATE TABLE IF NOT EXISTS competition_registrations (
-                    id SERIAL PRIMARY KEY,
-                    category VARCHAR(10) NOT NULL CHECK (category IN ('solo', 'duo_trio')),
-                    dancer_name VARCHAR(255),
-                    email VARCHAR(255),
-                    instagram_id VARCHAR(255),
-                    contact_number VARCHAR(50),
-                    team_name VARCHAR(255),
-                    member_names TEXT,
-                    member_count INTEGER DEFAULT 1,
-                    poc_email VARCHAR(255),
-                    poc_contact VARCHAR(50),
-                    total_amount DECIMAL(10,2) NOT NULL,
-                    payment_status VARCHAR(20) DEFAULT 'pending',
-                    payment_method VARCHAR(10),
-                    canceled_at TIMESTAMP,
-                    canceled_by INTEGER,
-                    cancellation_reason TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            `);
-        } else {
-            await dbConfig.run(`
-                CREATE TABLE IF NOT EXISTS competition_registrations (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    category TEXT NOT NULL,
-                    dancer_name TEXT,
-                    email TEXT,
-                    instagram_id TEXT,
-                    contact_number TEXT,
-                    team_name TEXT,
-                    member_names TEXT,
-                    member_count INTEGER DEFAULT 1,
-                    poc_email TEXT,
-                    poc_contact TEXT,
-                    total_amount REAL NOT NULL,
-                    payment_status TEXT DEFAULT 'pending',
-                    payment_method TEXT,
-                    canceled_at TEXT,
-                    canceled_by INTEGER,
-                    cancellation_reason TEXT,
-                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-                )
-            `);
-        }
-        console.log('✅ Ensured competition_registrations table exists');
-    } catch (e) {
-        console.log('ℹ️ competition_registrations table check skipped:', e.message || e);
-    }
-}
 
 module.exports = {
     initializeDatabase,

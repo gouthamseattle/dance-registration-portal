@@ -1,9 +1,21 @@
 # Dance Registration Portal
 
-Registration and payment portal for DDC dance classes and the annual competition.
+Registration and payment portal for DDC dance classes.
 Students register on their phones (links shared on WhatsApp), pay by Venmo or Zelle,
 and an admin confirms payment, which sends a confirmation email.
 Scale is small (50–100 concurrent users): prefer simple over clever.
+
+**Scope (deliberately small):**
+- Class types: Drop-in (1 or 2 classes), Series (more than 2 classes, choreography or technique), Crew Practice (1 class).
+- Admin portal features:
+  - Create classes
+  - Review, confirm or cancel registrations, with reports
+  - Student management (GouMo students vs crew members)
+  - Waitlist
+  - Dashboard stats
+  - Minimal settings (Venmo, Zelle, email on/off, registration open/closed)
+
+Competition, choreography packages, attendance and historical classification were removed in Oct 2026. Their old database tables still exist but are unused.
 
 The owner is a data engineer, not a front-end developer. Explain front-end and
 web concepts in plain terms when they come up.
@@ -18,13 +30,12 @@ web concepts in plain terms when they come up.
 | Login check, async error wrapper | `middleware/auth.js` |
 | Email (Gmail SMTP via nodemailer) | `utils/mailer.js` |
 | Capacity, schedule helpers | `utils/courseAvailability.js`, `utils/schedule.js` |
-| Student portal (main) | `public/email-profile.html`, `public/js/email-profile-registration.js` |
+| Student portal (served at `/`) | `public/index.html`, `public/js/registration.js` |
+| Email-first student portal | `public/email-profile.html`, `public/js/email-profile-registration.js` |
 | Admin dashboard | `public/admin.html`, `public/js/admin.js`, `public/css/admin-styles.css` |
-| Older registration page | `public/index.html`, `public/js/registration.js` |
 | Shared student styles | `public/css/styles.css` |
 | Smoke tests | `test/smoke.test.js`, run in CI by `.github/workflows/test.yml` |
 
-`routes/index.js` is an unused, outdated copy of the routes. Don't edit it.
 `memory-bank/` and `docs/` are historical notes from earlier development. Read them only when a task needs that history.
 
 ## Working rules
