@@ -150,6 +150,19 @@ a:hover { color: #fff; }
 }
 .site-header nav a:hover { color: var(--text); }
 .site-header .account { margin-left: auto; }
+.label-short { display: none; }
+
+/* Phones: keep the top bar on one line */
+@media (max-width: 599px) {
+  .site-header .bar { gap: 6px; }
+  .site-header .mini-logo { display: none; }
+  .site-header.scrolled .mini-logo { display: block; height: 30px; }
+  .site-header.scrolled nav a:last-child { display: none; }
+  .site-header nav a { padding: 0 7px; font-size: 13px; }
+  .site-header .account { padding: 0 12px; }
+  .label-long { display: none; }
+  .label-short { display: inline; }
+}
 
 /* ---------- Footer ---------- */
 .site-footer { margin-top: 48px; border-top: 1px solid var(--line-soft); }
