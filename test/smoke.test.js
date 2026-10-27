@@ -107,10 +107,12 @@ test('sensitive endpoints require admin login', async () => {
         ['GET', '/api/admin/competition/registrations'],
         ['PUT', '/api/settings', { registration_open: 'false' }]
     ];
+    const open = [];
     for (const [method, url, body] of cases) {
         const res = await api(method, url, body);
-        assert.equal(res.status, 401, `${method} ${url} should need login`);
+        if (res.status !== 401) open.push(`${method} ${url} returned ${res.status}`);
     }
+    assert.deepEqual(open, [], `These should require login: ${open.join('; ')}`);
 });
 
 // Shared state for the class registration flow
