@@ -102,7 +102,6 @@ test('sensitive endpoints require admin login', async () => {
     const cases = [
         ['PUT', '/api/registrations/1/payment', { payment_status: 'completed' }],
         ['GET', '/api/admin/registrations'],
-        ['GET', '/api/admin/competition/registrations'],
         ['PUT', '/api/settings', { registration_open: 'false' }]
     ];
     const open = [];
@@ -205,45 +204,61 @@ test('closed registration is enforced', async () => {
     await api('PUT', '/api/settings', { registration_open: 'true' }, { admin: true });
 });
 
-test('competition: solo and duo/trio registration with price checks', async () => {
-    await api('PUT', '/api/settings', {
-        competition_registration_open: 'true',
-        competition_solo_registration_open: 'true',
-        competition_duotrio_registration_open: 'true'
+test('admin creates a drop-in with two classes and a crew practice', async () => {
+    const slot = (name, date) => ({
+        slot_name: name, difficulty_level: 'All Levels', capacity: 20,
+        practice_date: date, start_time: '18:00', end_time: '19:30',
+        location: 'Test Studio', pricing: { drop_in: 25 }
+    });
+    const dropIn = await api('POST', '/api/courses', {
+        name: `Smoke Drop-in ${unique}`, course_type: 'drop_in',
+        slots: [slot('Class 1', '2030-02-01'), slot('Class 2', '2030-02-08')]
     }, { admin: true });
+    assert.equal(dropIn.status, 200, JSON.stringify(dropIn.body));
 
-    const wrongPrice = await api('POST', '/api/competition/register', {
-        category: 'solo', dancer_name: 'Solo Dancer', email: `solo.${unique}@example.com`,
-        contact_number: '5555550100', total_amount: 10
-    });
-    assert.equal(wrongPrice.status, 400, 'wrong solo amount rejected');
+    const crew = await api('POST', '/api/courses', {
+        name: `Smoke Crew Practice ${unique}`, course_type: 'crew_practice',
+        slots: [slot('Practice', '2030-02-02')]
+    }, { admin: true });
+    assert.equal(crew.status, 200, JSON.stringify(crew.body));
 
-    const solo = await api('POST', '/api/competition/register', {
-        category: 'solo', dancer_name: 'Solo Dancer', email: `solo.${unique}@example.com`,
-        contact_number: '5555550100', total_amount: 30
-    });
-    assert.equal(solo.status, 200, JSON.stringify(solo.body));
-
-    const trio = await api('POST', '/api/competition/register', {
-        category: 'duo_trio', team_name: `Team ${unique}`, member_names: 'A, B, C',
-        member_count: 3, poc_email: `team.${unique}@example.com`, poc_contact: '5555550101',
-        total_amount: 90
-    });
-    assert.equal(trio.status, 200, JSON.stringify(trio.body));
-
-    const list = await api('GET', '/api/admin/competition/registrations', null, { admin: true });
-    assert.equal(list.status, 200);
-    const rows = Array.isArray(list.body) ? list.body : (list.body.registrations || []);
-    assert.ok(rows.some(r => Number(r.id) === Number(solo.body.registrationId)), 'solo entry listed');
+    const crewTwoSlots = await api('POST', '/api/courses', {
+        name: `Smoke Crew Practice Bad ${unique}`, course_type: 'crew_practice',
+        slots: [slot('A', '2030-02-02'), slot('B', '2030-02-09')]
+    }, { admin: true });
+    assert.equal(crewTwoSlots.status, 400, 'crew practice limited to one class');
 });
 
-test('competition: solo waitlist mode when solo spots are closed', async () => {
-    await api('PUT', '/api/settings', { competition_solo_registration_open: 'false' }, { admin: true });
-    const res = await api('POST', '/api/competition/register', {
-        category: 'solo', dancer_name: 'Waitlisted Dancer', email: `wait.${unique}@example.com`,
-        contact_number: '5555550102', total_amount: 30
+test('waitlist: student joins and admin sees them', async () => {
+    const email = `waitlist.${unique}@example.com`;
+    const join = await api('POST', '/api/waitlist', {
+        first_name: 'Wait', last_name: 'Lister', email, course_id: courseId, payment_amount: 100
     });
-    assert.equal(res.status, 200, JSON.stringify(res.body));
-    assert.equal(res.body.waitlisted, true);
-    await api('PUT', '/api/settings', { competition_solo_registration_open: 'true' }, { admin: true });
+    assert.equal(join.status, 200, JSON.stringify(join.body));
+
+    const list = await api('GET', `/api/admin/waitlists?course_id=${courseId}`, null, { admin: true });
+    assert.equal(list.status, 200, JSON.stringify(list.body));
+    const rows = Array.isArray(list.body) ? list.body : [];
+    assert.ok(rows.length >= 1, 'waitlist entry listed for admin');
+});
+
+test('admin can save payment settings', async () => {
+    const res = await api('PUT', '/api/settings', {
+        venmo_username: 'test-venmo', zelle_recipient_name: 'Test Name', zelle_phone: '5555550199'
+    }, { admin: true });
+    assert.equal(res.status, 200);
+    const settings = await api('GET', '/api/settings');
+    assert.equal(settings.body.venmo_username, 'test-venmo');
+    assert.equal(settings.body.zelle_phone, '5555550199');
+});
+
+test('removed features are gone', async () => {
+    for (const [method, url] of [
+        ['POST', '/api/competition/register'],
+        ['GET', '/api/dance-series'],
+        ['GET', '/competition']
+    ]) {
+        const res = await api(method, url, method === 'POST' ? {} : undefined);
+        assert.equal(res.status, 404, `${method} ${url} should no longer exist`);
+    }
 });
