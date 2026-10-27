@@ -74,9 +74,19 @@ after(() => {
 // --- tests ---------------------------------------------------------------
 
 test('pages load', async () => {
-    for (const page of ['/', '/admin', '/email-profile.html']) {
+    for (const page of ['/', '/admin', '/email-profile.html', '/index-registration.html']) {
         const res = await fetch(BASE + page);
         assert.equal(res.status, 200, `${page} should load`);
+    }
+});
+
+test('home page is the new GouMo landing page with its assets', async () => {
+    const html = await fetch(BASE + '/').then((r) => r.text());
+    assert.match(html, /Train like you mean it/);
+    assert.match(html, /og:image/);
+    for (const asset of ['/css/site.css', '/js/home.js', '/images/goumo-logo.png', '/images/og-preview.jpg', '/images/goutham.jpg']) {
+        const res = await fetch(BASE + asset);
+        assert.equal(res.status, 200, `${asset} should exist`);
     }
 });
 
@@ -227,6 +237,14 @@ test('admin creates a drop-in with two classes and a crew practice', async () =>
         slots: [slot('A', '2030-02-02'), slot('B', '2030-02-09')]
     }, { admin: true });
     assert.equal(crewTwoSlots.status, 400, 'crew practice limited to one class');
+});
+
+test('public class list can include crew-only classes', async () => {
+    const all = await api('GET', '/api/courses?active_only=true&include_crew=true');
+    assert.equal(all.status, 200);
+    assert.ok(Array.isArray(all.body));
+    const general = await api('GET', '/api/courses?active_only=true');
+    assert.ok(all.body.length >= general.body.length, 'include_crew lists at least as many classes');
 });
 
 test('waitlist: student joins and admin sees them', async () => {

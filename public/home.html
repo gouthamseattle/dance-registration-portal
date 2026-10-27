@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GouMo Dance Chronicles · Dance classes in Seattle</title>
+  <meta name="description" content="Locking, House, Hip-hop and choreography classes in Seattle, led by a professional choreographer and dancers with multiple championships across India.">
+
+  <!-- Link preview card (WhatsApp, iMessage, Instagram, Facebook) -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="GouMo Dance Chronicles">
+  <meta property="og:title" content="GouMo Dance Chronicles · Seattle">
+  <meta property="og:description" content="Locking, House, Hip-hop and choreography classes. See this session's classes and register.">
+  <meta property="og:image" content="https://dance-registration-portal-production.up.railway.app/images/og-preview.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="theme-color" content="#0B0B0D">
+  <link rel="icon" type="image/png" href="/images/favicon.png">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="/css/site.css?v=1" rel="stylesheet">
+  <style>
+    /* ----- Hero ----- */
+    .hero { padding: 36px 0 8px; text-align: center; }
+    .hero-logo { width: min(270px, 70vw); height: auto; margin: 0 auto; }
+    .hero h1 { margin: 0; }
+    .tagline { display: block; margin-top: 14px; font-family: var(--font-display); font-size: 18px; letter-spacing: 0.06em; text-transform: uppercase; }
+    .lead { max-width: 640px; margin: 12px auto 0; font-size: 16px; line-height: 1.55; color: var(--text-2); }
+    .lead strong { color: var(--accent); }
+
+    .facts { display: grid; gap: 18px; margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--line-soft); text-align: left; }
+    .facts .name { display: block; margin-top: 6px; font-size: 16px; font-weight: 700; }
+    .facts p { margin: 4px 0 0; font-size: 13px; color: var(--muted); }
+    .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+
+    /* ----- Classes ----- */
+    .section { padding-top: 36px; }
+    .section-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+    .status { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--text-2); }
+    .status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+    .filters { display: flex; gap: 8px; flex-wrap: wrap; margin: 14px 0; }
+    .class-grid { display: grid; gap: 12px; }
+    .class-card { padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+    .class-card .top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+    .class-card .type { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+    .class-card h3 { margin: 3px 0 0; font-size: 18px; line-height: 1.25; }
+    .class-card .when { font-size: 13px; color: var(--muted); }
+    .class-card .price { font-size: 18px; font-weight: 700; white-space: nowrap; text-align: right; }
+    .class-card .price small { display: block; font-size: 12px; font-weight: 500; color: var(--muted); }
+    .class-card .actions { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+    .details-btn { min-height: 44px; padding: 0; border: none; background: none; color: var(--muted); font: 600 13px var(--font-body); cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
+    .details-btn svg { transition: transform 0.2s; }
+    .details-btn[aria-expanded="true"] svg { transform: rotate(180deg); }
+    .details { display: none; border-top: 1px solid var(--line-soft); padding-top: 10px; font-size: 14px; color: var(--text-2); }
+    .details.open { display: block; }
+    .details p { margin: 0 0 8px; }
+    .details .sched { white-space: pre-line; color: var(--muted); font-size: 13px; }
+    .empty { padding: 24px; text-align: center; color: var(--muted); }
+
+    /* ----- Closed state ----- */
+    .closed { padding: 20px; display: flex; flex-direction: column; gap: 10px; }
+    .closed .display { font-size: 34px; }
+    .photos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 6px; }
+    .photos img { width: 100%; height: 150px; object-fit: cover; border-radius: var(--radius); }
+    .photos img:first-child { grid-column: span 2; height: 200px; }
+
+    /* ----- About & instructors ----- */
+    .styles-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
+    .style-card { padding: 14px; }
+    .style-card strong { display: block; font-size: 16px; }
+    .style-card span { font-size: 13px; color: var(--muted); line-height: 1.4; }
+    .team { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
+    .person { overflow: hidden; display: flex; flex-direction: column; }
+    .person img { width: 100%; aspect-ratio: 1 / 1; object-fit: cover; }
+    .person div { padding: 10px 12px 12px; }
+    .person strong { display: block; font-size: 16px; }
+    .person .role { display: block; font-size: 12px; font-weight: 600; color: var(--accent); }
+    .person p { margin: 3px 0 0; font-size: 12px; color: var(--muted); line-height: 1.4; }
+
+    /* ----- Wider screens: same content, arranged across the width ----- */
+    @media (min-width: 760px) {
+      .hero { padding-top: 64px; }
+      .hero-logo { width: 400px; }
+      .tagline { font-size: 24px; }
+      .lead { font-size: 21px; }
+      .facts { grid-template-columns: 1fr 1fr; gap: 32px; margin-top: 40px; padding-top: 28px; }
+      .facts .name { font-size: 20px; }
+      .facts p { font-size: 15px; }
+      .h-section { font-size: 40px; }
+      .class-grid { grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
+      .class-card { padding: 22px; }
+      .class-card h3 { font-size: 21px; }
+      .about-row { display: grid; grid-template-columns: 1fr 1.4fr; gap: 40px; align-items: start; }
+      .team { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+      .photos img { height: 220px; }
+      .photos img:first-child { height: 320px; }
+    }
+  </style>
+</head>
+<body>
+  <header class="site-header" id="siteHeader">
+    <div class="container bar">
+      <a href="#top" aria-label="GouMo Dance Chronicles home"><img class="mini-logo" src="/images/goumo-logo.png" alt=""></a>
+      <nav aria-label="Sections">
+        <a href="#classes">Classes</a>
+        <a href="#about">About</a>
+        <a href="#instructors">Instructors</a>
+      </nav>
+      <a class="btn btn-ghost account" href="/email-profile.html?mode=account">My registrations</a>
+    </div>
+  </header>
+
+  <main id="top">
+    <section class="hero container">
+      <h1><img class="hero-logo" id="heroLogo" src="/images/goumo-logo.png" alt="GouMo Dance Chronicles" width="640" height="483"></h1>
+      <span class="tagline">Train like you mean it.</span>
+      <p class="lead">Led by a professional choreographer and dancers with <strong>multiple championships across India</strong>, now teaching in Seattle.</p>
+
+      <div class="facts">
+        <div>
+          <span class="eyebrow">Founders</span>
+          <span class="name">Goutham &amp; Monica</span>
+          <p>Founders of Dreamers Dance Crew · Hosts of the annual DDC × GouMo Dance Competition &amp; Showcase</p>
+        </div>
+        <div>
+          <span class="eyebrow">Styles we teach</span>
+          <div class="chips">
+            <span class="chip">Locking</span><span class="chip">House</span><span class="chip">Hip-hop</span><span class="chip">Choreography</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Classes (registration open) or "next session" (registration closed) -->
+    <section class="section container" id="classes" aria-live="polite">
+      <div id="openView" hidden>
+        <div class="section-head">
+          <h2 class="display h-section">This session</h2>
+          <span class="status">Registration open</span>
+        </div>
+        <div class="filters" id="filters" role="group" aria-label="Filter classes"></div>
+        <div class="class-grid" id="classGrid"></div>
+      </div>
+
+      <div id="closedView" hidden>
+        <div class="card closed">
+          <span class="eyebrow accent">Between sessions</span>
+          <h2 class="display">Next session drops soon.</h2>
+          <p class="muted" style="margin:0">Registration is closed right now. Follow us on Instagram to hear the moment the next session opens.</p>
+          <a class="btn btn-primary" href="https://instagram.com/goumo_dancechronicles" target="_blank" rel="noopener">Follow @goumo_dancechronicles</a>
+          <div class="photos">
+            <img src="/images/class-group.jpg" alt="A GouMo class group in the studio" loading="lazy">
+            <img src="/images/crew-seattle.jpg" alt="The GouMo crew in Seattle at night" loading="lazy">
+            <img src="/images/performance.jpg" alt="A GouMo performance group on stage" loading="lazy">
+          </div>
+        </div>
+      </div>
+
+      <p class="empty" id="loadingMsg">Loading classes…</p>
+    </section>
+
+    <section class="section container" id="about">
+      <div class="about-row">
+        <div>
+          <h2 class="display h-section">From the roots up</h2>
+          <p class="muted">Alongside choreography, we teach the foundations of street dance, so you keep growing as a dancer, class after class.</p>
+          <div class="styles-grid">
+            <div class="card style-card"><strong>Locking</strong><span>Funk, character, sharp points and locks</span></div>
+            <div class="card style-card"><strong>House</strong><span>Footwork, jacking and flow</span></div>
+            <div class="card style-card"><strong>Hip-hop</strong><span>Grooves, bounce and freestyle</span></div>
+            <div class="card style-card"><strong>Choreography</strong><span>Full routines across styles</span></div>
+          </div>
+        </div>
+        <div id="instructors">
+          <h2 class="display h-section">Instructors</h2>
+          <div class="team">
+            <div class="card person"><img src="/images/goutham.jpg" alt="Goutham" loading="lazy"><div><strong>Goutham</strong><span class="role">Head instructor · Choreographer</span><p>18+ years · Locking, House, Hip-hop · Best Choreographer, Chennai Super Dancers</p></div></div>
+            <div class="card person"><img src="/images/monica.jpg" alt="Monica" loading="lazy"><div><strong>Monica</strong><span class="role">Co-founder · Instructor</span><p>10+ years · Lead dancer in championship-winning teams</p></div></div>
+            <div class="card person"><img src="/images/rudie.jpg" alt="Rudie" loading="lazy"><div><strong>Rudie</strong><span class="role">Instructor</span><p>7+ years of professional dance experience</p></div></div>
+            <div class="card person"><img src="/images/supriya.jpg" alt="Supriya" loading="lazy"><div><strong>Supriya</strong><span class="role">Instructor</span><p>3+ years of dance experience</p></div></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container bar">
+      <a href="https://instagram.com/goumo_dancechronicles" target="_blank" rel="noopener">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"></rect><circle cx="12" cy="12" r="4"></circle><circle cx="17.5" cy="6.5" r="0.8"></circle></svg>
+        @goumo_dancechronicles
+      </a>
+      <span>GouMo Dance Chronicles · Seattle, WA</span>
+    </div>
+  </footer>
+
+  <script src="/js/home.js?v=1"></script>
+</body>
+</html>

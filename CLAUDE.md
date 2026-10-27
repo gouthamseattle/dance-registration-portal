@@ -30,10 +30,12 @@ web concepts in plain terms when they come up.
 | Login check, async error wrapper | `middleware/auth.js` |
 | Email (Gmail SMTP via nodemailer) | `utils/mailer.js` |
 | Capacity, schedule helpers | `utils/courseAvailability.js`, `utils/schedule.js` |
-| Student portal (served at `/`) | `public/index.html`, `public/js/registration.js` |
-| Email-first student portal | `public/email-profile.html`, `public/js/email-profile-registration.js` |
+| Home page (served at `/`): brand, live class list, instructors | `public/home.html`, `public/js/home.js` |
+| Design system (colors, fonts, buttons, cards), use it for every new page | `public/css/site.css` |
+| Registration flow: email, then profile, then pick class (`?course=ID` preselects) | `public/email-profile.html`, `public/js/email-profile-registration.js` |
+| Registration form + payment (Venmo/Zelle) | `public/index-registration.html`, `public/js/registration.js` |
 | Admin dashboard | `public/admin.html`, `public/js/admin.js`, `public/css/admin-styles.css` |
-| Shared student styles | `public/css/styles.css` |
+| Older student styles (registration pages, being replaced by `site.css`) | `public/css/styles.css` |
 | Smoke tests | `test/smoke.test.js`, run in CI by `.github/workflows/test.yml` |
 
 `memory-bank/` and `docs/` are historical notes from earlier development. Read them only when a task needs that history.
