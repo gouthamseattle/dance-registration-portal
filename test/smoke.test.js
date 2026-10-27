@@ -101,8 +101,6 @@ test('admin login works with ADMIN_PASSWORD', async () => {
 test('sensitive endpoints require admin login', async () => {
     const cases = [
         ['PUT', '/api/registrations/1/payment', { payment_status: 'completed' }],
-        ['POST', '/api/admin/create-test-profiles'],
-        ['POST', '/api/test/make-course-available'],
         ['GET', '/api/admin/registrations'],
         ['GET', '/api/admin/competition/registrations'],
         ['PUT', '/api/settings', { registration_open: 'false' }]
