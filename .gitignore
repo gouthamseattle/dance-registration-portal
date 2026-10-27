@@ -70,3 +70,7 @@ Thumbs.db
 # Temporary files
 tmp/
 temp/
+
+# Local curl cookie jars (may contain session cookies)
+cookies.txt
+*.cookies

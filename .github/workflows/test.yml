@@ -1,0 +1,56 @@
+# Runs the smoke tests on GitHub's servers on every push and pull request.
+# Uses a temporary Postgres database that is thrown away afterwards,
+# so production data is never touched.
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: dance_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://test:test@localhost:5432/dance_test
+      DATABASE_SSL: "false"
+      ADMIN_PASSWORD: test-admin-password
+      SESSION_SECRET: test-session-secret
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --omit=dev
+      - name: Run smoke tests
+        run: |
+          set -o pipefail
+          SHOW_SERVER_LOG=1 npm test 2>&1 | tee test-output.txt
+      - name: Summarize failures
+        if: failure()
+        run: |
+          # Failing tests plus server-side errors, shown on the run's summary page
+          {
+            grep -E "^not ok|^# (pass|fail)" test-output.txt || true
+            grep -E -A15 "not ok" test-output.txt | grep -vE "^\s+at |stack:|duration_ms|location:|failureType|code:" || true
+            grep -E "❌|Error:|error:" test-output.txt | grep -v "^\s*at " | sort -u | head -40 || true
+          } | head -c 20000 > summary.txt
+          echo "::error title=Test failures::$(sed ':a;N;$!ba;s/%/%25/g;s/\r/%0D/g;s/\n/%0A/g' summary.txt)"

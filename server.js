@@ -4039,7 +4039,7 @@ app.get('/api/admin/courses/:courseId/attendance/summary', requireAuth, asyncHan
 }));
 
 // Update registration payment status (restored)
-app.put('/api/registrations/:id/payment', asyncHandler(async (req, res) => {
+app.put('/api/registrations/:id/payment', requireAuth, asyncHandler(async (req, res) => {
     const { id } = req.params;
     const { payment_status, venmo_transaction_id, payment_method } = req.body;
     
@@ -5139,123 +5139,6 @@ process.on('SIGINT', async () => {
     } catch (error) {
         console.error('Error during shutdown:', error);
         process.exit(1);
-    }
-});
-
-// Quick test endpoint to make courses available for waitlist testing
-app.post('/api/test/make-course-available', asyncHandler(async (req, res) => {
-    try {
-        // Make course ID 5 (the full one with 0 spots) available to all users for waitlist testing
-        await dbConfig.run("UPDATE courses SET required_student_type = 'any' WHERE id = 5");
-        
-        // Also make course ID 1 available with some spots for regular registration
-        await dbConfig.run("UPDATE courses SET required_student_type = 'any' WHERE id = 1");
-        
-        console.log('🔧 Test courses made available to all users for waitlist testing');
-        
-        res.json({ 
-            success: true,
-            message: 'Test courses are now available to all users',
-            courses_updated: [
-                { id: 5, name: 'Full course - perfect for waitlist testing' },
-                { id: 1, name: 'Course with available spots' }
-            ]
-        });
-    } catch (error) {
-        console.error('❌ Error making test courses available:', error);
-        res.status(500).json({ error: 'Failed to update course access' });
-    }
-}));
-
-
-// Create the test profiles endpoint
-app.post('/api/admin/create-test-profiles', async (req, res) => {
-    try {
-        // Test profile 1: Crew Member
-        const crewMemberEmail = 'crew.test@example.com';
-        
-        const existingCrew = await dbConfig.get('SELECT * FROM students WHERE email = $1', [crewMemberEmail]);
-        
-        if (existingCrew) {
-            await dbConfig.run(`
-                UPDATE students SET
-                    first_name = $1,
-                    last_name = $2,
-                    student_type = $3,
-                    profile_complete = $4,
-                    admin_classified = $5,
-                    instagram_handle = $6,
-                    dance_experience = $7,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE email = $8
-            `, [
-                'Crew', 'TestUser', 'crew_member', dbConfig.isProduction ? true : 1, dbConfig.isProduction ? true : 1,
-                '@crewtest', 'Experienced dancer and crew member',
-                crewMemberEmail
-            ]);
-        } else {
-            await dbConfig.run(`
-                INSERT INTO students (
-                    first_name, last_name, email, student_type,
-                    profile_complete, admin_classified, instagram_handle,
-                    dance_experience
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-            `, [
-                'Crew', 'TestUser', crewMemberEmail, 'crew_member',
-                dbConfig.isProduction ? true : 1, dbConfig.isProduction ? true : 1, '@crewtest', 'Experienced dancer and crew member'
-            ]);
-        }
-        
-        // Test profile 2: General Student  
-        const generalStudentEmail = 'general.test@example.com';
-        
-        const existingGeneral = await dbConfig.get('SELECT * FROM students WHERE email = $1', [generalStudentEmail]);
-        
-        if (existingGeneral) {
-            await dbConfig.run(`
-                UPDATE students SET
-                    first_name = $1,
-                    last_name = $2,
-                    student_type = $3,
-                    profile_complete = $4,
-                    admin_classified = $5,
-                    instagram_handle = $6,
-                    dance_experience = $7,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE email = $8
-            `, [
-                'General', 'TestUser', 'general', dbConfig.isProduction ? true : 1, dbConfig.isProduction ? true : 1,
-                '@generaltest', 'New to house dancing',
-                generalStudentEmail
-            ]);
-        } else {
-            await dbConfig.run(`
-                INSERT INTO students (
-                    first_name, last_name, email, student_type,
-                    profile_complete, admin_classified, instagram_handle,
-                    dance_experience
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-            `, [
-                'General', 'TestUser', generalStudentEmail, 'general',
-                dbConfig.isProduction ? true : 1, dbConfig.isProduction ? true : 1, '@generaltest', 'New to house dancing'
-            ]);
-        }
-        
-        res.json({
-            success: true,
-            message: 'Test profiles created successfully',
-            profiles: {
-                crewMember: crewMemberEmail,
-                generalStudent: generalStudentEmail
-            }
-        });
-        
-    } catch (error) {
-        console.error('❌ Test profiles creation failed:', error);
-        res.status(500).json({
-            success: false,
-            error: error.message
-        });
     }
 });
 
