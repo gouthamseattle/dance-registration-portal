@@ -15,7 +15,8 @@ class DatabaseConfig {
             // PostgreSQL for production — use Pool for auto-reconnect
             this.pool = new Pool({
                 connectionString: process.env.DATABASE_URL,
-                ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false,
+                // DATABASE_SSL=false for a local/CI Postgres without SSL (Railway needs SSL)
+                ssl: process.env.DATABASE_URL && process.env.DATABASE_SSL !== 'false' ? { rejectUnauthorized: false } : false,
                 max: 10,
                 idleTimeoutMillis: 30000,
                 connectionTimeoutMillis: 5000,
@@ -35,7 +36,10 @@ class DatabaseConfig {
         } else {
             // SQLite for development (lazy-load to avoid requiring in production)
             sqlite3 = sqlite3 || require('sqlite3').verbose();
-            const dbPath = path.join(__dirname, 'database', 'registrations.db');
+            // DATABASE_PATH lets tests use a separate throwaway file
+            const dbPath = process.env.DATABASE_PATH
+                ? path.resolve(process.env.DATABASE_PATH)
+                : path.join(__dirname, 'database', 'registrations.db');
             this.db = new sqlite3.Database(dbPath);
             console.log('✅ Connected to SQLite database');
             return this.db;

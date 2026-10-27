@@ -4039,7 +4039,7 @@ app.get('/api/admin/courses/:courseId/attendance/summary', requireAuth, asyncHan
 }));
 
 // Update registration payment status (restored)
-app.put('/api/registrations/:id/payment', asyncHandler(async (req, res) => {
+app.put('/api/registrations/:id/payment', requireAuth, asyncHandler(async (req, res) => {
     const { id } = req.params;
     const { payment_status, venmo_transaction_id, payment_method } = req.body;
     
@@ -5143,7 +5143,7 @@ process.on('SIGINT', async () => {
 });
 
 // Quick test endpoint to make courses available for waitlist testing
-app.post('/api/test/make-course-available', asyncHandler(async (req, res) => {
+app.post('/api/test/make-course-available', requireAuth, asyncHandler(async (req, res) => {
     try {
         // Make course ID 5 (the full one with 0 spots) available to all users for waitlist testing
         await dbConfig.run("UPDATE courses SET required_student_type = 'any' WHERE id = 5");
@@ -5169,7 +5169,7 @@ app.post('/api/test/make-course-available', asyncHandler(async (req, res) => {
 
 
 // Create the test profiles endpoint
-app.post('/api/admin/create-test-profiles', async (req, res) => {
+app.post('/api/admin/create-test-profiles', requireAuth, async (req, res) => {
     try {
         // Test profile 1: Crew Member
         const crewMemberEmail = 'crew.test@example.com';

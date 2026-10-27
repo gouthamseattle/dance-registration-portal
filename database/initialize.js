@@ -18,16 +18,19 @@ async function initializeDatabase(dbConfig) {
             const db = await dbConfig.connect();
             console.log(`✅ Database initialized successfully (attempt ${attempt}/${maxRetries})`);
 
+            // Postgres: create base tables first (idempotent), so the column/table
+            // updates in ensureSchema work on a brand-new database (staging, CI).
+            if (dbConfig.isProduction) {
+                try {
+                    const { migrateToPostgres } = require('../scripts/migrate-to-postgres');
+                    await migrateToPostgres();
+                } catch (err) {
+                    console.error('❌ Base table setup failed (continuing):', err.message);
+                }
+            }
+
             // Ensure all schema updates are applied
             await ensureSchema(dbConfig);
-            
-            // Run background migration if in production
-            if (process.env.NODE_ENV === 'production') {
-                const { migrateToPostgres } = require('../scripts/migrate-to-postgres');
-                migrateToPostgres()
-                    .then(() => console.log('✅ Background migration completed'))
-                    .catch((err) => console.error('❌ Background migration failed:', err));
-            }
             
             return db;
         } catch (error) {

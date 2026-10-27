@@ -7,7 +7,7 @@ async function migrateToPostgres() {
     // Connect to PostgreSQL
     const client = new Client({
         connectionString: process.env.DATABASE_URL,
-        ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false
+        ssl: process.env.DATABASE_URL && process.env.DATABASE_SSL !== 'false' ? { rejectUnauthorized: false } : false
     });
     
     try {
@@ -263,20 +263,30 @@ async function migrateTable(sqliteDb, pgClient, tableName, columns) {
 async function insertDefaultData(client) {
     console.log('📝 Inserting default data...');
     
-    // Insert default admin user (force update to fix login issue)
+    // Admin user. The password comes from the ADMIN_PASSWORD environment variable.
+    // - ADMIN_PASSWORD set: the admin password is set to it on every startup
+    //   (this is how you change the admin password: update it in Railway, redeploy).
+    // - ADMIN_PASSWORD not set: an existing admin password is never overwritten;
+    //   a brand-new database gets the default 'admin123' (change it immediately).
     const bcrypt = require('bcryptjs');
-    const hashedPassword = await bcrypt.hash('admin123', 10);
-    
-    await client.query(`
-        INSERT INTO admin_users (username, password_hash, email, is_active) 
-        VALUES ($1, $2, $3, $4) 
-        ON CONFLICT (username) DO UPDATE SET 
-            password_hash = $2,
-            email = $3,
-            is_active = $4
-    `, ['admin', hashedPassword, 'admin@dancestudio.com', true]);
-    
-    console.log('✅ Admin user created/updated with fresh password hash');
+    const envPassword = process.env.ADMIN_PASSWORD;
+    const hashedPassword = await bcrypt.hash(envPassword || 'admin123', 10);
+
+    if (envPassword) {
+        await client.query(`
+            INSERT INTO admin_users (username, password_hash, email, is_active)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT (username) DO UPDATE SET password_hash = $2, is_active = $4
+        `, ['admin', hashedPassword, 'admin@dancestudio.com', true]);
+        console.log('✅ Admin password set from ADMIN_PASSWORD');
+    } else {
+        await client.query(`
+            INSERT INTO admin_users (username, password_hash, email, is_active)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT (username) DO NOTHING
+        `, ['admin', hashedPassword, 'admin@dancestudio.com', true]);
+        console.log('⚠️ ADMIN_PASSWORD not set; existing admin password left unchanged');
+    }
     
     // Insert default system settings
     const defaultSettings = [
