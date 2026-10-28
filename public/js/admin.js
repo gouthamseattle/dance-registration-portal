@@ -1874,8 +1874,9 @@ class AdminDashboard {
                     <button class="btn btn-outline-secondary btn-sm" onclick="admin.classifyStudent(${st.id}, '${isCrew ? 'general' : 'crew_member'}').then(() => admin.openStudent(${st.id}))">${isCrew ? 'Make GouMo student' : 'Make crew member'}</button>
                 </div>
             </div>
-            <div class="stat-grid mb-3" style="grid-template-columns:repeat(3,minmax(0,1fr))">
-                <div class="stat"><span class="stat-label">Classes taken</span><span class="stat-number">${data.totals.classes_paid}</span></div>
+            <div class="stat-grid mb-3" style="grid-template-columns:repeat(${isCrew || data.totals.crew_practices ? 4 : 3},minmax(0,1fr))">
+                <div class="stat"><span class="stat-label">Classes taken</span><span class="stat-number">${isCrew || data.totals.crew_practices ? data.totals.regular_classes : data.totals.classes_paid}</span></div>
+                ${isCrew || data.totals.crew_practices ? `<div class="stat"><span class="stat-label">Crew practices</span><span class="stat-number">${data.totals.crew_practices}</span></div>` : ''}
                 <div class="stat"><span class="stat-label">Paid</span><span class="stat-number">${this.money(data.totals.amount_paid)}</span></div>
                 <div class="stat"><span class="stat-label">Pending</span><span class="stat-number">${data.totals.pending}</span></div>
             </div>

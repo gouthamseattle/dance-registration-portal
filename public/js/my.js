@@ -41,14 +41,22 @@
     const isFinished = (r) => { const ds = regDates(r); return ds.length > 0 && ds[ds.length - 1] < now; };
     const upcoming = data.registrations.filter((r) => r.payment_status !== 'canceled' && !isFinished(r));
 
-    $('statClasses').textContent = data.totals.classes_paid;
+    // Crew members: crew practice is counted apart from regular classes,
+    // and finished practices collapse into one "Crew practice" line.
+    const isCrewPractice = (r) => r.course_type === 'crew_practice';
+    const showCrew = st.student_type === 'crew_member' || data.registrations.some(isCrewPractice);
+    $('statClasses').textContent = showCrew ? data.totals.regular_classes : data.totals.classes_paid;
+    $('statThirdLabel').textContent = showCrew ? 'Crew practice' : 'Waitlists';
+    $('statWaitlists').textContent = showCrew ? data.totals.crew_practices : data.waitlists.length;
     $('statUpcoming').textContent = upcoming.length;
-    $('statWaitlists').textContent = data.waitlists.length;
 
     const sorted = [...data.registrations].sort((a, b) => (regDates(b)[0] || '').localeCompare(regDates(a)[0] || ''));
+    const donePractices = showCrew ? sorted.filter((r) => isCrewPractice(r) && isFinished(r) && r.payment_status === 'completed') : [];
+    const listed = sorted.filter((r) => !donePractices.includes(r));
     const rows = [
       ...data.waitlists.map((w) => row(w.course_name, `Waitlist #${w.position}`, 'wait', false)),
-      ...sorted.map((r) => {
+      ...(donePractices.length ? [row('Crew practice', `${donePractices.length} attended`, 'ok', false)] : []),
+      ...listed.map((r) => {
         const finished = isFinished(r) && r.payment_status === 'completed';
         const [label, cls] = finished ? ['Done', 'off'] : (STATUS[r.payment_status] || [r.payment_status || '', 'off']);
         return row(r.course_name || 'Class', label, cls, finished || r.payment_status === 'canceled');

@@ -569,6 +569,22 @@ test('student profiles: admin history and notes; student "My classes" page', asy
 
     const page = await fetch(`${BASE}/my`);
     assert.equal(page.status, 200);
+
+    // Crew member: crew practice is counted apart from regular classes
+    await api('PUT', `/api/admin/students/${me.id}/classify`, { student_type: 'crew_member' }, { admin: true });
+    const crew = await api('POST', '/api/courses', {
+        name: `Profile Crew ${unique}`, course_type: 'crew_practice', required_student_type: 'crew_member', session_dates: ['2030-08-09'],
+        slots: [{ slot_name: 'Main Session', difficulty_level: 'All Levels', capacity: 15, day_of_week: 'Sunday', practice_date: '2030-08-09',
+                  start_time: '17:00', end_time: '19:00', location: 'Profile Studio', pricing: { full_package: 15, drop_in: 15 } }]
+    }, { admin: true });
+    assert.equal(crew.status, 200, JSON.stringify(crew.body));
+    const creg = await api('POST', '/api/register', { first_name: 'Prof', email, course_id: crew.body.courseId, payment_amount: 15 });
+    assert.equal(creg.status, 200, JSON.stringify(creg.body));
+    await api('PUT', `/api/admin/registrations/${creg.body.registrationId}/confirm-payment`, {}, { admin: true });
+    const totals = (await api('POST', '/api/my/profile', { email })).body.totals;
+    assert.equal(totals.crew_practices, 1);
+    assert.equal(totals.regular_classes, 1);
+    assert.equal(totals.classes_paid, 2);
 });
 
 test('student navigation: back to classes and old account links', async () => {

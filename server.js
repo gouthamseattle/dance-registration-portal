@@ -2836,11 +2836,15 @@ async function studentHistory(studentId) {
         ORDER BY w.created_at DESC
     `, [studentId]);
     const paid = registrations.filter(r => r.payment_status === 'completed');
+    const crewPaid = paid.filter(r => r.course_type === 'crew_practice').length;
     return {
         registrations,
         waitlists,
         totals: {
             classes_paid: paid.length,
+            // Crew members: crew practices are counted apart from regular classes
+            crew_practices: crewPaid,
+            regular_classes: paid.length - crewPaid,
             amount_paid: Math.round(paid.reduce((sum, r) => sum + (Number(r.payment_amount) || 0), 0) * 100) / 100,
             pending: registrations.filter(r => r.payment_status === 'pending').length
         }
