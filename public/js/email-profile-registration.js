@@ -19,6 +19,8 @@ class EmailProfileRegistrationApp {
         this.settings = {};
         // Class chosen on the home page (?course=ID): skip the class list and go straight to it.
         this.preselectCourseId = new URLSearchParams(window.location.search).get('course');
+        // Combo chosen on the home page (?combo=ID): after sign-in, go straight to its checkout.
+        this.preselectComboId = new URLSearchParams(window.location.search).get('combo');
         
         this.init();
     }
@@ -40,6 +42,7 @@ class EmailProfileRegistrationApp {
     // Arrived from a Register button on the home page (?course=ID):
     // show the chosen class above the email box ("Almost there").
     async showSelectedClassSummary() {
+        if (this.preselectComboId) return this.showSelectedComboSummary();
         if (!this.preselectCourseId) return;
         try {
             const list = await fetch('/api/courses?active_only=true&include_crew=true').then(r => r.json());
@@ -64,6 +67,45 @@ class EmailProfileRegistrationApp {
         } catch (e) {
             console.warn('Could not load the selected class', e);
         }
+    }
+
+    async showSelectedComboSummary() {
+        try {
+            const combo = await fetch(`/api/combos/${encodeURIComponent(this.preselectComboId)}`).then(r => (r.ok ? r.json() : null));
+            if (!combo) { this.preselectComboId = null; return; }
+            this.selectedCombo = combo;
+            const C = window.ClassInfo;
+            const box = document.getElementById('selectedClassSummary');
+            box.innerHTML = `
+                <div>
+                    <span class="kind">${C.esc(C.comboKicker(combo.classes))}</span>
+                    <span class="name">${C.esc(combo.name)}</span>
+                    <span class="when">${C.esc(combo.classes.map(c => c.name).join(' + '))}</span>
+                </div>
+                <span class="amount">$${Number(combo.price).toFixed(0)}</span>`;
+            box.hidden = false;
+            document.getElementById('emailStepTitle').textContent = 'Almost there';
+            document.getElementById('emailStepSub').textContent = "Enter your email. If you've danced with us before, we'll take you straight to payment.";
+        } catch (e) {
+            console.warn('Could not load the selected combo', e);
+        }
+    }
+
+    // Hand off to checkout with the combo; checkout registers every class in it.
+    goToComboCheckout() {
+        const params = new URLSearchParams({
+            email: this.currentEmail,
+            student_id: this.currentStudent.id,
+            combo_id: this.preselectComboId,
+            student_type: this.currentStudent.student_type || '',
+            first_name: this.currentStudent.first_name || '',
+            last_name: this.currentStudent.last_name || '',
+            instagram_handle: this.currentStudent.instagram_handle || '',
+            dance_experience: this.currentStudent.dance_experience || '',
+            profile_complete: true
+        });
+        this.showLoading();
+        window.location.href = `/index-registration.html?${params.toString()}`;
     }
 
     async loadSettings() {
@@ -160,7 +202,7 @@ class EmailProfileRegistrationApp {
                     return;
                 }
 
-                if (this.preselectCourseId) {
+                if (this.preselectCourseId || this.preselectComboId) {
                     this.showAvailableCourses();
                 } else {
                     this.showWelcomeBack();
@@ -323,6 +365,10 @@ class EmailProfileRegistrationApp {
     }
 
     async showAvailableCourses() {
+        if (this.preselectComboId && this.currentStudent) {
+            this.goToComboCheckout();
+            return;
+        }
         this.currentStep = 'course-selection';
         this.hideAllSections();
         document.getElementById('courseSelection').style.display = 'block';

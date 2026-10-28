@@ -465,6 +465,7 @@ class AdminDashboard {
 
     loadCourses() {
         this.filterCourses();
+        this.loadCombos();
     }
 
     filterCourses() {
@@ -649,7 +650,7 @@ class AdminDashboard {
                                 </div>
                             </td>
                             <td>
-                                <strong>${reg.course_name || 'Drop-in Class'}</strong>${(() => { try { const d = JSON.parse(reg.selected_dates || 'null'); return Array.isArray(d) && d.length ? `<br><small class="text-muted">Dates: ${window.ClassInfo.formatDates(d)}</small>` : ''; } catch (e) { return ''; } })()}
+                                <strong>${reg.course_name || 'Drop-in Class'}</strong>${reg.combo_name ? `<br><small class="text-muted">Combo: ${window.ClassInfo.esc(reg.combo_name)} · confirm or cancel applies to the whole combo</small>` : ''}${(() => { try { const d = JSON.parse(reg.selected_dates || 'null'); return Array.isArray(d) && d.length ? `<br><small class="text-muted">Dates: ${window.ClassInfo.formatDates(d)}</small>` : ''; } catch (e) { return ''; } })()}
                                 ${reg.class_date ? `<br><small class="text-muted">${new Date(reg.class_date).toLocaleDateString()}</small>` : ''}
                             </td>
                             <td>
@@ -987,6 +988,168 @@ class AdminDashboard {
                 </div>
             </div>
             ${problems.length ? `<ul class="small text-muted mt-3 mb-0 ps-3">${problems.map(p => `<li>${C.esc(p)}</li>`).join('')}</ul>` : '<p class="small text-success mt-3 mb-0">Ready to save</p>'}`;
+    }
+
+    // ===================== Combos =====================
+    async loadCombos() {
+        const list = document.getElementById('combosList');
+        if (!list) return;
+        try {
+            const response = await this.apiFetch('/api/admin/combos');
+            this.combos = response.ok ? await response.json() : [];
+        } catch (e) {
+            this.combos = [];
+        }
+        const C = window.ClassInfo;
+        if (!this.combos.length) {
+            list.innerHTML = '<p class="text-muted small">No combos yet.</p>';
+            return;
+        }
+        list.innerHTML = this.combos.map(combo => `
+            <div class="card mb-2">
+                <div class="card-body d-flex flex-wrap justify-content-between align-items-center gap-3">
+                    <div>
+                        <div class="d-flex align-items-center gap-2">
+                            <strong>${C.esc(combo.name)}</strong>
+                            <span class="badge ${combo.is_active ? 'bg-success' : 'bg-secondary'}">${combo.is_active ? 'On' : 'Off'}</span>
+                        </div>
+                        <div class="small text-muted">${combo.classes.map(c => C.esc(c.name)).join(' + ')}</div>
+                    </div>
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="text-end">
+                            <strong>$${Number(combo.price).toFixed(0)}</strong>
+                            ${combo.savings > 0 ? `<div class="small text-success">saves $${Number(combo.savings).toFixed(0)}</div>` : ''}
+                        </div>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="admin.toggleCombo(${combo.id}, ${!combo.is_active})">${combo.is_active ? 'Turn off' : 'Turn on'}</button>
+                        <button class="btn btn-sm btn-outline-primary" onclick="admin.editCombo(${combo.id})">Edit</button>
+                        <button class="btn btn-sm btn-outline-danger" onclick="admin.deleteCombo(${combo.id})" aria-label="Delete combo"><i class="fas fa-trash"></i></button>
+                    </div>
+                </div>
+            </div>`).join('');
+    }
+
+    showCreateCombo() { this.openComboForm(null); }
+
+    editCombo(id) {
+        const combo = (this.combos || []).find(c => c.id === id);
+        if (combo) this.openComboForm(combo);
+    }
+
+    openComboForm(combo) {
+        const C = window.ClassInfo;
+        document.getElementById('comboId').value = combo ? combo.id : '';
+        document.getElementById('comboModalTitle').textContent = combo ? 'Edit combo' : 'New combo';
+        document.getElementById('saveComboBtn').textContent = combo ? 'Save combo' : 'Create combo';
+        document.getElementById('comboName').value = combo ? combo.name : '';
+        document.getElementById('comboDescription').value = combo ? (combo.description || '') : '';
+        document.getElementById('comboPrice').value = combo ? Number(combo.price) : '';
+        const chosen = new Set(combo ? combo.course_ids : []);
+        const options = this.courses.filter(c => c.is_active || chosen.has(c.id));
+        document.getElementById('comboClassList').innerHTML = options.length ? options.map(c => {
+            const when = [C.formatDates(C.dates(c)).split(',')[0], C.formatTime(C.slot(c).start_time), c.instructor, `${C.dates(c).length} date${C.dates(c).length === 1 ? '' : 's'}`].filter(Boolean).join(' · ');
+            return `
+            <label class="d-flex justify-content-between align-items-center gap-3 border rounded p-2" style="cursor:pointer">
+                <span class="d-flex align-items-center gap-2">
+                    <input type="checkbox" class="form-check-input mt-0" name="comboClass" value="${c.id}" ${chosen.has(c.id) ? 'checked' : ''}>
+                    <span><span class="fw-semibold">${C.esc(c.name)}</span><br><small class="text-muted">${C.esc(when)}</small></span>
+                </span>
+                <strong>$${Number(C.fees(c).full || 0).toFixed(0)}</strong>
+            </label>`;
+        }).join('') : '<p class="text-muted small">Create some classes first.</p>';
+
+        const modalEl = document.getElementById('comboModal');
+        if (!modalEl.dataset.wired) {
+            modalEl.addEventListener('input', () => this.refreshComboForm());
+            modalEl.addEventListener('change', () => this.refreshComboForm());
+            modalEl.dataset.wired = '1';
+        }
+        this.refreshComboForm();
+        bootstrap.Modal.getOrCreateInstance(modalEl).show();
+    }
+
+    comboFormValues() {
+        const ids = [...document.querySelectorAll('input[name="comboClass"]:checked')].map(i => Number(i.value));
+        return {
+            name: document.getElementById('comboName').value.trim(),
+            description: document.getElementById('comboDescription').value.trim(),
+            price: Number(document.getElementById('comboPrice').value),
+            course_ids: ids
+        };
+    }
+
+    refreshComboForm() {
+        const C = window.ClassInfo;
+        const v = this.comboFormValues();
+        const classes = this.courses.filter(c => v.course_ids.includes(c.id));
+        const separately = classes.reduce((sum, c) => sum + (Number(C.fees(c).full) || 0), 0);
+        const savings = separately - (v.price || 0);
+        document.getElementById('comboSeparately').textContent = `$${separately.toFixed(0)}`;
+        document.getElementById('comboSavings').innerHTML = !v.price ? ''
+            : savings > 0 ? `<span class="text-success">Students save $${savings.toFixed(0)}</span>`
+            : '<span class="text-warning">The combo costs the same or more than buying separately</span>';
+
+        const problems = [];
+        if (!v.name) problems.push('Give the combo a name');
+        if (v.course_ids.length < 2) problems.push('Pick at least 2 classes');
+        if (!(v.price > 0)) problems.push('Set a combo price');
+        const who = C.comboInstructors(classes);
+        document.getElementById('comboPreview').innerHTML = `
+            <div style="background:#151518;border:1px solid #2B2B32;border-radius:14px;padding:16px;color:#F5F5F4">
+                <div style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#FFD60A">${C.esc(C.comboKicker(classes))}</div>
+                <div style="font-size:18px;font-weight:700;margin-top:4px">${C.esc(v.name || 'Combo name')}</div>
+                ${who ? `<div style="font-size:13px;color:#A8A8B3">with ${C.esc(who)}</div>` : ''}
+                <div style="border-top:1px solid #1F1F25;margin-top:10px;padding-top:10px;display:flex;flex-direction:column;gap:6px;font-size:13px">
+                    ${C.comboRows(classes).map(([k, val]) => `<div><div style="color:#D4D4D8;font-weight:600">${C.esc(k)}</div><div style="color:#8E8E99">${C.esc(val)}</div></div>`).join('') || '<span style="color:#8E8E99">Pick classes to see them here</span>'}
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px">
+                    <span><strong style="font-size:20px">${v.price ? '$' + v.price.toFixed(0) : '$—'}</strong>${savings > 0 && v.price ? ` <span style="font-size:12px;color:#3DF2C3">save $${savings.toFixed(0)}</span>` : ''}</span>
+                    <span style="background:#FFD60A;color:#0B0B0D;border-radius:10px;padding:8px 14px;font-weight:700;font-size:14px">Register</span>
+                </div>
+            </div>
+            <p class="small text-muted mt-2 mb-0">One payment registers the student in every class in the combo. Spots are counted in each class.</p>
+            ${problems.length ? `<ul class="small text-muted mt-2 mb-0 ps-3">${problems.map(p => `<li>${C.esc(p)}</li>`).join('')}</ul>` : '<p class="small text-success mt-2 mb-0">Ready to save</p>'}`;
+        return problems;
+    }
+
+    async saveCombo() {
+        const problems = this.refreshComboForm();
+        if (problems.length) { this.showError(problems.join('. ')); return; }
+        const id = document.getElementById('comboId').value;
+        const response = await this.apiFetch(id ? `/api/combos/${id}` : '/api/combos', {
+            method: id ? 'PUT' : 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(this.comboFormValues())
+        });
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            this.showError(error.error || 'Failed to save combo');
+            return;
+        }
+        bootstrap.Modal.getInstance(document.getElementById('comboModal')).hide();
+        this.showSuccess(id ? 'Combo updated' : 'Combo created');
+        this.loadCombos();
+    }
+
+    async toggleCombo(id, active) {
+        const response = await this.apiFetch(`/api/combos/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ is_active: active })
+        });
+        if (!response.ok) { this.showError('Failed to update combo'); return; }
+        this.loadCombos();
+    }
+
+    async deleteCombo(id) {
+        if (!confirm('Delete this combo? Classes in it are not affected.')) return;
+        const response = await this.apiFetch(`/api/combos/${id}`, { method: 'DELETE' });
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            this.showError(error.error || 'Failed to delete combo');
+            return;
+        }
+        this.showSuccess('Combo deleted');
+        this.loadCombos();
     }
 
     async saveCourse() {

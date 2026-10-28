@@ -214,6 +214,8 @@ body.crew-practice-mode { background: var(--bg); }
 .class-rows div { display: flex; gap: 10px; font-size: 14px; }
 .class-rows dt { width: 72px; flex: none; font-weight: 400; color: var(--faint); }
 .class-rows dd { margin: 0; color: var(--text-2); }
+.class-rows div.stack { flex-direction: column; gap: 1px; }
+.class-rows div.stack dt { width: auto; font-weight: 600; color: var(--text); }
 .date-picker { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; margin-top: 10px; }
 .date-option { display: flex; align-items: center; gap: 8px; min-height: 48px; padding: 0 10px; white-space: nowrap; font-size: 15px; border: 1px solid var(--line); border-radius: 10px; font-weight: 600; cursor: pointer; }
 .date-option:has(input:checked) { border-color: var(--accent); }

@@ -125,5 +125,18 @@
     return parts.join(' · ');
   }
 
-  window.ClassInfo = { esc, toDate, formatTime, formatDates, formatOneDate, dates, slot, typeLabel, timeRange, location, style, fees, feeText, rows, kicker, isPerDate };
+  // Combos: one row per class ("House Level 1", "Tue Nov 4, 11 · 6:15 – 7:30 PM")
+  function comboRows(classes) {
+    return (classes || []).map((c) => [c.name, [formatDates(dates(c)), timeRange(c)].filter(Boolean).join(' · ')]);
+  }
+  function comboInstructors(classes) {
+    return [...new Set((classes || []).map((c) => c.instructor).filter(Boolean))].join(' & ');
+  }
+  // "Combo · 2 classes · House"
+  function comboKicker(classes) {
+    const styles = [...new Set((classes || []).map(style).filter(Boolean))];
+    return [`Combo · ${(classes || []).length} classes`, ...styles].join(' · ');
+  }
+
+  window.ClassInfo = { comboRows, comboInstructors, comboKicker, esc, toDate, formatTime, formatDates, formatOneDate, dates, slot, typeLabel, timeRange, location, style, fees, feeText, rows, kicker, isPerDate };
 })();

@@ -2767,6 +2767,257 @@ app.post('/api/admin/courses/:courseId/waitlist/notify-next', requireAuth, async
 }));
 
 // Students and Registrations
+// ===================== Combos =====================
+// A combo bundles 2+ classes at one price. Registering creates one pending
+// registration per class, sharing a combo_group; the combo price is split
+// across them so reports still add up.
+
+const dbTrue = () => (dbConfig.isProduction ? 'true' : '1');
+
+// One combo's classes, shaped like /api/courses rows so the student pages
+// can format them with class-info.js.
+async function loadComboClasses(comboId) {
+    const courses = await dbConfig.all(`
+        SELECT c.* FROM combo_classes cc
+        JOIN courses c ON c.id = cc.course_id
+        WHERE cc.combo_id = $1
+        ORDER BY c.start_date, c.id
+    `, [comboId]);
+    for (const course of courses) {
+        const slots = await dbConfig.all('SELECT * FROM course_slots WHERE course_id = $1 ORDER BY id', [course.id]);
+        for (const slot of slots) {
+            const prices = await dbConfig.all('SELECT pricing_type, price FROM course_pricing WHERE course_slot_id = $1', [slot.id]);
+            slot.pricing = {};
+            prices.forEach(p => { slot.pricing[p.pricing_type] = Number(p.price); });
+        }
+        course.slots = slots;
+        const pricing = (slots[0] && slots[0].pricing) || {};
+        course.full_course_price = Number(pricing.full_package) || 0;
+        course.per_class_price = Number(pricing.drop_in) || 0;
+        const availability = await getCourseAvailability(dbConfig, course.id, course.course_type);
+        course.available_spots = availability.available;
+    }
+    return courses;
+}
+
+async function loadCombo(comboId) {
+    const combo = await dbConfig.get('SELECT * FROM combos WHERE id = $1', [comboId]);
+    if (!combo) return null;
+    combo.price = Number(combo.price);
+    combo.is_active = combo.is_active === true || combo.is_active === 1;
+    combo.classes = await loadComboClasses(combo.id);
+    combo.course_ids = combo.classes.map(c => c.id);
+    combo.regular_total = combo.classes.reduce((sum, c) => sum + c.full_course_price, 0);
+    combo.savings = Math.max(0, combo.regular_total - combo.price);
+    combo.available_spots = combo.classes.length ? Math.min(...combo.classes.map(c => c.available_spots)) : 0;
+    return combo;
+}
+
+function comboProblems(body) {
+    const problems = [];
+    const ids = [...new Set((body.course_ids || []).map(Number).filter(Boolean))];
+    if (!String(body.name || '').trim()) problems.push('Give the combo a name');
+    if (ids.length < 2) problems.push('Pick at least 2 classes');
+    if (!(Number(body.price) > 0)) problems.push('Set a combo price');
+    return { problems, ids };
+}
+
+async function saveComboClasses(comboId, ids) {
+    await dbConfig.run('DELETE FROM combo_classes WHERE combo_id = $1', [comboId]);
+    for (const courseId of ids) {
+        await dbConfig.run('INSERT INTO combo_classes (combo_id, course_id) VALUES ($1, $2)', [comboId, courseId]);
+    }
+}
+
+// Public: active combos whose classes are all active
+app.get('/api/combos', asyncHandler(async (req, res) => {
+    const rows = await dbConfig.all(`SELECT id FROM combos WHERE is_active = ${dbTrue()} ORDER BY id`);
+    const combos = [];
+    for (const row of rows) {
+        const combo = await loadCombo(row.id);
+        const allActive = combo.classes.length >= 2 && combo.classes.every(c => c.is_active === true || c.is_active === 1);
+        if (allActive) combos.push(combo);
+    }
+    res.json(combos);
+}));
+
+app.get('/api/combos/:id', asyncHandler(async (req, res) => {
+    const combo = await loadCombo(req.params.id);
+    if (!combo || !combo.is_active) return res.status(404).json({ error: 'Combo not found' });
+    res.json(combo);
+}));
+
+// Admin: every combo, including turned-off ones
+app.get('/api/admin/combos', requireAuth, asyncHandler(async (req, res) => {
+    const rows = await dbConfig.all('SELECT id FROM combos ORDER BY id DESC');
+    const combos = [];
+    for (const row of rows) combos.push(await loadCombo(row.id));
+    res.json(combos);
+}));
+
+app.post('/api/combos', requireAuth, asyncHandler(async (req, res) => {
+    const { problems, ids } = comboProblems(req.body || {});
+    if (problems.length) return res.status(400).json({ error: problems.join('. ') });
+    const { name, description, price } = req.body;
+    const result = await dbConfig.run(`
+        INSERT INTO combos (name, description, price, is_active) VALUES ($1, $2, $3, ${dbTrue()})
+        ${dbConfig.isProduction ? 'RETURNING id' : ''}
+    `, [String(name).trim(), description || null, Number(price)]);
+    const comboId = dbConfig.isProduction ? result[0]?.id : result.lastID;
+    await saveComboClasses(comboId, ids);
+    res.json(await loadCombo(comboId));
+}));
+
+app.put('/api/combos/:id', requireAuth, asyncHandler(async (req, res) => {
+    const existing = await loadCombo(req.params.id);
+    if (!existing) return res.status(404).json({ error: 'Combo not found' });
+    const body = req.body || {};
+    // Turning a combo on/off can be sent on its own
+    if (Object.keys(body).length === 1 && body.is_active !== undefined) {
+        await dbConfig.run('UPDATE combos SET is_active = $1 WHERE id = $2', [dbConfig.isProduction ? !!body.is_active : (body.is_active ? 1 : 0), existing.id]);
+        return res.json(await loadCombo(existing.id));
+    }
+    const { problems, ids } = comboProblems(body);
+    if (problems.length) return res.status(400).json({ error: problems.join('. ') });
+    const active = body.is_active === undefined ? existing.is_active : !!body.is_active;
+    await dbConfig.run('UPDATE combos SET name = $1, description = $2, price = $3, is_active = $4 WHERE id = $5', [
+        String(body.name).trim(), body.description || null, Number(body.price),
+        dbConfig.isProduction ? active : (active ? 1 : 0), existing.id
+    ]);
+    await saveComboClasses(existing.id, ids);
+    res.json(await loadCombo(existing.id));
+}));
+
+app.delete('/api/combos/:id', requireAuth, asyncHandler(async (req, res) => {
+    const used = await dbConfig.get('SELECT COUNT(*) AS n FROM registrations WHERE combo_id = $1', [req.params.id]);
+    if (Number(used?.n) > 0) {
+        return res.status(400).json({ error: 'Students have registered for this combo. Turn it off instead of deleting it.' });
+    }
+    await dbConfig.run('DELETE FROM combo_classes WHERE combo_id = $1', [req.params.id]);
+    await dbConfig.run('DELETE FROM combos WHERE id = $1', [req.params.id]);
+    res.json({ success: true });
+}));
+
+// Student: register for every class in a combo with one payment
+app.post('/api/register-combo', asyncHandler(async (req, res) => {
+    const { email, first_name, last_name, instagram_handle, instagram_id, dance_experience, combo_id, special_requests } = req.body || {};
+    if (!email || !combo_id) return res.status(400).json({ error: 'Required fields missing: email and combo_id' });
+
+    const settings = await dbConfig.get('SELECT setting_value FROM system_settings WHERE setting_key = $1', ['registration_open']);
+    if (settings && settings.setting_value !== 'true') {
+        return res.status(400).json({ error: 'Registration is currently closed' });
+    }
+
+    const combo = await loadCombo(combo_id);
+    if (!combo || !combo.is_active || combo.classes.length < 2) {
+        return res.status(400).json({ error: 'This combo is not available' });
+    }
+
+    // Find or create the student
+    const instagram = instagram_handle || instagram_id || null;
+    let student = await dbConfig.get('SELECT * FROM students WHERE email = $1', [email]);
+    if (!student) {
+        const result = await dbConfig.run(`
+            INSERT INTO students (first_name, last_name, email, instagram_handle, dance_experience)
+            VALUES ($1, $2, $3, $4, $5) ${dbConfig.isProduction ? 'RETURNING id' : ''}
+        `, [first_name || 'Student', last_name || '', email, instagram, dance_experience || null]);
+        student = { id: dbConfig.isProduction ? result[0]?.id : result.lastID, student_type: 'general' };
+    }
+
+    // Every class must be open to this student, not already paid, and have room
+    for (const course of combo.classes) {
+        if (!(course.is_active === true || course.is_active === 1)) {
+            return res.status(400).json({ error: `${course.name} is no longer open` });
+        }
+        if (course.required_student_type === 'crew_member' && student.student_type !== 'crew_member') {
+            return res.status(403).json({ error: `${course.name} is for crew members only` });
+        }
+        const paid = await dbConfig.get(
+            "SELECT id FROM registrations WHERE student_id = $1 AND course_id = $2 AND payment_status = 'completed' LIMIT 1",
+            [student.id, course.id]
+        );
+        if (paid) return res.status(400).json({ error: `You are already registered for ${course.name}` });
+        if (course.available_spots <= 0) {
+            return res.status(400).json({ error: `${course.name} is full`, course_full: true, course_name: course.name });
+        }
+    }
+
+    // Replace any earlier unpaid registrations for these classes, so trying again doesn't duplicate
+    const placeholders = combo.course_ids.map((_, i) => `$${i + 2}`).join(', ');
+    await dbConfig.run(
+        `DELETE FROM registrations WHERE student_id = $1 AND payment_status = 'pending' AND course_id IN (${placeholders})`,
+        [student.id, ...combo.course_ids]
+    );
+
+    // Split the combo price across the classes (last one takes the rounding remainder)
+    const n = combo.classes.length;
+    const share = Math.floor((combo.price / n) * 100) / 100;
+    const group = `combo-${combo.id}-${student.id}-${Date.now()}`;
+    const registrationIds = [];
+    for (let i = 0; i < n; i++) {
+        const amount = i === n - 1 ? Math.round((combo.price - share * (n - 1)) * 100) / 100 : share;
+        const result = await dbConfig.run(`
+            INSERT INTO registrations (student_id, course_id, payment_amount, payment_status, special_requests, registration_type, combo_id, combo_group)
+            VALUES ($1, $2, $3, 'pending', $4, 'combo', $5, $6) ${dbConfig.isProduction ? 'RETURNING id' : ''}
+        `, [student.id, combo.classes[i].id, amount, special_requests || null, combo.id, group]);
+        registrationIds.push(dbConfig.isProduction ? result[0]?.id : result.lastID);
+    }
+
+    res.json({
+        success: true,
+        registrationId: registrationIds[0],
+        registrationIds,
+        studentId: student.id,
+        payment_amount: combo.price,
+        combo_name: combo.name
+    });
+}));
+
+// Registrations that belong together (a combo), or just this one
+async function registrationGroupIds(id) {
+    const row = await dbConfig.get('SELECT combo_group FROM registrations WHERE id = $1', [id]);
+    if (!row || !row.combo_group) return [Number(id)];
+    const rows = await dbConfig.all('SELECT id FROM registrations WHERE combo_group = $1 ORDER BY id', [row.combo_group]);
+    return rows.map(r => Number(r.id));
+}
+
+// Email details for a registration; for a combo, all its classes in one email
+async function registrationEmailDetails(id) {
+    const ids = await registrationGroupIds(id);
+    const regs = [];
+    for (const regId of ids) {
+        const reg = await dbConfig.get(`
+            SELECT r.id, r.payment_amount, r.course_id, r.combo_id,
+                   s.email, s.first_name, s.last_name, c.name AS course_name
+            FROM registrations r
+            JOIN students s ON s.id = r.student_id
+            JOIN courses c ON c.id = r.course_id
+            WHERE r.id = $1
+        `, [regId]);
+        if (reg) {
+            reg.schedule_info = (await fetchCourseWithSlots(dbConfig, reg.course_id)).schedule_info;
+            regs.push(reg);
+        }
+    }
+    if (!regs.length) return null;
+    const first = regs[0];
+    const details = {
+        email: first.email,
+        studentName: [first.first_name, first.last_name].filter(Boolean).join(' '),
+        registrationId: first.id,
+        courseName: first.course_name,
+        scheduleInfo: first.schedule_info,
+        amount: Number(first.payment_amount)
+    };
+    if (regs.length > 1) {
+        const combo = first.combo_id ? await dbConfig.get('SELECT name FROM combos WHERE id = $1', [first.combo_id]) : null;
+        details.courseName = combo ? `${combo.name} (${regs.map(r => r.course_name).join(' + ')})` : regs.map(r => r.course_name).join(' + ');
+        details.scheduleInfo = regs.map(r => `${r.course_name}: ${r.schedule_info}`).join(' | ');
+        details.amount = Math.round(regs.reduce((sum, r) => sum + Number(r.payment_amount || 0), 0) * 100) / 100;
+    }
+    return details;
+}
+
 app.post('/api/register', asyncHandler(async (req, res) => {
     const {
         first_name, last_name, email, phone, date_of_birth,
@@ -3077,10 +3328,11 @@ app.get('/api/admin/registrations', requireAuth, asyncHandler(async (req, res) =
     
     let query = `
         SELECT r.*, s.id AS student_id, s.first_name, s.last_name, s.email, s.phone, s.dance_experience, s.instagram_handle AS instagram_id,
-               c.name as course_name, c.course_type, c.price
+               c.name as course_name, c.course_type, c.price, cb.name AS combo_name
         FROM registrations r
         LEFT JOIN students s ON r.student_id = s.id
         LEFT JOIN courses c ON r.course_id = c.id
+        LEFT JOIN combos cb ON r.combo_id = cb.id
     `;
     
     const params = [];
@@ -3218,15 +3470,18 @@ app.put('/api/admin/registrations/:id/confirm-payment', requireAuth, asyncHandle
     const { id } = req.params;
     const { venmo_transaction_note } = req.body;
 
-    // 1) Update registration to completed status
-    await dbConfig.run(`
-        UPDATE registrations SET
-            payment_status = 'completed',
-            payment_method = 'Venmo',
-            paypal_transaction_id = $1,
-            updated_at = CURRENT_TIMESTAMP
-        WHERE id = $2
-    `, [venmo_transaction_note || `Venmo payment confirmed by admin`, id]);
+    // 1) Mark paid (for a combo: every class in it)
+    const groupIds = await registrationGroupIds(id);
+    for (const regId of groupIds) {
+        await dbConfig.run(`
+            UPDATE registrations SET
+                payment_status = 'completed',
+                payment_method = 'Venmo',
+                paypal_transaction_id = $1,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = $2
+        `, [venmo_transaction_note || `Venmo payment confirmed by admin`, regId]);
+    }
 
     console.log('✅ Admin confirmed Venmo payment for registration:', id);
 
@@ -3245,34 +3500,14 @@ app.put('/api/admin/registrations/:id/confirm-payment', requireAuth, asyncHandle
             return res.json({ success: true, message: 'Payment confirmed successfully', email_sent, email_skipped });
         }
 
-        // Load registration with student and course info
-        const reg = await dbConfig.get(`
-            SELECT r.id, r.payment_amount, r.course_id,
-                   s.email, s.first_name, s.last_name,
-                   c.name AS course_name, c.start_date, c.end_date
-            FROM registrations r
-            JOIN students s ON s.id = r.student_id
-            JOIN courses c ON c.id = r.course_id
-            WHERE r.id = $1
-        `, [id]);
-
-        if (!reg) {
-            console.warn('⚠️ Registration not found for email send:', id);
+        // Student, class and amount for the email (a combo lists all its classes)
+        const details = await registrationEmailDetails(id);
+        if (!details) {
             return res.json({ success: true, message: 'Payment confirmed successfully (registration not found for email)', email_sent: false });
         }
 
-        // Compute schedule_info consistently with courses endpoint
-        const { schedule_info } = await fetchCourseWithSlots(dbConfig, reg.course_id);
-
         // Send confirmation email via Gmail SMTP
-        console.log('📧 Attempting to send confirmation email to:', reg.email, '| GMAIL_USER configured:', !!process.env.GMAIL_USER);
-        sendRegistrationConfirmationEmail(reg.email, {
-            courseName: reg.course_name,
-            scheduleInfo: schedule_info,
-            amount: reg.payment_amount,
-            registrationId: reg.id,
-            studentName: [reg.first_name, reg.last_name].filter(Boolean).join(' ')
-        }).then(() => {
+        sendRegistrationConfirmationEmail(details.email, details).then(() => {
             console.log('✉️  Sent confirmation email to:', reg.email);
         }).catch(err => {
             console.error('❌ Error sending confirmation email:', err.message, err.stack);
@@ -3307,31 +3542,13 @@ app.post('/api/admin/registrations/:id/resend-confirmation', requireAuth, asyncH
             return res.json({ success: true, message: 'Email notifications are disabled', email_sent, email_skipped });
         }
 
-        // Load registration with student and course info
-        const reg = await dbConfig.get(`
-            SELECT r.id, r.payment_amount, r.course_id,
-                   s.email, s.first_name, s.last_name,
-                   c.name AS course_name, c.start_date, c.end_date
-            FROM registrations r
-            JOIN students s ON s.id = r.student_id
-            JOIN courses c ON c.id = r.course_id
-            WHERE r.id = $1
-        `, [id]);
-
-        if (!reg) {
+        // Student, class and amount for the email (a combo lists all its classes)
+        const details = await registrationEmailDetails(id);
+        if (!details) {
             return res.status(404).json({ error: 'Registration not found' });
         }
 
-        const { schedule_info } = await fetchCourseWithSlots(dbConfig, reg.course_id);
-
-        // Send email using SendGrid
-        sendRegistrationConfirmationEmail(reg.email, {
-            courseName: reg.course_name,
-            scheduleInfo: schedule_info,
-            amount: reg.payment_amount,
-            registrationId: reg.id,
-            studentName: [reg.first_name, reg.last_name].filter(Boolean).join(' ')
-        }).then(() => {
+        sendRegistrationConfirmationEmail(details.email, details).then(() => {
             console.log('✉️  Resent confirmation email to:', reg.email);
         }).catch(err => {
             console.error('❌ Error resending confirmation email:', err);
@@ -3355,15 +3572,19 @@ app.put('/api/admin/registrations/:id/cancel', requireAuth, asyncHandler(async (
     const { reason } = req.body || {};
     try {
         // Update registration as canceled with audit fields
-        await dbConfig.run(`
-            UPDATE registrations SET
-                payment_status = 'canceled',
-                canceled_at = CURRENT_TIMESTAMP,
-                canceled_by = $1,
-                cancellation_reason = $2,
-                updated_at = CURRENT_TIMESTAMP
-            WHERE id = $3
-        `, [req.session.adminId || null, reason || null, id]);
+        // For a combo, cancel every class in it
+        const groupIds = await registrationGroupIds(id);
+        for (const regId of groupIds) {
+            await dbConfig.run(`
+                UPDATE registrations SET
+                    payment_status = 'canceled',
+                    canceled_at = CURRENT_TIMESTAMP,
+                    canceled_by = $1,
+                    cancellation_reason = $2,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = $3
+            `, [req.session.adminId || null, reason || null, regId]);
+        }
 
         // Email notifications (optional)
         let email_sent = false, email_skipped = false, email_error = null;
@@ -3375,28 +3596,10 @@ app.put('/api/admin/registrations/:id/cancel', requireAuth, asyncHandler(async (
             if (!emailEnabled) {
                 email_skipped = true;
             } else {
-                // Load registration with student and course info
-                const reg = await dbConfig.get(`
-                    SELECT r.id, r.payment_amount, r.course_id,
-                           s.email, s.first_name, s.last_name,
-                           c.name AS course_name
-                    FROM registrations r
-                    JOIN students s ON s.id = r.student_id
-                    JOIN courses c ON c.id = r.course_id
-                    WHERE r.id = $1
-                `, [id]);
-
-                if (reg && reg.email) {
-                    const { schedule_info } = await fetchCourseWithSlots(dbConfig, reg.course_id);
+                const details = await registrationEmailDetails(id);
+                if (details && details.email) {
                     const { sendRegistrationCancellationEmail } = require('./utils/mailer');
-                    await sendRegistrationCancellationEmail(reg.email, {
-                        courseName: reg.course_name,
-                        scheduleInfo: schedule_info,
-                        amount: reg.payment_amount,
-                        registrationId: reg.id,
-                        studentName: [reg.first_name, reg.last_name].filter(Boolean).join(' '),
-                        cancellationReason: reason || ''
-                    });
+                    await sendRegistrationCancellationEmail(details.email, { ...details, cancellationReason: reason || '' });
                     email_sent = true;
                 }
             }
@@ -3420,15 +3623,18 @@ app.put('/api/admin/registrations/:id/uncancel', requireAuth, asyncHandler(async
     const { id } = req.params;
     try {
         // Restore registration to pending and clear cancellation audit fields
-        await dbConfig.run(`
-            UPDATE registrations SET
-                payment_status = 'pending',
-                canceled_at = NULL,
-                canceled_by = NULL,
-                cancellation_reason = NULL,
-                updated_at = CURRENT_TIMESTAMP
-            WHERE id = $1
-        `, [id]);
+        const groupIds = await registrationGroupIds(id);
+        for (const regId of groupIds) {
+            await dbConfig.run(`
+                UPDATE registrations SET
+                    payment_status = 'pending',
+                    canceled_at = NULL,
+                    canceled_by = NULL,
+                    cancellation_reason = NULL,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = $1
+            `, [regId]);
+        }
 
         // Capacity information (for UI hints)
         const row = await dbConfig.get('SELECT course_id FROM registrations WHERE id = $1', [id]);

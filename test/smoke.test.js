@@ -292,6 +292,73 @@ test('class fields: dates, instructor, style, crew-only and per-date fees', asyn
     assert.equal(JSON.parse(edited.session_dates).length, 3);
 });
 
+test('combos: admin bundles classes; one checkout registers and confirms all of them', async () => {
+    const mk = async (name, start, fee) => {
+        const r = await api('POST', '/api/courses', {
+            name: `${name} ${unique}`, course_type: 'multi-week', song_name: 'House', instructor: 'Goutham',
+            session_dates: ['2030-05-07', '2030-05-14', '2030-05-21'],
+            slots: [{ slot_name: 'Main Session', difficulty_level: 'All Levels', capacity: 10, day_of_week: 'Tuesday',
+                      start_time: start, end_time: '21:00', location: 'Test Studio', pricing: { full_package: fee } }]
+        }, { admin: true });
+        assert.equal(r.status, 200, JSON.stringify(r.body));
+        return r.body.courseId;
+    };
+    const l1 = await mk('Combo L1', '18:15', 80);
+    const l2 = await mk('Combo L2', '19:30', 100);
+
+    assert.equal((await api('POST', '/api/combos', { name: 'x', price: 150, course_ids: [l1] })).status, 401, 'admin only');
+    const bad = await api('POST', '/api/combos', { name: 'Too small', price: 150, course_ids: [l1] }, { admin: true });
+    assert.equal(bad.status, 400, 'needs at least 2 classes');
+
+    const created = await api('POST', '/api/combos', { name: `Level 1 + 2 ${unique}`, price: 150, course_ids: [l1, l2] }, { admin: true });
+    assert.equal(created.status, 200, JSON.stringify(created.body));
+    const combo = created.body;
+    assert.equal(combo.regular_total, 180);
+    assert.equal(combo.savings, 30);
+
+    const pub = await api('GET', '/api/combos');
+    const listed = pub.body.find((c) => c.id === combo.id);
+    assert.ok(listed, 'combo listed for students');
+    assert.equal(listed.classes.length, 2);
+    assert.ok(listed.classes[0].slots[0].start_time, 'class details included');
+
+    // Student checks out once: a registration in each class, price split, same group
+    const email = `combo.${unique}@example.com`;
+    const reg = await api('POST', '/api/register-combo', { email, first_name: 'Combo', last_name: 'Student', combo_id: combo.id });
+    assert.equal(reg.status, 200, JSON.stringify(reg.body));
+    assert.equal(reg.body.payment_amount, 150);
+    assert.equal(reg.body.registrationIds.length, 2);
+
+    // Trying again replaces the unpaid registrations instead of duplicating them
+    const again = await api('POST', '/api/register-combo', { email, first_name: 'Combo', combo_id: combo.id });
+    assert.equal(again.status, 200, JSON.stringify(again.body));
+
+    const mineNow = async () => {
+        const regs = await api('GET', '/api/admin/registrations', null, { admin: true });
+        return regs.body.filter((r) => r.email === email);
+    };
+    let mine = await mineNow();
+    assert.equal(mine.length, 2, 'one registration per class, no duplicates');
+    assert.equal(mine.reduce((sum, r) => sum + Number(r.payment_amount), 0), 150, 'combo price split across classes');
+    assert.ok(mine.every((r) => r.combo_name === combo.name));
+
+    // Confirming one confirms the whole combo; cancelling one cancels both
+    const confirm = await api('PUT', `/api/admin/registrations/${again.body.registrationId}/confirm-payment`, {}, { admin: true });
+    assert.equal(confirm.status, 200, JSON.stringify(confirm.body));
+    mine = await mineNow();
+    assert.ok(mine.every((r) => r.payment_status === 'completed'), 'both classes paid');
+
+    const cancel = await api('PUT', `/api/admin/registrations/${again.body.registrationIds[1]}/cancel`, { reason: 'test' }, { admin: true });
+    assert.equal(cancel.status, 200, JSON.stringify(cancel.body));
+    mine = await mineNow();
+    assert.ok(mine.every((r) => r.payment_status === 'canceled'), 'both classes canceled');
+
+    // Turned off: hidden from students; can't be deleted once used
+    await api('PUT', `/api/combos/${combo.id}`, { is_active: false }, { admin: true });
+    assert.ok(!(await api('GET', '/api/combos')).body.some((c) => c.id === combo.id), 'turned-off combo hidden');
+    assert.equal((await api('DELETE', `/api/combos/${combo.id}`, null, { admin: true })).status, 400);
+});
+
 test('registration pages use the GouMo design system', async () => {
     for (const page of ['/email-profile.html?course=1', '/index-registration.html']) {
         const html = await fetch(BASE + page).then((r) => r.text());

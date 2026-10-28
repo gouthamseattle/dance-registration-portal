@@ -72,6 +72,7 @@ async function ensureSchema(dbConfig) {
         
         // Class fields: list of dates, instructor; registration: dates picked
         await ensureClassFieldColumns(dbConfig);
+        await ensureComboTables(dbConfig);
 
         // Ensure student profile and access control columns exist
         await ensureStudentProfileColumns(dbConfig);
@@ -216,6 +217,41 @@ async function ensureClassFieldColumns(dbConfig) {
         console.log('✅ Ensured class field columns exist');
     } catch (e) {
         console.log('ℹ️ class field columns check skipped:', e.message || e);
+    }
+}
+
+/**
+ * Combos (Oct 2026): a bundle of classes sold together at one price.
+ * Registering for a combo creates one registration per class; they share
+ * a combo_group so the admin can confirm or cancel them together.
+ */
+async function ensureComboTables(dbConfig) {
+    try {
+        const pk = dbConfig.isProduction ? 'SERIAL PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT';
+        const bool = dbConfig.isProduction ? 'BOOLEAN DEFAULT TRUE' : 'INTEGER DEFAULT 1';
+        await dbConfig.run(`CREATE TABLE IF NOT EXISTS combos (
+            id ${pk},
+            name VARCHAR(255) NOT NULL,
+            description TEXT,
+            price DECIMAL(10,2) NOT NULL,
+            is_active ${bool},
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )`);
+        await dbConfig.run(`CREATE TABLE IF NOT EXISTS combo_classes (
+            combo_id INTEGER NOT NULL,
+            course_id INTEGER NOT NULL,
+            PRIMARY KEY (combo_id, course_id)
+        )`);
+        if (dbConfig.isProduction) {
+            await dbConfig.run('ALTER TABLE registrations ADD COLUMN IF NOT EXISTS combo_id INTEGER');
+            await dbConfig.run('ALTER TABLE registrations ADD COLUMN IF NOT EXISTS combo_group VARCHAR(64)');
+        } else {
+            await dbConfig.run('ALTER TABLE registrations ADD COLUMN combo_id INTEGER').catch(() => {});
+            await dbConfig.run('ALTER TABLE registrations ADD COLUMN combo_group TEXT').catch(() => {});
+        }
+        console.log('✅ Ensured combo tables exist');
+    } catch (e) {
+        console.log('ℹ️ combo tables check skipped:', e.message || e);
     }
 }
 
