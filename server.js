@@ -53,14 +53,41 @@ app.use(express.static('public', {
 
  // Session configuration
 app.set('trust proxy', 1);
+// Admin sign-ins are kept in the database (table app_sessions), so a deploy or
+// restart doesn't sign you out, and they last 30 days from the last visit. This
+// matters for the admin "app" on the phone's home screen.
+class DbSessionStore extends session.Store {
+    get(sid, cb) {
+        dbConfig.get('SELECT sess, expire FROM app_sessions WHERE sid = $1', [sid])
+            .then(row => {
+                if (!row || new Date(row.expire) < new Date()) return cb(null, null);
+                cb(null, JSON.parse(row.sess));
+            })
+            .catch(err => cb(err));
+    }
+    set(sid, sess, cb) {
+        const expire = new Date(Date.now() + (sess.cookie?.maxAge || 30 * 24 * 60 * 60 * 1000));
+        dbConfig.run(
+            'INSERT INTO app_sessions (sid, sess, expire) VALUES ($1, $2, $3) ON CONFLICT (sid) DO UPDATE SET sess = excluded.sess, expire = excluded.expire',
+            [sid, JSON.stringify(sess), expire.toISOString()]
+        ).then(() => cb && cb(null)).catch(err => cb && cb(err));
+    }
+    destroy(sid, cb) {
+        dbConfig.run('DELETE FROM app_sessions WHERE sid = $1', [sid]).then(() => cb && cb(null)).catch(err => cb && cb(err));
+    }
+    touch(sid, sess, cb) { this.set(sid, sess, cb); }
+}
+
 app.use(session({
+    store: new DbSessionStore(),
     secret: process.env.SESSION_SECRET || 'dance-registration-secret',
     resave: false,
     saveUninitialized: false,
-    cookie: { 
+    rolling: true,
+    cookie: {
         secure: false, // Set to false for Railway deployment
         httpOnly: true,
-        maxAge: 24 * 60 * 60 * 1000, // 24 hours
+        maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days, renewed on each visit
         sameSite: 'lax'
     }
 }));

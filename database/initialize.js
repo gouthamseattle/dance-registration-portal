@@ -73,6 +73,7 @@ async function ensureSchema(dbConfig) {
         // Class fields: list of dates, instructor; registration: dates picked
         await ensureClassFieldColumns(dbConfig);
         await ensureComboTables(dbConfig);
+        await ensureSessionTable(dbConfig);
 
         // Ensure student profile and access control columns exist
         await ensureStudentProfileColumns(dbConfig);
@@ -262,6 +263,22 @@ async function ensureComboTables(dbConfig) {
         console.log('✅ Ensured combo tables exist');
     } catch (e) {
         console.log('ℹ️ combo tables check skipped:', e.message || e);
+    }
+}
+
+// Admin sign-in sessions (see DbSessionStore in server.js)
+async function ensureSessionTable(dbConfig) {
+    try {
+        await dbConfig.run(`CREATE TABLE IF NOT EXISTS app_sessions (
+            sid VARCHAR(255) PRIMARY KEY,
+            sess TEXT NOT NULL,
+            expire TIMESTAMP NOT NULL
+        )`);
+        // Clear out expired sign-ins
+        await dbConfig.run('DELETE FROM app_sessions WHERE expire < CURRENT_TIMESTAMP').catch(() => {});
+        console.log('✅ Ensured session table exists');
+    } catch (e) {
+        console.log('ℹ️ session table check skipped:', e.message || e);
     }
 }
 
