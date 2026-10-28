@@ -177,3 +177,7 @@ button.stat:hover { border-color: var(--muted); }
 .check-item:last-child { border-bottom: 0; }
 .check-item h6 { margin-bottom: 6px; }
 .check-item ul { margin: 6px 0 10px; padding-left: 18px; }
+
+/* Home-screen app on iPhone: keep the top bar clear of the notch / status bar */
+.admin-top { padding-top: env(safe-area-inset-top); }
+.admin-main { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }

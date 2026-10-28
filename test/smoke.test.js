@@ -676,6 +676,21 @@ test('student cleanup: bulk hide/restore/type, test accounts, data check', async
     assert.equal((await api('GET', `/api/admin/students/${keeper.id}`, null, { admin: true })).body.registrations.length, 2, 'classes moved to one profile');
 });
 
+test('admin works as a home-screen app and stays signed in', async () => {
+    const manifest = await fetch(`${BASE}/admin-manifest.webmanifest`);
+    assert.equal(manifest.status, 200);
+    const m = JSON.parse(await manifest.text());
+    assert.equal(m.start_url, '/admin');
+    assert.equal(m.display, 'standalone');
+    const html = await (await fetch(`${BASE}/admin`)).text();
+    assert.ok(html.includes('apple-touch-icon') && html.includes('apple-mobile-web-app-capable'));
+    assert.equal((await fetch(`${BASE}/images/admin-icon-180.png`)).status, 200);
+    // The signed-in session (from the login at the start) is kept in the database
+    const status = await api('GET', '/api/admin/status', null, { admin: true });
+    assert.equal(status.status, 200);
+    assert.ok(status.body.authenticated, 'still signed in through the database session store');
+});
+
 test('removed features are gone', async () => {
     for (const [method, url] of [
         ['POST', '/api/competition/register'],
