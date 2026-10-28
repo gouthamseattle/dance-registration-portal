@@ -45,13 +45,11 @@ class EmailProfileRegistrationApp {
             const list = await fetch('/api/courses?active_only=true&include_crew=true').then(r => r.json());
             const course = (Array.isArray(list) ? list : []).find(c => String(c.id) === String(this.preselectCourseId));
             if (!course) return;
-            const esc = (v) => String(v ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
-            const kinds = { 'drop_in': 'Drop-in', 'crew_practice': 'Crew practice' };
-            const kind = kinds[course.course_type] || 'Series';
-            const slot = (course.slots || [])[0] || {};
-            const when = [slot.day_of_week, slot.start_time].filter(Boolean).join(' · ');
-            const perClass = course.course_type === 'drop_in' || course.course_type === 'crew_practice';
-            const price = perClass ? (course.per_class_price || course.full_course_price) : (course.full_course_price || course.per_class_price);
+            const C = window.ClassInfo;
+            const esc = C.esc;
+            const kind = C.kicker(course);
+            const when = [C.formatDates(C.dates(course)), C.timeRange(course)].filter(Boolean).join(' · ');
+            const price = C.fees(course).headline;
             const box = document.getElementById('selectedClassSummary');
             box.innerHTML = `
                 <div>

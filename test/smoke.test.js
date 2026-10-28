@@ -239,6 +239,59 @@ test('admin creates a drop-in with two classes and a crew practice', async () =>
     assert.equal(crewTwoSlots.status, 400, 'crew practice limited to one class');
 });
 
+test('class fields: dates, instructor, style, crew-only and per-date fees', async () => {
+    const dates = ['2030-03-05', '2030-03-12', '2030-03-19', '2030-03-26'];
+    const created = await api('POST', '/api/courses', {
+        name: `Smoke Series ${unique}`, course_type: 'multi-week',
+        song_name: 'House', instructor: 'Goutham', required_student_type: 'any',
+        session_dates: [dates[2], dates[0], dates[1], dates[3], dates[0]],   // unsorted + duplicate on purpose
+        slots: [{ slot_name: 'Main Session', difficulty_level: 'All Levels', capacity: 20, day_of_week: 'Tuesday',
+                  start_time: '18:15', end_time: '19:30', location: 'Test Studio', pricing: { full_package: 80, drop_in: 30 } }]
+    }, { admin: true });
+    assert.equal(created.status, 200, JSON.stringify(created.body));
+    const id = created.body.courseId;
+
+    const list = await api('GET', '/api/courses?active_only=true&include_crew=true');
+    const course = list.body.find((c) => Number(c.id) === Number(id));
+    assert.ok(course, 'new class listed');
+    assert.deepEqual(JSON.parse(course.session_dates), dates, 'dates stored sorted and de-duplicated');
+    assert.equal(course.instructor, 'Goutham');
+    assert.equal(course.song_name, 'House');
+    assert.equal(Number(course.full_course_price), 80);
+    assert.equal(Number(course.per_class_price), 30);
+
+    // Student picks 2 of the 4 dates: server works out 2 x $30 regardless of what the browser says
+    const email = `dates.${unique}@example.com`;
+    const reg = await api('POST', '/api/register', {
+        first_name: 'Date', last_name: 'Picker', email, course_id: id,
+        payment_amount: 1, registration_type: 'per-date', selected_dates: [dates[0], dates[2]]
+    });
+    assert.equal(reg.status, 200, JSON.stringify(reg.body));
+    assert.equal(reg.body.payment_amount, 60);
+
+    const bad = await api('POST', '/api/register', {
+        first_name: 'Date', email: `bad.${unique}@example.com`, course_id: id,
+        payment_amount: 30, selected_dates: ['2031-01-01']
+    });
+    assert.equal(bad.status, 400, 'a date outside the class is rejected');
+
+    const regs = await api('GET', '/api/admin/registrations', null, { admin: true });
+    const rows = Array.isArray(regs.body) ? regs.body : (regs.body.registrations || []);
+    const mine = rows.find((r) => Number(r.id) === Number(reg.body.registrationId));
+    assert.deepEqual(JSON.parse(mine.selected_dates), [dates[0], dates[2]]);
+    assert.equal(Number(mine.payment_amount), 60);
+
+    // Edit: mark crew-only and drop a date
+    const upd = await api('PUT', `/api/courses/${id}`, { required_student_type: 'crew_member', session_dates: dates.slice(0, 3) }, { admin: true });
+    assert.equal(upd.status, 200, JSON.stringify(upd.body));
+    const general = await api('GET', '/api/courses?active_only=true');
+    assert.ok(!general.body.some((c) => Number(c.id) === Number(id)), 'crew-only class hidden from the general list');
+    const all = await api('GET', '/api/courses?active_only=true&include_crew=true');
+    const edited = all.body.find((c) => Number(c.id) === Number(id));
+    assert.equal(edited.required_student_type, 'crew_member');
+    assert.equal(JSON.parse(edited.session_dates).length, 3);
+});
+
 test('registration pages use the GouMo design system', async () => {
     for (const page of ['/email-profile.html?course=1', '/index-registration.html']) {
         const html = await fetch(BASE + page).then((r) => r.text());

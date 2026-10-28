@@ -162,6 +162,25 @@ app.put('/api/settings', requireAuth, asyncHandler(async (req, res) => {
     res.json({ success: true });
 }));
 
+
+// ---------- Class field helpers (dates list, crew-only) ----------
+// Accepts an array or JSON string of dates; returns a sorted, de-duplicated array of 'YYYY-MM-DD'.
+function normalizeSessionDates(value) {
+    let list = value;
+    if (typeof list === 'string') {
+        try { list = JSON.parse(list); } catch (e) { list = list.split(','); }
+    }
+    if (!Array.isArray(list)) return [];
+    const clean = list
+        .map(d => String(d || '').trim().slice(0, 10))
+        .filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d));
+    return [...new Set(clean)].sort();
+}
+
+function normalizeStudentType(value) {
+    return value === 'crew_member' ? 'crew_member' : 'any';
+}
+
 // Courses
 app.get('/api/courses', asyncHandler(async (req, res) => {
     // include_crew=true: the public home page lists crew-only classes too (shown with a "Crew only" label).
@@ -930,8 +949,10 @@ app.post('/api/courses', requireAuth, asyncHandler(async (req, res) => {
         name, description, course_type, duration_weeks,
         start_date, end_date, instructor, schedule_info, prerequisites,
         song_name, movie_name, language, series_slot,
+        session_dates, required_student_type,
         slots // Array of slot objects with difficulty_level, capacity, pricing, etc.
     } = req.body;
+    const dates = normalizeSessionDates(session_dates);
     
     if (!name || !course_type || !slots || slots.length === 0) {
         return res.status(400).json({ error: 'Required fields missing: name, course_type, and at least one slot are required' });
@@ -947,13 +968,16 @@ app.post('/api/courses', requireAuth, asyncHandler(async (req, res) => {
         INSERT INTO courses (
             name, description, course_type, duration_weeks,
             start_date, end_date, instructor, schedule_info, prerequisites,
-            song_name, movie_name, language, series_slot
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+            song_name, movie_name, language, series_slot,
+            session_dates, required_student_type
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
         ${dbConfig.isProduction ? 'RETURNING id' : ''}
     `, [
-        name, description, course_type, duration_weeks || 1,
-        start_date, end_date, instructor, schedule_info, prerequisites,
-        song_name || null, movie_name || null, language || null, series_slot || null
+        name, description, course_type, duration_weeks || dates.length || 1,
+        start_date || dates[0] || null, end_date || dates[dates.length - 1] || null,
+        instructor || null, schedule_info, prerequisites,
+        song_name || null, movie_name || null, language || null, series_slot || null,
+        dates.length ? JSON.stringify(dates) : null, normalizeStudentType(required_student_type)
     ]);
     
     // Get course ID
@@ -1028,6 +1052,7 @@ app.put('/api/courses/:id', requireAuth, asyncHandler(async (req, res) => {
         name, description, course_type, duration_weeks,
         start_date, end_date, instructor, schedule_info, prerequisites, is_active,
         song_name, movie_name, language, series_slot,
+        session_dates, required_student_type,
         slots // Array of slot objects for updating
     } = req.body;
 
@@ -1046,7 +1071,9 @@ app.put('/api/courses/:id', requireAuth, asyncHandler(async (req, res) => {
         song_name,
         movie_name,
         language,
-        series_slot
+        series_slot,
+        session_dates: session_dates === undefined ? undefined : JSON.stringify(normalizeSessionDates(session_dates)),
+        required_student_type: required_student_type === undefined ? undefined : normalizeStudentType(required_student_type)
     };
 
     const sets = [];
@@ -2745,8 +2772,9 @@ app.post('/api/register', asyncHandler(async (req, res) => {
         first_name, last_name, email, phone, date_of_birth,
         emergency_contact_name, emergency_contact_phone, medical_conditions,
         dance_experience, instagram_handle, instagram_id, how_heard_about_us,
-        course_id, payment_amount, special_requests
+        course_id, special_requests, selected_dates, registration_type
     } = req.body;
+    let { payment_amount } = req.body;
     
     // Handle both instagram_handle and instagram_id field names
     const instagram = instagram_handle || instagram_id;
@@ -2856,12 +2884,46 @@ app.post('/api/register', asyncHandler(async (req, res) => {
         'SELECT id FROM registrations WHERE student_id = $1 AND course_id = $2 AND payment_status = \'pending\' ORDER BY registration_date DESC LIMIT 1',
         [student.id, course_id]
     );
+
+    // Picking individual dates: they must be dates of this class, and the
+    // amount is worked out here (dates x per-date fee), not trusted from the browser.
+    let pickedDates = null;
+    if (selected_dates !== undefined && selected_dates !== null) {
+        pickedDates = normalizeSessionDates(selected_dates);
+        const courseRow = await dbConfig.get('SELECT session_dates FROM courses WHERE id = $1', [course_id]);
+        const classDates = normalizeSessionDates(courseRow?.session_dates);
+        if (pickedDates.length === 0) {
+            return res.status(400).json({ error: 'Please pick at least one date' });
+        }
+        if (classDates.length && pickedDates.some(d => !classDates.includes(d))) {
+            return res.status(400).json({ error: 'One or more picked dates are not part of this class' });
+        }
+        const priceRow = await dbConfig.get(`
+            SELECT cp.price FROM course_pricing cp
+            JOIN course_slots cs ON cp.course_slot_id = cs.id
+            WHERE cs.course_id = $1 AND cp.pricing_type = 'drop_in'
+            ORDER BY cs.id LIMIT 1
+        `, [course_id]);
+        const perDate = Number(priceRow?.price);
+        if (!perDate) {
+            return res.status(400).json({ error: 'This class does not offer individual dates' });
+        }
+        payment_amount = perDate * pickedDates.length;
+    }
+    const pickedDatesJson = pickedDates ? JSON.stringify(pickedDates) : null;
+
     if (existingPending) {
-        console.log('ℹ️ Returning existing pending registration', { id: existingPending.id, student_id: student.id, course_id });
+        // Same student, same class, not paid yet: update their choice instead of duplicating
+        await dbConfig.run(
+            'UPDATE registrations SET payment_amount = $1, selected_dates = $2, registration_type = $3, updated_at = CURRENT_TIMESTAMP WHERE id = $4',
+            [payment_amount, pickedDatesJson, registration_type || null, existingPending.id]
+        );
+        console.log('ℹ️ Updated existing pending registration', { id: existingPending.id, student_id: student.id, course_id });
         return res.json({ 
             success: true, 
             registrationId: existingPending.id, 
             studentId: student.id,
+            payment_amount: Number(payment_amount),
             deduped: true
         });
     }
@@ -2869,10 +2931,11 @@ app.post('/api/register', asyncHandler(async (req, res) => {
     // Create registration
     const registrationResult = await dbConfig.run(`
         INSERT INTO registrations (
-            student_id, course_id, payment_amount, payment_status, special_requests
-        ) VALUES ($1, $2, $3, 'pending', $4)
+            student_id, course_id, payment_amount, payment_status, special_requests,
+            registration_type, selected_dates
+        ) VALUES ($1, $2, $3, 'pending', $4, $5, $6)
         ${dbConfig.isProduction ? 'RETURNING id' : ''}
-    `, [student.id, course_id, payment_amount, special_requests]);
+    `, [student.id, course_id, payment_amount, special_requests, registration_type || null, pickedDatesJson]);
     
     // Handle different return formats for SQLite vs PostgreSQL
     let registrationId;
@@ -2888,7 +2951,8 @@ app.post('/api/register', asyncHandler(async (req, res) => {
     res.json({ 
         success: true, 
         registrationId: registrationId,
-        studentId: student.id
+        studentId: student.id,
+        payment_amount: Number(payment_amount)
     });
 }));
 
