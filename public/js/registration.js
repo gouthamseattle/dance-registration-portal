@@ -966,70 +966,48 @@ class DanceRegistrationApp {
                 this.registrationData.payment_method = this.selectedPaymentMethod;
             }
 
-            // COMBO: one call registers the student in every class of the combo
-            if (this.registrationData.combo_registration) {
-                const comboResponse = await fetch('/api/register-combo', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(this.registrationData)
-                });
-                const comboResult = await comboResponse.json();
-                if (!comboResponse.ok) throw new Error(comboResult.error || 'Registration failed');
-                this.registrationData.registrationId = comboResult.registrationId;
-                this.registrationData.registration_ids = comboResult.registrationIds;
-                this.registrationData.studentId = comboResult.studentId;
-                this.registrationData.payment_amount = comboResult.payment_amount;
-                this.showPaymentSection();
-                return;
-            }
-
-            // Try regular registration first
-            const response = await fetch('/api/register', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(this.registrationData)
-            });
-
-            const result = await response.json();
-
-            if (!response.ok) {
-                // Check if course is full and try waitlist
-                if (result.course_full) {
-                    console.log('🎯 Course is full, attempting waitlist registration');
+            // Check only: nothing is saved yet. The registration is created when the
+            // student taps "I've sent the payment" (see showPaymentSentConfirmation).
+            const { ok, result } = await this.submitRegistration(true);
+            if (!ok) {
+                if (result.course_full && !this.registrationData.combo_registration) {
                     await this.handleWaitlistRegistration();
                     return;
-                } else {
-                    throw new Error(result.error || 'Registration failed');
                 }
+                throw new Error(result.error || 'Registration failed');
             }
-
-            // Regular registration successful
-            this.registrationData.registrationId = result.registrationId;
-            this.registrationData.studentId = result.studentId;
-            // The server works out the amount for picked dates; use its figure for payment
+            // The server works out the amount (picked dates, combos); use its figure
             if (result.payment_amount) this.registrationData.payment_amount = result.payment_amount;
-
-            // Debug logging to verify data
-            console.log('✅ Registration successful:', {
-                registrationId: this.registrationData.registrationId,
-                studentId: this.registrationData.studentId,
-                amount: this.registrationData.payment_amount
-            });
-
-            // Verify we have all required data before proceeding
-            if (!this.registrationData.registrationId || !this.registrationData.payment_amount) {
-                throw new Error('Registration data incomplete - missing ID or amount');
-            }
-
-            // Proceed to payment
+            this.registrationData.registrationId = null;
             this.showPaymentSection();
 
         } catch (error) {
             console.error('Registration error:', error);
             this.showError(error.message || 'Registration failed. Please try again.');
         }
+    }
+
+    // Send the registration to the server. dryRun = true only checks it
+    // (class open, not full, not already paid) and returns the amount.
+    async submitRegistration(dryRun) {
+        const url = this.registrationData.combo_registration ? '/api/register-combo' : '/api/register';
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...this.registrationData, dry_run: dryRun })
+        });
+        const result = await response.json().catch(() => ({}));
+        return { ok: response.ok, result };
+    }
+
+    // What the Venmo / Zelle note should say: class and student name
+    paymentDetailsRequest(courseName) {
+        return {
+            amount: this.registrationData.payment_amount,
+            courseId: this.registrationData.combo_registration ? null : this.registrationData.course_id,
+            courseName,
+            studentName: [this.registrationData.first_name, this.registrationData.last_name].filter(Boolean).join(' ')
+        };
     }
 
     async handleWaitlistRegistration() {
@@ -1374,11 +1352,7 @@ class DanceRegistrationApp {
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({
-                    registrationId: this.registrationData.registrationId,
-                    amount: this.registrationData.payment_amount,
-                    courseName: courseName
-                })
+                body: JSON.stringify(this.paymentDetailsRequest(courseName))
             });
 
             const venmoData = await response.json();
@@ -1470,7 +1444,7 @@ class DanceRegistrationApp {
                         </div>
                         
                         <div class="d-grid">
-                            <button class="btn btn-success" onclick="app.showPaymentSentConfirmation()">
+                            <button class="btn btn-success" onclick="app.showPaymentSentConfirmation(this)">
                                 <i class="fas fa-check me-2"></i>
                                 I've Sent the Payment
                             </button>
@@ -1490,7 +1464,6 @@ class DanceRegistrationApp {
                 <div class="alert alert-danger">
                     <h6><i class="fas fa-exclamation-triangle me-2"></i>Venmo Payment Error</h6>
                     <p class="mb-2">${error.message}</p>
-                    <p class="mb-0 small">Your registration has been saved with ID: #${this.registrationData.registrationId}</p>
                     <div class="mt-3">
                         <button class="btn btn-outline-primary" onclick="app.initializePaymentOptions()">Try Another Payment Method</button>
                     </div>
@@ -1513,11 +1486,7 @@ class DanceRegistrationApp {
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({
-                    registrationId: this.registrationData.registrationId,
-                    amount: this.registrationData.payment_amount,
-                    courseName: courseName
-                })
+                body: JSON.stringify(this.paymentDetailsRequest(courseName))
             });
 
             const zelleData = await response.json();
@@ -1604,7 +1573,7 @@ class DanceRegistrationApp {
                         </div>
                         
                         <div class="d-grid">
-                            <button class="btn btn-success" onclick="app.showPaymentSentConfirmation()">
+                            <button class="btn btn-success" onclick="app.showPaymentSentConfirmation(this)">
                                 <i class="fas fa-check me-2"></i>
                                 I've Sent the Payment
                             </button>
@@ -1619,7 +1588,6 @@ class DanceRegistrationApp {
                 <div class="alert alert-danger">
                     <h6><i class="fas fa-exclamation-triangle me-2"></i>Zelle Payment Error</h6>
                     <p class="mb-2">${error.message}</p>
-                    <p class="mb-0 small">Your registration has been saved with ID: #${this.registrationData.registrationId}</p>
                     <div class="mt-3">
                         <button class="btn btn-outline-primary" onclick="app.initializePaymentOptions()">Try Another Payment Method</button>
                     </div>
@@ -1642,7 +1610,27 @@ class DanceRegistrationApp {
         }
     }
 
-    showPaymentSentConfirmation() {
+    // "I've sent the payment": this is when the registration is saved.
+    async showPaymentSentConfirmation(button) {
+        if (this._savingRegistration) return;
+        this._savingRegistration = true;
+        const label = button ? button.innerHTML : '';
+        if (button) { button.disabled = true; button.textContent = 'Saving your registration…'; }
+        try {
+            const { ok, result } = await this.submitRegistration(false);
+            if (!ok) throw new Error(result.error || 'Could not save your registration');
+            this.registrationData.registrationId = result.registrationId;
+            this.registrationData.registration_ids = result.registrationIds;
+            this.registrationData.studentId = result.studentId;
+            if (result.payment_amount) this.registrationData.payment_amount = result.payment_amount;
+        } catch (error) {
+            this._savingRegistration = false;
+            if (button) { button.disabled = false; button.innerHTML = label; }
+            this.showError(`${error.message}. If you already paid, message us on Instagram @goumo_dancechronicles and we'll sort it out.`);
+            return;
+        }
+        this._savingRegistration = false;
+
         // Update the payment section to show confirmation
         const container = document.getElementById('paypal-button-container');
         container.innerHTML = `
@@ -1650,7 +1638,7 @@ class DanceRegistrationApp {
                 <div class="alert alert-success">
                     <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
                     <h5>Payment Sent!</h5>
-                    <p class="mb-2">Thank you for sending your Venmo payment.</p>
+                    <p class="mb-2">Thank you for sending your ${this.selectedPaymentMethod === 'zelle' ? 'Zelle' : 'Venmo'} payment.</p>
                     <p class="mb-2 small">Registration received, We will confirm your payment and send an email confirmation</p>
                     <p class="mb-0 small text-muted">
                         <i class="fas fa-envelope me-1"></i>

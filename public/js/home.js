@@ -17,11 +17,13 @@
     const crewOnly = course.required_student_type === 'crew_member' ? ' <span class="badge">Crew only</span>' : '';
     const spots = Number(course.available_spots);
     const isFull = Number.isFinite(spots) && spots <= 0;
+    const isClosed = !C.isOpen(course);
     const f = C.fees(course);
     const registerUrl = `/email-profile.html?course=${encodeURIComponent(course.id)}`;
     const rows = C.rows(course).filter(([k]) => !(isFull && k === 'Fees'));
-    if (isFull) rows.push(['Status', 'Full · waitlist open']);
-    const fewLeft = !isFull && Number.isFinite(spots) && spots <= 5;
+    if (isClosed) rows.push(['Status', 'Registration closed']);
+    else if (isFull) rows.push(['Status', 'Full · waitlist open']);
+    const fewLeft = !isClosed && !isFull && Number.isFinite(spots) && spots <= 5;
 
     return `
       <article class="card class-card" data-type="${esc(C.typeLabel(course))}">
@@ -39,7 +41,9 @@
         ${course.description ? `<p class="desc">${esc(course.description)}</p>` : ''}
         <div class="actions">
           <span class="spots">${fewLeft ? `Only ${spots} spot${spots === 1 ? '' : 's'} left` : ''}</span>
-          ${isFull
+          ${isClosed
+            ? '<span class="btn btn-outline" aria-disabled="true">Registration closed</span>'
+            : isFull
             ? `<a class="btn btn-outline" href="${registerUrl}">Join waitlist</a>`
             : `<a class="btn btn-primary" href="${registerUrl}">Register</a>`}
         </div>

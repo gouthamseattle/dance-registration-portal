@@ -450,6 +450,66 @@ test('admin page uses the GouMo design system', async () => {
     }
 });
 
+test('checkout saves nothing until "I\'ve sent the payment"; per-class registration switch', async () => {
+    const cls = await api('POST', '/api/courses', {
+        name: `Switch Test ${unique}`, course_type: 'multi-week', session_dates: ['2030-07-07', '2030-07-14', '2030-07-21'],
+        slots: [{ slot_name: 'Main Session', difficulty_level: 'All Levels', capacity: 10, day_of_week: 'Tuesday',
+                  start_time: '18:00', end_time: '19:00', location: 'Test Studio', pricing: { full_package: 90 } }]
+    }, { admin: true });
+    assert.equal(cls.status, 200, JSON.stringify(cls.body));
+    const id = cls.body.courseId;
+    const email = `checkout.${unique}@example.com`;
+    const body = { first_name: 'Check', last_name: 'Out', email, course_id: id, payment_amount: 90, payment_method: 'venmo' };
+
+    // Check only: amount comes back, nothing is saved
+    const check = await api('POST', '/api/register', { ...body, dry_run: true });
+    assert.equal(check.status, 200, JSON.stringify(check.body));
+    assert.equal(check.body.payment_amount, 90);
+    assert.ok(!check.body.registrationId);
+    const before = await api('GET', '/api/registrations', null, { admin: true });
+    assert.ok(!before.body.some((r) => r.email === email), 'no registration saved by the check');
+
+    // Payment details work without a registration number
+    const venmo = await api('POST', '/api/generate-venmo-link', { amount: 90, courseId: id, studentName: 'Check Out' });
+    assert.equal(venmo.status, 200, JSON.stringify(venmo.body));
+    assert.ok(venmo.body.paymentNote.includes(`Switch Test ${unique}`) && venmo.body.paymentNote.includes('Check Out'));
+    const zelle = await api('POST', '/api/generate-zelle-payment', { amount: 90, courseId: id, studentName: 'Check Out' });
+    assert.equal(zelle.status, 200, JSON.stringify(zelle.body));
+
+    // Tapping "I've sent the payment" saves it
+    const saved = await api('POST', '/api/register', body);
+    assert.equal(saved.status, 200, JSON.stringify(saved.body));
+    assert.ok(saved.body.registrationId);
+
+    // Admin closes registration for just this class
+    assert.equal((await api('PUT', `/api/courses/${id}/registration-open`, { open: false })).status, 401, 'admin only');
+    const close = await api('PUT', `/api/courses/${id}/registration-open`, { open: false }, { admin: true });
+    assert.equal(close.status, 200, JSON.stringify(close.body));
+    const list = await api('GET', '/api/courses?active_only=true&include_crew=true');
+    const listed = list.body.find((c) => Number(c.id) === Number(id));
+    assert.ok(listed, 'closed class still listed');
+    assert.ok(listed.registration_open === false || listed.registration_open === 0, 'listed as closed');
+    const blocked = await api('POST', '/api/register', { ...body, email: `late2.${unique}@example.com`, dry_run: true });
+    assert.equal(blocked.status, 400);
+    assert.ok(blocked.body.registration_closed);
+
+    // A combo containing a closed class is hidden and can't be booked
+    const other = await api('POST', '/api/courses', {
+        name: `Switch Other ${unique}`, course_type: 'multi-week', session_dates: ['2030-07-08', '2030-07-15', '2030-07-22'],
+        slots: [{ slot_name: 'Main Session', difficulty_level: 'All Levels', capacity: 10, day_of_week: 'Wednesday',
+                  start_time: '18:00', end_time: '19:00', location: 'Test Studio', pricing: { full_package: 90 } }]
+    }, { admin: true });
+    const combo = await api('POST', '/api/combos', { name: `Switch Combo ${unique}`, price: 150, course_ids: [id, other.body.courseId] }, { admin: true });
+    assert.equal(combo.status, 200, JSON.stringify(combo.body));
+    assert.ok(!(await api('GET', '/api/combos')).body.some((c) => c.id === combo.body.id), 'combo hidden while a class is closed');
+    const comboTry = await api('POST', '/api/register-combo', { email: `combo2.${unique}@example.com`, combo_id: combo.body.id, dry_run: true });
+    assert.equal(comboTry.status, 400);
+
+    // Reopen
+    await api('PUT', `/api/courses/${id}/registration-open`, { open: true }, { admin: true });
+    assert.ok((await api('GET', '/api/combos')).body.some((c) => c.id === combo.body.id), 'combo back once reopened');
+});
+
 test('removed features are gone', async () => {
     for (const [method, url] of [
         ['POST', '/api/competition/register'],
