@@ -65,6 +65,15 @@
     $('classList').innerHTML = rows.length ? rows.join('')
       : '<p class="empty">No classes yet. <a class="accent" href="/#classes">See what\'s on</a>.</p>';
 
+    // Test accounts: remember it on this device so other pages let it through,
+    // and offer a switch between crew member and GouMo student views
+    const tester = st.is_tester === true || st.is_tester === 1 || st.is_tester === 't';
+    try { tester ? localStorage.setItem('goumo_tester', '1') : localStorage.removeItem('goumo_tester'); } catch (e) { /* private mode */ }
+    $('testerBox').hidden = !tester;
+    document.querySelectorAll('#testerBox [data-as]').forEach((b) => {
+      b.className = `btn ${b.dataset.as === (st.student_type === 'crew_member' ? 'crew_member' : 'general') ? 'btn-primary' : 'btn-outline'}`;
+    });
+
     $('firstName').value = st.first_name || '';
     $('lastName').value = st.last_name || '';
     $('instagram').value = st.instagram_handle || '';
@@ -88,9 +97,21 @@
     }
   }
 
+  $('testerBox').addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-as]');
+    if (!b) return;
+    const res = await fetch('/api/my/tester-type', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, student_type: b.dataset.as })
+    }).catch(() => null);
+    $('testerMsg').className = res && res.ok ? 'msg ok' : 'msg err';
+    $('testerMsg').textContent = res && res.ok ? 'Switched.' : 'Could not switch.';
+    if (res && res.ok) load(email);
+  });
+
   $('signInForm').addEventListener('submit', (e) => { e.preventDefault(); load($('email').value.trim()); });
   $('signOut').addEventListener('click', () => {
     remember(''); email = '';
+    try { localStorage.removeItem('goumo_tester'); } catch (e2) { /* private mode */ }
     $('profile').hidden = true; $('signIn').hidden = false; $('email').value = '';
   });
   $('detailsForm').addEventListener('submit', async (e) => {

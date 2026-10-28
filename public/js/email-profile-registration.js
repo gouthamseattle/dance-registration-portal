@@ -121,7 +121,7 @@ class EmailProfileRegistrationApp {
             this.settings = await response.json();
             
             // Check if registration is open
-            if (this.settings.registration_open !== 'true') {
+            if (this.settings.registration_open !== 'true' && !window.ClassInfo.isTesterDevice()) {
                 this.showRegistrationClosed();
                 return;
             }
@@ -706,7 +706,8 @@ class EmailProfileRegistrationApp {
             return;
         }
 
-        if (!window.ClassInfo.isOpen(course)) {
+        const tester = !!(this.currentStudent && (this.currentStudent.is_tester === true || this.currentStudent.is_tester === 1 || this.currentStudent.is_tester === 't'));
+        if (!tester && !window.ClassInfo.isOpen(course)) {
             this.showError(`Registration for ${course.name} is closed right now.`);
             return;
         }
@@ -717,7 +718,7 @@ class EmailProfileRegistrationApp {
         console.log('Course selected:', course.name, 'Available spots:', availableSpots);
 
         // Check if course is full and needs waitlist registration
-        if (availableSpots <= 0) {
+        if (!tester && availableSpots <= 0) {
             console.log('Course is full, proceeding with waitlist registration');
             await this.handleWaitlistRegistration(course);
             return;

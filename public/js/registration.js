@@ -42,7 +42,7 @@ class DanceRegistrationApp {
             this.settings = await response.json();
             
             // Check if registration is open
-            if (this.settings.registration_open !== 'true') {
+            if (this.settings.registration_open !== 'true' && !window.ClassInfo.isTesterDevice()) {
                 this.showRegistrationClosed();
                 return;
             }

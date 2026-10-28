@@ -17,7 +17,8 @@
     const crewOnly = course.required_student_type === 'crew_member' ? ' <span class="badge">Crew only</span>' : '';
     const spots = Number(course.available_spots);
     const isFull = Number.isFinite(spots) && spots <= 0;
-    const isClosed = !C.isOpen(course);
+    const tester = C.isTesterDevice();
+    const isClosed = !tester && !C.isOpen(course);
     const f = C.fees(course);
     const registerUrl = `/email-profile.html?course=${encodeURIComponent(course.id)}`;
     const rows = C.rows(course).filter(([k]) => !(isFull && k === 'Fees'));
@@ -43,6 +44,8 @@
           <span class="spots">${fewLeft ? `Only ${spots} spot${spots === 1 ? '' : 's'} left` : ''}</span>
           ${isClosed
             ? '<span class="btn btn-outline" aria-disabled="true">Registration closed</span>'
+            : isFull && tester
+            ? `<a class="btn btn-primary" href="${registerUrl}">Register (test)</a>`
             : isFull
             ? `<a class="btn btn-outline" href="${registerUrl}">Join waitlist</a>`
             : `<a class="btn btn-primary" href="${registerUrl}">Register</a>`}
@@ -107,7 +110,7 @@
     const loading = document.getElementById('loadingMsg');
     try {
       const settings = await fetch('/api/settings').then((r) => r.json());
-      if (settings.registration_open !== 'true') {
+      if (settings.registration_open !== 'true' && !C.isTesterDevice()) {
         showClosed();
         return;
       }

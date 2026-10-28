@@ -141,5 +141,9 @@
     return [`Combo · ${(classes || []).length} classes`, ...styles].join(' · ');
   }
 
-  window.ClassInfo = { isOpen, comboRows, comboInstructors, comboKicker, esc, toDate, formatTime, formatDates, formatOneDate, dates, slot, typeLabel, timeRange, location, style, fees, feeText, rows, kicker, isPerDate };
+  // Test account signed in on this device (set by the My classes page). Only
+  // changes what the pages show; the server checks the real account.
+  function isTesterDevice() { try { return localStorage.getItem('goumo_tester') === '1'; } catch (e) { return false; } }
+
+  window.ClassInfo = { isTesterDevice, isOpen, comboRows, comboInstructors, comboKicker, esc, toDate, formatTime, formatDates, formatOneDate, dates, slot, typeLabel, timeRange, location, style, fees, feeText, rows, kicker, isPerDate };
 })();
