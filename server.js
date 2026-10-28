@@ -2791,6 +2791,94 @@ function paymentMethodLabel(value) {
     return v === 'venmo' ? 'Venmo' : v === 'zelle' ? 'Zelle' : null;
 }
 
+// ===================== Student profiles =====================
+// One student's classes (with time and location for the student page)
+// and active waitlists. Used by the admin profile and the "My GouMo" page.
+async function studentHistory(studentId) {
+    const registrations = await dbConfig.all(`
+        SELECT r.id, r.course_id, r.payment_status, r.payment_amount, r.payment_method, r.registration_date,
+               r.selected_dates, r.combo_id, r.combo_group,
+               c.name AS course_name, c.course_type, c.session_dates, c.song_name, c.instructor,
+               c.start_date, c.duration_weeks, cb.name AS combo_name
+        FROM registrations r
+        LEFT JOIN courses c ON c.id = r.course_id
+        LEFT JOIN combos cb ON cb.id = r.combo_id
+        WHERE r.student_id = $1
+        ORDER BY r.registration_date DESC
+    `, [studentId]);
+    const slotCache = {};
+    for (const r of registrations) {
+        if (!r.course_id) continue;
+        if (!(r.course_id in slotCache)) {
+            slotCache[r.course_id] = await dbConfig.get(
+                'SELECT start_time, end_time, location, practice_date FROM course_slots WHERE course_id = $1 ORDER BY id LIMIT 1', [r.course_id]);
+        }
+        r.slots = slotCache[r.course_id] ? [slotCache[r.course_id]] : [];
+    }
+    const waitlists = await dbConfig.all(`
+        SELECT w.id, w.course_id, w.waitlist_position AS position, w.created_at, c.name AS course_name
+        FROM waitlist w JOIN courses c ON c.id = w.course_id
+        WHERE w.student_id = $1 AND w.status = 'active'
+        ORDER BY w.created_at DESC
+    `, [studentId]);
+    const paid = registrations.filter(r => r.payment_status === 'completed');
+    return {
+        registrations,
+        waitlists,
+        totals: {
+            classes_paid: paid.length,
+            amount_paid: Math.round(paid.reduce((sum, r) => sum + (Number(r.payment_amount) || 0), 0) * 100) / 100,
+            pending: registrations.filter(r => r.payment_status === 'pending').length
+        }
+    };
+}
+
+const STUDENT_PUBLIC_FIELDS = 'id, first_name, last_name, email, instagram_handle, dance_experience, student_type, created_at';
+
+// Admin: one student's profile, history and private notes
+app.get('/api/admin/students/:id', requireAuth, asyncHandler(async (req, res) => {
+    const student = await dbConfig.get(`SELECT ${STUDENT_PUBLIC_FIELDS}, admin_notes FROM students WHERE id = $1`, [req.params.id]);
+    if (!student) return res.status(404).json({ error: 'Student not found' });
+    res.json({ student, ...(await studentHistory(student.id)) });
+}));
+
+app.put('/api/admin/students/:id/notes', requireAuth, asyncHandler(async (req, res) => {
+    const notes = String((req.body || {}).notes || '').slice(0, 5000);
+    await dbConfig.run('UPDATE students SET admin_notes = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2', [notes || null, req.params.id]);
+    res.json({ success: true });
+}));
+
+// Student "My GouMo" page. Sign-in is email only (decided Oct 2026), so this
+// returns only the student's own basics and classes, never admin notes.
+app.post('/api/my/profile', asyncHandler(async (req, res) => {
+    const email = String((req.body || {}).email || '').trim();
+    if (!email) return res.status(400).json({ error: 'Enter your email' });
+    const student = await dbConfig.get(`SELECT ${STUDENT_PUBLIC_FIELDS} FROM students WHERE LOWER(email) = LOWER($1)`, [email]);
+    if (!student) return res.status(404).json({ error: "We couldn't find that email. Register for a class first, or try the email you used before." });
+    const history = await studentHistory(student.id);
+    history.registrations.forEach(r => { delete r.combo_group; });
+    res.json({ student, ...history });
+}));
+
+app.put('/api/my/profile', asyncHandler(async (req, res) => {
+    const { email, first_name, last_name, instagram_handle, dance_experience } = req.body || {};
+    if (!email || !String(first_name || '').trim()) return res.status(400).json({ error: 'Your first name is required' });
+    const student = await dbConfig.get('SELECT id FROM students WHERE LOWER(email) = LOWER($1)', [String(email).trim()]);
+    if (!student) return res.status(404).json({ error: 'Student not found' });
+    const allowed = ['beginner', 'some_experience', 'intermediate', 'advanced', 'professional'];
+    await dbConfig.run(`
+        UPDATE students SET first_name = $1, last_name = $2, instagram_handle = $3, dance_experience = $4, updated_at = CURRENT_TIMESTAMP
+        WHERE id = $5
+    `, [String(first_name).trim().slice(0, 100), String(last_name || '').trim().slice(0, 100),
+        String(instagram_handle || '').trim().replace(/^@/, '').slice(0, 100) || null,
+        allowed.includes(dance_experience) ? dance_experience : null, student.id]);
+    res.json({ success: true });
+}));
+
+app.get('/my', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'my.html'));
+});
+
 // Admin: every student with how many classes they've paid for
 app.get('/api/admin/students', requireAuth, asyncHandler(async (req, res) => {
     const students = await dbConfig.all(`

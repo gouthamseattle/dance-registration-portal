@@ -1630,6 +1630,8 @@ class DanceRegistrationApp {
             return;
         }
         this._savingRegistration = false;
+        // Remember the email on this phone so "My classes" opens straight away
+        try { localStorage.setItem('goumo_email', this.registrationData.email || ''); } catch (e) { /* private mode */ }
 
         // Update the payment section to show confirmation
         const container = document.getElementById('paypal-button-container');
@@ -1659,9 +1661,11 @@ class DanceRegistrationApp {
                 </div>
 
                 <div class="d-grid gap-2 mt-4">
-                    <button class="btn btn-primary" onclick="app.resetRegistration()">
-                        <i class="fas fa-plus me-2"></i>
-                        Register for Another Class
+                    <a class="btn btn-primary" href="/my">
+                        See my classes
+                    </a>
+                    <button class="btn btn-outline-secondary" onclick="app.resetRegistration()">
+                        Register for another class
                     </button>
                     <button class="btn btn-outline-secondary" onclick="app.shareRegistration()">
                         <i class="fas fa-share me-2"></i>
