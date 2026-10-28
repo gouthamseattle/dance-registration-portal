@@ -875,172 +875,20 @@ class DanceRegistrationApp {
             const style = document.createElement('style');
             style.id = 'package-selection-styles';
             style.textContent = `
-                .course-package-options {
-                    display: flex;
-                    flex-direction: column;
-                    gap: 1rem;
-                    margin-top: 1rem;
-                }
-                
-                .package-option-card {
-                    border: 2px solid #e9ecef;
-                    border-radius: 12px;
-                    padding: 1rem;
-                    margin-bottom: 0;
-                    background: #f8f9fa;
-                    transition: all 0.3s ease;
-                    position: relative;
-                }
-                
-                .package-option-card:hover {
-                    border-color: #007bff;
-                    background: #ffffff;
-                    box-shadow: 0 4px 12px rgba(0,123,255,0.15);
-                }
-                
-                /* STRONG SELECTED STATE */
-                .package-option-card:has(input[type="radio"]:checked) {
-                    border-color: #007bff !important;
-                    background: linear-gradient(135deg, #e3f2fd 0%, #ffffff 100%) !important;
-                    box-shadow: 0 6px 20px rgba(0,123,255,0.25) !important;
-                    transform: scale(1.02);
-                }
-                
-                .package-option-card:has(input[type="radio"]:checked)::before {
-                    content: "✓ SELECTED";
-                    position: absolute;
-                    top: 10px;
-                    right: 15px;
-                    background: #007bff;
-                    color: white;
-                    font-size: 0.7rem;
-                    font-weight: bold;
-                    padding: 4px 8px;
-                    border-radius: 12px;
-                    letter-spacing: 0.5px;
-                }
-                
-                .package-option-card:has(input[type="radio"]:checked) .package-header {
-                    color: #007bff !important;
-                }
-                
-                .package-option-card:has(input[type="radio"]:checked) .package-header strong {
-                    color: #007bff !important;
-                }
-                
-                .package-option-card:has(input[type="radio"]:checked) .package-price .h5 {
-                    color: #007bff !important;
-                    font-weight: 900 !important;
-                }
-                
-                /* Fallback for browsers without :has() support */
-                .package-option-card input[type="radio"]:checked + label {
-                    color: #007bff !important;
-                }
-                
-                .package-option-card.selected {
-                    border-color: #007bff !important;
-                    background: linear-gradient(135deg, #e3f2fd 0%, #ffffff 100%) !important;
-                    box-shadow: 0 6px 20px rgba(0,123,255,0.25) !important;
-                    transform: scale(1.02);
-                }
-                
-                .package-option-card.selected::before {
-                    content: "✓ SELECTED";
-                    position: absolute;
-                    top: 10px;
-                    right: 15px;
-                    background: #007bff;
-                    color: white;
-                    font-size: 0.7rem;
-                    font-weight: bold;
-                    padding: 4px 8px;
-                    border-radius: 12px;
-                    letter-spacing: 0.5px;
-                }
-                
-                .package-content {
-                    width: 100%;
-                    display: block;
-                }
-                
-                .package-header {
-                    display: flex;
-                    align-items: center;
-                    gap: 0.5rem;
-                    margin-bottom: 0.5rem;
-                    font-weight: bold;
-                    font-size: 1.1rem;
-                    color: #212529;
-                }
-                
-                .package-description {
-                    margin-bottom: 0.75rem;
-                    color: #6c757d;
-                    font-size: 0.9rem;
-                    line-height: 1.4;
-                }
-                
-                .package-price {
-                    display: flex;
-                    align-items: baseline;
-                    gap: 0.5rem;
-                    font-weight: 600;
-                }
-                
-                .package-price .h5 {
-                    margin: 0;
-                    font-size: 1.5rem;
-                    font-weight: bold;
-                }
-                
-                .package-price small {
-                    color: #6c757d;
-                    font-size: 0.85rem;
-                }
-                
-                .combo-package {
-                    border-color: #28a745;
-                    background: linear-gradient(135deg, #f8fff9 0%, #e8f5e8 100%);
-                }
-                
-                .combo-package:hover {
-                    border-color: #28a745;
-                    box-shadow: 0 4px 12px rgba(40,167,69,0.15);
-                }
-                
-                .crew-package {
-                    border-color: #dc3545;
-                    background: linear-gradient(135deg, #fff8f8 0%, #fde8e8 100%);
-                }
-                
-                .crew-package:hover {
-                    border-color: #dc3545;
-                    box-shadow: 0 4px 12px rgba(220,53,69,0.15);
-                }
-                
-                /* Force text visibility */
-                .package-content * {
-                    color: inherit !important;
-                }
-                
-                .package-header strong {
-                    color: #212529 !important;
-                    font-weight: bold !important;
-                    display: block !important;
-                }
-                
-                .package-description small {
-                    color: #6c757d !important;
-                    display: block !important;
-                }
-                
-                /* Debug - force visibility */
-                .form-check-label {
-                    cursor: pointer;
-                    display: block !important;
-                    width: 100% !important;
-                }
+                /* House Foundation package picker, GouMo dark style (tokens from site.css) */
+                .course-package-options { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
+                .package-option-card { position: relative; margin: 0; padding: 14px 16px 14px 44px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); cursor: pointer; }
+                .package-option-card:hover { border-color: var(--text-2); }
+                .package-option-card:has(input[type="radio"]:checked), .package-option-card.selected { border: 2px solid var(--accent); }
+                .package-option-card .form-check-input { position: absolute; left: 16px; top: 18px; margin: 0; }
+                .package-option-card .form-check-label { display: block; width: 100%; cursor: pointer; }
+                .package-content { display: flex; flex-direction: column; gap: 4px; }
+                .package-header { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; color: var(--text); }
+                .package-header strong { font-size: 16px; color: var(--text); }
+                .package-description { font-size: 13px; color: var(--muted); }
+                .package-price { display: flex; align-items: baseline; gap: 8px; }
+                .package-price .h5 { margin: 0; font-size: 18px; font-weight: 700; color: var(--text); }
+                .package-price small { color: var(--muted); }
             `;
             document.head.appendChild(style);
         }
@@ -1199,11 +1047,8 @@ class DanceRegistrationApp {
             }
         } else {
             // Restore regular branding
-            headerTitle.innerHTML = `
-                <i class="fas fa-music text-primary"></i>
-                GouMo Dance Chronicles
-            `;
-            headerSubtitle.textContent = 'Register for amazing dance experiences';
+            headerTitle.innerHTML = '<a href="/"><img class="brand-logo" src="/images/goumo-logo.png" alt="GouMo Dance Chronicles"></a>';
+            headerSubtitle.textContent = 'Checkout';
             
             // Remove crew practice styling
             document.body.classList.remove('crew-practice-mode', 'crew-bg-strong');
@@ -1839,20 +1684,20 @@ class DanceRegistrationApp {
                             <i class="fas fa-mobile-alt fa-2x text-primary me-3"></i>
                             <div>
                                 <h6 class="mb-1">Send payment to</h6>
-                                <strong>@${venmoData.venmoUsername}</strong>
+                                <div class="copy-row"><span class="copy-value">@${venmoData.venmoUsername}</span><button type="button" class="btn-copy">Copy</button></div>
                             </div>
                         </div>
                     </div>
 
                     <div class="payment-details mb-4">
-                        <div class="row">
-                            <div class="col-6">
+                        <div class="row g-3">
+                            <div class="col-12">
                                 <strong>Amount:</strong><br>
                                 <span class="h4 text-success">$${this.registrationData.payment_amount}</span>
                             </div>
-                            <div class="col-6">
-                                <strong>Payment Note:</strong><br>
-                                <small class="text-muted">${venmoData.paymentNote}</small>
+                            <div class="col-12">
+                                <strong>Payment note:</strong>
+                                <div class="copy-row"><span class="copy-value">${venmoData.paymentNote}</span><button type="button" class="btn-copy">Copy</button></div>
                             </div>
                         </div>
                     </div>
@@ -1975,21 +1820,21 @@ class DanceRegistrationApp {
                             <i class="fas fa-university fa-2x text-success me-3"></i>
                             <div>
                                 <h6 class="mb-1">Send Zelle payment to:</h6>
-                                <strong>${zelleData.zelleRecipientName}</strong><br>
-                                <small>${zelleData.zellePhone}</small>
+                                <strong>${zelleData.zelleRecipientName}</strong>
+                                <div class="copy-row"><span class="copy-value">${zelleData.zellePhone}</span><button type="button" class="btn-copy">Copy</button></div>
                             </div>
                         </div>
                     </div>
 
                     <div class="payment-details mb-4">
-                        <div class="row">
-                            <div class="col-6">
+                        <div class="row g-3">
+                            <div class="col-12">
                                 <strong>Amount:</strong><br>
                                 <span class="h4 text-success">$${zelleData.amount}</span>
                             </div>
-                            <div class="col-6">
-                                <strong>Payment Note:</strong><br>
-                                <small class="text-muted">${zelleData.paymentNote}</small>
+                            <div class="col-12">
+                                <strong>Payment note:</strong>
+                                <div class="copy-row"><span class="copy-value">${zelleData.paymentNote}</span><button type="button" class="btn-copy">Copy</button></div>
                             </div>
                         </div>
                     </div>
@@ -2293,11 +2138,8 @@ class DanceRegistrationApp {
         const registrationCard = document.querySelector('#registrationForm .card');
         
         // Restore regular branding
-        headerTitle.innerHTML = `
-            <i class="fas fa-music text-primary"></i>
-            GouMo Dance Chronicles
-        `;
-        headerSubtitle.textContent = 'Register for amazing dance experiences';
+        headerTitle.innerHTML = '<a href="/"><img class="brand-logo" src="/images/goumo-logo.png" alt="GouMo Dance Chronicles"></a>';
+        headerSubtitle.textContent = 'Checkout';
         
         // Remove crew practice styling
         document.body.classList.remove('crew-practice-mode', 'crew-bg-strong');
@@ -2373,3 +2215,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Add payment status update endpoint to server.js (this would be added to the server)
 // This is a note for the missing API endpoint that needs to be added to server.js
+
+
+// Copy buttons on the Venmo/Zelle screens: copy the value next to the button.
+document.addEventListener('click', async (e) => {
+    const btn = e.target.closest('.btn-copy');
+    if (!btn) return;
+    const value = btn.closest('.copy-row')?.querySelector('.copy-value')?.textContent.trim();
+    if (!value) return;
+    try {
+        await navigator.clipboard.writeText(value);
+    } catch (err) {
+        const ta = document.createElement('textarea');
+        ta.value = value; document.body.appendChild(ta); ta.select();
+        try { document.execCommand('copy'); } catch (_) {}
+        ta.remove();
+    }
+    const original = btn.textContent;
+    btn.textContent = 'Copied';
+    setTimeout(() => { btn.textContent = original; }, 1500);
+});
