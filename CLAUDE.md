@@ -21,6 +21,7 @@ Scale is small (50–100 concurrent users): prefer simple over clever.
 - **Slot pricing:** `full_package` is the fee for all dates; `drop_in` is the per-date fee.
 - **Registrations** can store `selected_dates`. When a student picks dates, the server computes the amount.
 - **Display:** dates, fees and labels for students are formatted in `public/js/class-info.js`.
+- **Combos:** `combos` (name, price, is_active) + `combo_classes` (combo_id, course_id) bundle 2+ classes at one price. `POST /api/register-combo` creates one pending registration per class, price split across them, sharing `registrations.combo_group`; confirm, cancel and uncancel apply to the whole group.
 
 Competition, choreography packages, attendance and historical classification were removed in Oct 2026. Their old database tables still exist but are unused.
 

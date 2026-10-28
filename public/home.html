@@ -50,11 +50,15 @@
     .class-card .when { font-size: 13px; color: var(--muted); }
     .class-card .price { font-size: 18px; font-weight: 700; white-space: nowrap; text-align: right; }
     .class-card .price small { display: block; font-size: 12px; font-weight: 500; color: var(--muted); }
+    .class-card .price small.save { color: var(--accent); font-weight: 700; }
+    .combo-card { border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
     .class-card .actions { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
     .rows { display: flex; flex-direction: column; gap: 5px; margin: 0; padding-top: 10px; border-top: 1px solid var(--line-soft); }
     .rows div { display: flex; gap: 10px; font-size: 13px; }
     .rows dt { width: 66px; flex: none; font-weight: 400; color: var(--faint); }
     .rows dd { margin: 0; color: var(--text-2); }
+    .rows div.stack { flex-direction: column; gap: 1px; }
+    .rows div.stack dt { width: auto; font-weight: 600; color: var(--text); }
     .class-card .desc { margin: 0; font-size: 13px; color: var(--muted); }
     .class-card .spots { font-size: 13px; color: var(--accent); }
     .empty { padding: 24px; text-align: center; color: var(--muted); }
@@ -196,7 +200,7 @@
     </div>
   </footer>
 
-  <script src="/js/class-info.js?v=1"></script>
-  <script src="/js/home.js?v=3"></script>
+  <script src="/js/class-info.js?v=2"></script>
+  <script src="/js/home.js?v=4"></script>
 </body>
 </html>

@@ -6,9 +6,10 @@
  */
 (function () {
   const C = window.ClassInfo;
-  const FILTERS = ['All', 'Series', 'Drop-in', 'Crew practice'];
+  const FILTERS = ['All', 'Combos', 'Series', 'Drop-in', 'Crew practice'];
 
   let courses = [];
+  let combos = [];
   let activeFilter = 'All';
 
   function cardHtml(course) {
@@ -45,8 +46,39 @@
       </article>`;
   }
 
+  // A combo: several classes at one price, registered with one payment
+  function comboCardHtml(combo) {
+    const esc = C.esc;
+    const spots = Number(combo.available_spots);
+    const isFull = Number.isFinite(spots) && spots <= 0;
+    const who = C.comboInstructors(combo.classes);
+    const crewOnly = combo.classes.some((c) => c.required_student_type === 'crew_member') ? ' <span class="badge">Crew only</span>' : '';
+    const fewLeft = !isFull && Number.isFinite(spots) && spots <= 5;
+    return `
+      <article class="card class-card combo-card" data-type="Combos">
+        <div class="top">
+          <div>
+            <span class="type">${esc(C.comboKicker(combo.classes))}${crewOnly}</span>
+            <h3>${esc(combo.name)}</h3>
+            ${who ? `<span class="when">with ${esc(who)}</span>` : ''}
+          </div>
+          <span class="price">$${Number(combo.price).toFixed(0)}${combo.savings > 0 ? `<small class="save">save $${Number(combo.savings).toFixed(0)}</small>` : ''}</span>
+        </div>
+        <dl class="rows">
+          ${C.comboRows(combo.classes).map(([k, v]) => `<div class="stack"><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}
+          ${C.location(combo.classes[0] || {}) ? `<div><dt>Location</dt><dd>${esc(C.location(combo.classes[0]))}</dd></div>` : ''}
+        </dl>
+        ${combo.description ? `<p class="desc">${esc(combo.description)}</p>` : ''}
+        <div class="actions">
+          <span class="spots">${isFull ? 'Full' : fewLeft ? `Only ${spots} spot${spots === 1 ? '' : 's'} left` : 'One payment, all classes'}</span>
+          ${isFull ? '' : `<a class="btn btn-primary" href="/email-profile.html?combo=${encodeURIComponent(combo.id)}">Register</a>`}
+        </div>
+      </article>`;
+  }
+
   function renderFilters() {
     const present = new Set(courses.map(C.typeLabel));
+    if (combos.length) present.add('Combos');
     const options = FILTERS.filter((f) => f === 'All' || present.has(f));
     const el = document.getElementById('filters');
     el.hidden = options.length <= 2; // no point filtering a single type
@@ -55,9 +87,10 @@
 
   function renderClasses() {
     const grid = document.getElementById('classGrid');
+    const shownCombos = activeFilter === 'All' || activeFilter === 'Combos' ? combos : [];
     const shown = activeFilter === 'All' ? courses : courses.filter((c) => C.typeLabel(c) === activeFilter);
-    grid.innerHTML = shown.length
-      ? shown.map(cardHtml).join('')
+    grid.innerHTML = shown.length || shownCombos.length
+      ? shownCombos.map(comboCardHtml).join('') + shown.map(cardHtml).join('')
       : '<p class="empty">No classes in this category right now.</p>';
   }
 
@@ -74,7 +107,11 @@
         showClosed();
         return;
       }
-      courses = await fetch('/api/courses?active_only=true&include_crew=true').then((r) => r.json());
+      [courses, combos] = await Promise.all([
+        fetch('/api/courses?active_only=true&include_crew=true').then((r) => r.json()),
+        fetch('/api/combos').then((r) => (r.ok ? r.json() : [])).catch(() => [])
+      ]);
+      if (!Array.isArray(combos)) combos = [];
       if (!Array.isArray(courses) || courses.length === 0) {
         showClosed();
         return;

@@ -10,7 +10,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link href="/css/site.css?v=2" rel="stylesheet">
-    <link href="/css/registration.css?v=2" rel="stylesheet">
+    <link href="/css/registration.css?v=3" rel="stylesheet">
     <link rel="icon" type="image/png" href="/images/favicon.png">
     <meta name="description" content="Complete your dance class registration - GouMo Dance Chronicles">
     <meta name="theme-color" content="#0B0B0D">
@@ -289,8 +289,8 @@
 
     <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="/js/class-info.js?v=1"></script>
-    <script src="/js/registration.js?v=57"></script>
+    <script src="/js/class-info.js?v=2"></script>
+    <script src="/js/registration.js?v=58"></script>
     
     <!-- Registration Completion Handler -->
     <script>
@@ -312,20 +312,15 @@
                 profile_complete: urlParams.get('profile_complete')
             };
 
-            // Package registration params
-            const isPackageRegistration = urlParams.get('package_registration') === 'true';
-            const packageName = urlParams.get('package_name') || 'Choreography Package';
-            const packagePrice = urlParams.get('package_price') || '0';
-            const packageCourses = urlParams.get('package_courses') ? urlParams.get('package_courses').split('|') : [];
-            const registrationIds = urlParams.get('registration_ids') || '';
+            // Combo checkout (?combo_id=ID): one payment for every class in the combo
+            const comboId = urlParams.get('combo_id');
 
             console.log('📝 Student data from URL:', studentData);
-            console.log('📦 Package registration:', { isPackageRegistration, packageName, packagePrice, packageCourses, registrationIds });
 
-            if (studentData.student_id && studentData.course_id && studentData.email) {
+            if (studentData.student_id && (studentData.course_id || comboId) && studentData.email) {
                 // Pre-fill hidden form fields
                 document.getElementById('studentId').value = studentData.student_id;
-                document.getElementById('courseId').value = studentData.course_id;
+                document.getElementById('courseId').value = studentData.course_id || '';
                 document.getElementById('studentEmail').value = studentData.email;
                 document.getElementById('studentFirstName').value = studentData.first_name || '';
                 document.getElementById('studentLastName').value = studentData.last_name || '';
@@ -333,7 +328,8 @@
                 document.getElementById('studentExperience').value = studentData.dance_experience || '';
 
                 // Show student profile info
-                const fullName = [studentData.first_name, studentData.last_name].filter(Boolean).join(' ');
+                const esc = window.ClassInfo.esc;
+                const fullName = esc([studentData.first_name, studentData.last_name].filter(Boolean).join(' '));
                 const studentProfileDiv = document.getElementById('studentProfileInfo');
                 studentProfileDiv.innerHTML = `
                     <h6 class="mb-2">
@@ -343,93 +339,71 @@
                     <div class="row text-start">
                         <div class="col-sm-6">
                             <strong>Name:</strong> ${fullName}<br>
-                            <strong>Email:</strong> ${studentData.email}
+                            <strong>Email:</strong> ${esc(studentData.email)}
                         </div>
                         <div class="col-sm-6">
-                            ${studentData.instagram_handle ? `<strong>Instagram:</strong> @${studentData.instagram_handle}<br>` : ''}
-                            <strong>Experience:</strong> ${studentData.dance_experience || 'Not specified'}
+                            ${studentData.instagram_handle ? `<strong>Instagram:</strong> @${esc(studentData.instagram_handle)}<br>` : ''}
+                            <strong>Experience:</strong> ${esc(studentData.dance_experience || 'Not specified')}
                         </div>
                     </div>
                 `;
                 studentProfileDiv.style.display = 'block';
 
-                if (isPackageRegistration) {
-                    // === PACKAGE REGISTRATION FLOW ===
-                    // Registrations are already created — just need to show info & collect payment
-                    console.log('📦 Package registration mode — skipping selectCourse, showing package info');
+                if (comboId) {
+                    // === COMBO FLOW ===
+                    // Show the combo, then let registration.js register every class on submit
+                    fetch(`/api/combos/${encodeURIComponent(comboId)}`)
+                        .then(r => (r.ok ? r.json() : Promise.reject(new Error('This combo is no longer available'))))
+                        .then(combo => {
+                            const C = window.ClassInfo;
+                            const who = C.comboInstructors(combo.classes);
+                            document.getElementById('selectedCourseInfo').innerHTML = `
+                                <span class="d-block small fw-bold text-uppercase" style="letter-spacing:.08em;color:var(--accent)">${esc(C.comboKicker(combo.classes))}</span>
+                                <h5 class="mt-1 mb-1">${esc(combo.name)}</h5>
+                                ${who ? `<div class="text-muted small mb-2">with ${esc(who)}</div>` : ''}
+                                <dl class="class-rows mb-0">
+                                    ${C.comboRows(combo.classes).map(([k, v]) => `<div class="stack"><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}
+                                    ${C.location(combo.classes[0] || {}) ? `<div><dt>Location</dt><dd>${esc(C.location(combo.classes[0]))}</dd></div>` : ''}
+                                </dl>
+                                ${combo.savings > 0 ? `<p class="small mt-2 mb-0">You save $${Number(combo.savings).toFixed(0)} compared with booking separately.</p>` : ''}`;
+                            document.getElementById('paymentOptions').style.display = 'none';
+                            document.getElementById('totalAmount').textContent = '$' + Number(combo.price).toFixed(0);
 
-                    // Build choreography list HTML
-                    const courseListHtml = packageCourses.length > 0
-                        ? packageCourses.map(name => `<li>${name}</li>`).join('')
-                        : '<li>Choreography Package</li>';
-
-                    // Populate course info with package details
-                    const infoContainer = document.getElementById('selectedCourseInfo');
-                    infoContainer.innerHTML = `
-                        <h5><i class="fas fa-box text-info me-2"></i>${packageName}</h5>
-                        <div class="mt-2">
-                            <strong>Includes ${packageCourses.length} choreographies:</strong>
-                            <ul class="mb-0 mt-1">${courseListHtml}</ul>
-                        </div>
-                    `;
-
-                    // Hide payment option radio buttons (not applicable for packages)
-                    document.getElementById('paymentOptions').style.display = 'none';
-
-                    // Set total amount to package price
-                    document.getElementById('totalAmount').textContent = '$' + packagePrice;
-
-                    // Configure the app for package payment when it initializes
-                    function setupAppForPackage() {
-                        if (!window.app) {
-                            setTimeout(setupAppForPackage, 200);
-                            return;
-                        }
-                        console.log('📦 Configuring app for package payment');
-
-                        // Set registration data so payment flow works
-                        window.app.registrationData = {
-                            student_id: studentData.student_id,
-                            course_id: parseInt(studentData.course_id),
-                            email: studentData.email,
-                            first_name: studentData.first_name,
-                            last_name: studentData.last_name,
-                            instagram_handle: studentData.instagram_handle,
-                            dance_experience: studentData.dance_experience,
-                            payment_amount: packagePrice,
-                            registration_type: 'choreography-package',
-                            package_name: packageName,
-                            package_registration: true,
-                            registrationId: registrationIds.split(',')[0],  // Primary registration ID
-                            registration_ids: registrationIds
-                        };
-
-                        // Create a minimal selectedCourse so populatePaymentSummary works
-                        window.app.selectedCourse = {
-                            id: parseInt(studentData.course_id),
-                            name: packageName,
-                            course_type: 'choreography',
-                            full_course_price: parseFloat(packagePrice),
-                            per_class_price: 0
-                        };
-
-                        // Mark current step so form display is correct
-                        window.app.currentStep = 'form';
-
-                        // Setup payment method selection handlers
-                        if (window.app.setupPaymentMethodSelectionHandlers) {
-                            window.app.setupPaymentMethodSelectionHandlers();
-                        }
-                        if (window.app.setupPaymentMethodSelection) {
-                            window.app.setupPaymentMethodSelection();
-                        }
-
-                        // Hide loading overlay
-                        const loadingOverlay = document.getElementById('loadingOverlay');
-                        if (loadingOverlay) loadingOverlay.style.display = 'none';
-                    }
-                    setupAppForPackage();
-
+                            const setupAppForCombo = () => {
+                                if (!window.app) { setTimeout(setupAppForCombo, 200); return; }
+                                window.app.registrationData = {
+                                    student_id: studentData.student_id,
+                                    email: studentData.email,
+                                    first_name: studentData.first_name,
+                                    last_name: studentData.last_name,
+                                    instagram_handle: studentData.instagram_handle,
+                                    dance_experience: studentData.dance_experience,
+                                    combo_registration: true,
+                                    combo_id: combo.id,
+                                    payment_amount: combo.price,
+                                    registration_type: 'combo'
+                                };
+                                window.app.selectedCourse = {
+                                    id: combo.course_ids[0],
+                                    name: combo.name,
+                                    course_type: 'combo',
+                                    full_course_price: combo.price,
+                                    per_class_price: 0,
+                                    slots: []
+                                };
+                                window.app.currentStep = 'form';
+                                if (window.app.setupPaymentMethodSelectionHandlers) window.app.setupPaymentMethodSelectionHandlers();
+                                if (window.app.setupPaymentMethodSelection) window.app.setupPaymentMethodSelection();
+                                const loadingOverlay = document.getElementById('loadingOverlay');
+                                if (loadingOverlay) loadingOverlay.style.display = 'none';
+                            };
+                            setupAppForCombo();
+                        })
+                        .catch(err => {
+                            document.getElementById('selectedCourseInfo').innerHTML = `<p class="mb-0">${esc(err.message)}. <a href="/">See classes</a></p>`;
+                            const loadingOverlay = document.getElementById('loadingOverlay');
+                            if (loadingOverlay) loadingOverlay.style.display = 'none';
+                        });
                 } else {
                     // === REGULAR SINGLE-COURSE FLOW ===
                     // Override the registration app's course selection

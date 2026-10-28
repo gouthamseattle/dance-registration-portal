@@ -901,8 +901,8 @@ class DanceRegistrationApp {
         const preFilledInstagram = document.getElementById('studentInstagram')?.value;
         const preFilledExperience = document.getElementById('studentExperience')?.value;
 
-        // Save package registration state before overwriting registrationData
-        const savedPackageData = this.registrationData.package_registration ? { ...this.registrationData } : null;
+        // Combo checkout: keep the combo details while the form data is rebuilt
+        const savedCombo = this.registrationData.combo_registration ? { ...this.registrationData } : null;
 
         // Prepare registration data using pre-filled data when available
         this.registrationData = {
@@ -914,14 +914,11 @@ class DanceRegistrationApp {
             student_id: studentId || null
         };
 
-        // Restore package registration state if it was a package flow
-        if (savedPackageData) {
-            this.registrationData.package_registration = true;
-            this.registrationData.payment_amount = savedPackageData.payment_amount;
-            this.registrationData.registrationId = savedPackageData.registrationId;
-            this.registrationData.registration_ids = savedPackageData.registration_ids;
-            this.registrationData.registration_type = savedPackageData.registration_type;
-            this.registrationData.package_name = savedPackageData.package_name;
+        if (savedCombo) {
+            this.registrationData.combo_registration = true;
+            this.registrationData.combo_id = savedCombo.combo_id;
+            this.registrationData.payment_amount = savedCombo.payment_amount;
+            this.registrationData.registration_type = 'combo';
         }
 
         console.log('📝 Using registration data:', {
@@ -942,7 +939,9 @@ class DanceRegistrationApp {
                 [preFilledFirstName, preFilledLastName].filter(Boolean).join(' ');
         }
 
-        if (this.selectedCourse) {
+        if (savedCombo) {
+            // Price and classes come from the combo; the server registers each class
+        } else if (this.selectedCourse) {
             this.registrationData.course_id = this.selectedCourse.id;
             this.registrationData.drop_in_class_id = null;
             
@@ -967,11 +966,19 @@ class DanceRegistrationApp {
                 this.registrationData.payment_method = this.selectedPaymentMethod;
             }
 
-            // PACKAGE REGISTRATION: registrations already exist, skip /api/register
-            if (this.registrationData.package_registration) {
-                console.log('📦 Package registration — skipping /api/register, going to payment');
-                console.log('📦 Registration IDs:', this.registrationData.registration_ids);
-                console.log('📦 Payment amount:', this.registrationData.payment_amount);
+            // COMBO: one call registers the student in every class of the combo
+            if (this.registrationData.combo_registration) {
+                const comboResponse = await fetch('/api/register-combo', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(this.registrationData)
+                });
+                const comboResult = await comboResponse.json();
+                if (!comboResponse.ok) throw new Error(comboResult.error || 'Registration failed');
+                this.registrationData.registrationId = comboResult.registrationId;
+                this.registrationData.registration_ids = comboResult.registrationIds;
+                this.registrationData.studentId = comboResult.studentId;
+                this.registrationData.payment_amount = comboResult.payment_amount;
                 this.showPaymentSection();
                 return;
             }
