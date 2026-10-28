@@ -574,7 +574,40 @@ class AdminDashboard {
         }).join('')}</div>`;
     }
 
+    // Settings → Test email: shows which method is active and the exact error if sending fails
+    async loadEmailStatus() {
+        const el = document.getElementById('emailStatus');
+        try {
+            const r = await this.apiFetch('/api/admin/email-status');
+            const st = await r.json();
+            el.textContent = st.method === 'not configured'
+                ? 'Email is not set up yet (no Gmail values in Railway).'
+                : `Sending with ${st.method}${st.from ? ` from ${st.from}` : ''}.`;
+        } catch (e) { el.textContent = ''; }
+    }
+
+    async sendTestEmail() {
+        const to = document.getElementById('testEmailTo').value.trim();
+        const out = document.getElementById('testEmailResult');
+        if (!to) { out.innerHTML = '<span class="text-warning">Enter an email address first.</span>'; return; }
+        const btn = document.getElementById('sendTestEmailBtn');
+        btn.disabled = true; out.textContent = 'Sending…';
+        try {
+            const r = await this.apiFetch('/api/admin/send-test-email', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to })
+            });
+            const res = await r.json();
+            const esc = window.ClassInfo.esc;
+            out.innerHTML = res.success
+                ? `<span class="text-success">${esc(res.message)}</span>`
+                : `<span class="text-danger">Not sent (${esc(res.method || '')}): ${esc(res.error || 'unknown error')}</span>`;
+        } catch (e) {
+            out.innerHTML = '<span class="text-danger">Could not reach the server.</span>';
+        } finally { btn.disabled = false; }
+    }
+
     loadSettings() {
+        this.loadEmailStatus();
         // Populate settings form
         document.getElementById('venmoUsername').value = this.settings.venmo_username || '';
         document.getElementById('zelleRecipientName').value = this.settings.zelle_recipient_name || '';
