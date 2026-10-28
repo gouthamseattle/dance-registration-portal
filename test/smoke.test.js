@@ -239,6 +239,17 @@ test('admin creates a drop-in with two classes and a crew practice', async () =>
     assert.equal(crewTwoSlots.status, 400, 'crew practice limited to one class');
 });
 
+test('registration pages use the GouMo design system', async () => {
+    for (const page of ['/email-profile.html?course=1', '/index-registration.html']) {
+        const html = await fetch(BASE + page).then((r) => r.text());
+        assert.match(html, /\/css\/site\.css/, `${page} links site.css`);
+        assert.match(html, /\/css\/registration\.css/, `${page} links registration.css`);
+        assert.doesNotMatch(html, /css\/styles\.css/, `${page} no longer uses the old stylesheet`);
+    }
+    const css = await fetch(BASE + '/css/registration.css');
+    assert.equal(css.status, 200);
+});
+
 test('public class list can include crew-only classes', async () => {
     const all = await api('GET', '/api/courses?active_only=true&include_crew=true');
     assert.equal(all.status, 200);

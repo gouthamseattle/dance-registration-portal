@@ -34,8 +34,8 @@ web concepts in plain terms when they come up.
 | Design system (colors, fonts, buttons, cards), use it for every new page | `public/css/site.css` |
 | Registration flow: email, then profile, then pick class (`?course=ID` preselects) | `public/email-profile.html`, `public/js/email-profile-registration.js` |
 | Registration form + payment (Venmo/Zelle) | `public/index-registration.html`, `public/js/registration.js` |
+| Registration pages' look: re-skins Bootstrap with the design-system tokens | `public/css/registration.css` |
 | Admin dashboard | `public/admin.html`, `public/js/admin.js`, `public/css/admin-styles.css` |
-| Older student styles (registration pages, being replaced by `site.css`) | `public/css/styles.css` |
 | Smoke tests | `test/smoke.test.js`, run in CI by `.github/workflows/test.yml` |
 
 `memory-bank/` and `docs/` are historical notes from earlier development. Read them only when a task needs that history.

@@ -1,0 +1,209 @@
+/*
+ * Registration & payment pages in the GouMo look.
+ * Loads after Bootstrap and site.css. Bootstrap still provides the layout
+ * and widgets; this file re-skins them with the design-system tokens, so the
+ * page structure and scripts stay unchanged.
+ */
+
+/* ---------- Bootstrap's own variables, pointed at GouMo tokens ---------- */
+:root, [data-bs-theme="dark"] {
+  --bs-body-bg: var(--bg);
+  --bs-body-color: var(--text);
+  --bs-body-font-family: var(--font-body);
+  --bs-secondary-color: var(--muted);
+  --bs-tertiary-bg: var(--surface-2);
+  --bs-border-color: var(--line);
+  --bs-border-radius: var(--radius);
+  --bs-border-radius-lg: var(--radius-lg);
+  --bs-link-color: var(--text);
+  --bs-link-hover-color: #fff;
+  --bs-link-color-rgb: 245, 245, 244;
+  --bs-primary: var(--accent);
+  --bs-primary-rgb: 255, 214, 10;
+  --bs-success-rgb: 74, 222, 128;
+  --bs-heading-color: var(--text);
+}
+body { background: var(--bg); color: var(--text); font-family: var(--font-body); }
+.text-muted, .form-text, small.text-muted { color: var(--muted) !important; }
+.text-primary, .text-warning { color: var(--accent) !important; }
+.text-success { color: #4ADE80 !important; }
+.text-info { color: var(--text-2) !important; }
+.text-danger { color: #FF7A59 !important; }
+.lead { font-size: 1rem; color: var(--muted); }
+h1, h2, h3, h4, h5, h6 { color: var(--text); }
+hr { border-color: var(--line); opacity: 1; }
+
+/* ---------- Page header & footer ---------- */
+.header-section { border-bottom: 1px solid var(--line-soft); padding: 14px 0 12px; text-align: center; }
+.header-section h1 { margin: 0; font-size: 1rem; }
+.header-section .brand-logo { height: 64px; width: auto; display: inline-block; }
+.header-section .lead { margin: 6px 0 0; font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--faint); }
+.ddc-hero { display: inline-flex; align-items: center; gap: 10px; }
+.ddc-header-logo { height: 48px; width: auto; }
+.ddc-hero-text { font-family: var(--font-display); font-size: 26px; text-transform: uppercase; letter-spacing: 0.02em; }
+.ddc-card-header-logo { height: 28px; width: auto; margin-right: 8px; vertical-align: middle; }
+.ddc-footer-logo { margin-top: 12px; }
+.ddc-footer-img { height: 36px; width: auto; margin: 0 auto; }
+.footer { margin-top: 48px; padding: 22px 20px 28px; border-top: 1px solid var(--line-soft); text-align: center; font-size: 13px; color: var(--faint); }
+.footer a { color: var(--text); font-weight: 600; text-decoration: none; }
+
+/* ---------- Loading overlay ---------- */
+.loading-overlay {
+  position: fixed; inset: 0; z-index: 2000;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  background: var(--bg); color: var(--muted);
+}
+.spinner-border { color: var(--accent); }
+
+/* ---------- Cards ---------- */
+.card {
+  --bs-card-bg: var(--surface);
+  --bs-card-border-color: var(--line);
+  --bs-card-cap-bg: transparent;
+  --bs-card-color: var(--text);
+  border-radius: var(--radius-lg) !important;
+  box-shadow: none !important;
+}
+.card.border-0 { border: 1px solid var(--line) !important; }
+.card-header { background: transparent !important; color: var(--text) !important; border-bottom: 1px solid var(--line-soft); padding: 18px 20px 14px; text-align: left !important; }
+.card-header h3 { font-family: var(--font-display); font-weight: 400; font-size: 28px; text-transform: uppercase; line-height: 1.05; margin: 0; }
+.card-header h3 i, .card-header h3 .fas, .card-header h3 .fab { display: none; }
+.card-header p { margin-top: 6px; }
+.card-body { padding: 20px; }
+.card-title { color: var(--text); font-weight: 700; }
+
+/* ---------- Buttons ---------- */
+.btn { background-image: none !important; border-radius: var(--radius); font-weight: 700; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.btn-lg { min-height: 52px; font-size: 16px; }
+.btn-sm { min-height: 36px; font-size: 13px; }
+.btn i { margin: 0 !important; }
+.btn-primary, .btn-success, .venmo-btn {
+  --bs-btn-bg: var(--accent); --bs-btn-border-color: var(--accent); --bs-btn-color: var(--on-accent);
+  --bs-btn-hover-bg: #FFE14D; --bs-btn-hover-border-color: #FFE14D; --bs-btn-hover-color: var(--on-accent);
+  --bs-btn-active-bg: #E6C000; --bs-btn-active-border-color: #E6C000; --bs-btn-active-color: var(--on-accent);
+  --bs-btn-disabled-bg: var(--accent); --bs-btn-disabled-border-color: var(--accent); --bs-btn-disabled-color: var(--on-accent);
+}
+.btn-secondary, .btn-outline-secondary, .btn-outline-primary, .btn-outline-success, .btn-light {
+  --bs-btn-bg: transparent; --bs-btn-border-color: var(--line); --bs-btn-color: var(--text);
+  --bs-btn-hover-bg: var(--surface-2); --bs-btn-hover-border-color: var(--text-2); --bs-btn-hover-color: var(--text);
+  --bs-btn-active-bg: var(--surface-2); --bs-btn-active-border-color: var(--text); --bs-btn-active-color: var(--text);
+}
+.btn-secondary, .btn-outline-secondary, .btn-outline-primary, .btn-outline-success, .btn-light {
+  color: var(--text) !important; background-color: transparent !important; border: 1px solid var(--line) !important;
+}
+.btn-secondary:hover, .btn-outline-secondary:hover, .btn-outline-primary:hover, .btn-outline-success:hover, .btn-light:hover {
+  background-color: var(--surface-2) !important; border-color: var(--text-2) !important;
+}
+.btn-copy {
+  min-height: 36px; padding: 0 12px; border: none; border-radius: var(--radius-sm);
+  background: var(--surface-2); color: var(--text); font-size: 13px; font-weight: 600;
+}
+.btn-copy:hover { background: #2A2A31; color: #fff; }
+.btn-close { filter: invert(1) grayscale(1) brightness(2); }
+
+/* ---------- Form fields ---------- */
+.form-label { font-size: 14px; font-weight: 600; color: var(--text-2); }
+.form-label i { display: none; }
+.form-control, .form-select, .input-group-text {
+  background-color: var(--surface-2); border: 1px solid var(--line); color: var(--text);
+  border-radius: var(--radius); min-height: 52px; font-size: 16px;
+}
+.form-control::placeholder { color: #7C7C86; }
+.form-control:focus, .form-select:focus {
+  background-color: var(--surface-2); color: var(--text);
+  border-color: var(--accent); box-shadow: 0 0 0 3px rgba(255, 214, 10, 0.18);
+}
+.form-select { background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23D4D4D8' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m2 5 6 6 6-6'/%3e%3c/svg%3e"); }
+.input-group-text { color: var(--muted); }
+.input-group > .form-control { border-top-left-radius: 0; border-bottom-left-radius: 0; }
+.form-check-input { background-color: var(--surface-2); border-color: var(--text-2); }
+.form-check-input:checked { background-color: var(--accent); border-color: var(--accent); }
+
+/* ---------- Alerts become quiet info panels ---------- */
+.alert {
+  --bs-alert-bg: var(--surface-2); --bs-alert-border-color: var(--line); --bs-alert-color: var(--text-2);
+  border-radius: var(--radius); font-size: 14px;
+}
+.alert h6, .alert strong { color: var(--text); }
+.alert-warning { --bs-alert-bg: rgba(255, 214, 10, 0.08); --bs-alert-border-color: rgba(255, 214, 10, 0.35); }
+.alert-danger { --bs-alert-bg: rgba(255, 90, 54, 0.10); --bs-alert-border-color: rgba(255, 90, 54, 0.45); }
+.alert-success { --bs-alert-bg: rgba(74, 222, 128, 0.08); --bs-alert-border-color: rgba(74, 222, 128, 0.35); }
+.alert-light { --bs-alert-bg: var(--surface); }
+
+/* ---------- Badges ---------- */
+.badge { border-radius: 999px; font-weight: 700; }
+.badge.bg-primary, .badge.bg-warning { background: var(--accent) !important; color: var(--on-accent) !important; }
+.badge.bg-success { background: #4ADE80 !important; color: var(--bg) !important; }
+.badge.bg-secondary, .badge.bg-info, .badge.bg-light { background: var(--surface-2) !important; color: var(--text) !important; }
+
+/* ---------- Toasts ---------- */
+.toast { --bs-toast-bg: var(--surface); --bs-toast-border-color: var(--line); --bs-toast-color: var(--text); --bs-toast-header-bg: var(--surface-2); --bs-toast-header-color: var(--text); }
+.toast-header.bg-danger, .toast-header.bg-success { background: var(--surface-2) !important; color: var(--text) !important; }
+
+/* ---------- Step header used on the email / profile screens ---------- */
+.step { max-width: 560px; margin: 0 auto; padding: 24px 20px 8px; }
+.step-title { font-family: var(--font-display); font-weight: 400; font-size: 38px; line-height: 1; text-transform: uppercase; margin: 0 0 8px; }
+.step-sub { color: var(--muted); margin: 0 0 20px; font-size: 15px; }
+.card.class-summary { flex-direction: row; justify-content: space-between; align-items: center; gap: 12px; padding: 14px 16px; margin-bottom: 22px; text-align: left; }
+.class-summary .kind, .class-summary .when { display: block; }
+.class-summary .kind { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+.class-summary .name { display: block; font-size: 16px; font-weight: 700; }
+.class-summary .when { font-size: 13px; color: var(--muted); }
+.class-summary .amount { font-size: 18px; font-weight: 700; white-space: nowrap; }
+.note-row { display: flex; gap: 12px; align-items: flex-start; border-top: 1px solid var(--line-soft); padding-top: 18px; margin-top: 22px; font-size: 14px; color: var(--muted); }
+.note-row strong { color: var(--text); }
+
+/* ---------- Course list (email-first page) ---------- */
+.section-header h4 { font-family: var(--font-display); font-weight: 400; font-size: 24px; text-transform: uppercase; margin: 0; }
+.section-header h4 i { display: none; }
+.course-card, .dropin-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); color: var(--text); }
+.course-card.registered, .course-card.registered-course { border-color: rgba(74, 222, 128, 0.5); }
+.course-card.pending, .course-card.pending-course { border-color: rgba(255, 214, 10, 0.5); }
+.course-info-item, .dropin-detail { color: var(--text-2); font-size: 14px; }
+.price, .dropin-price { font-weight: 700; color: var(--text); }
+.registration-status-badge { border-radius: 999px; font-size: 12px; font-weight: 700; }
+
+/* ---------- Payment choices ---------- */
+.payment-options { display: grid; gap: 10px; }
+.payment-option-card, .package-option-card {
+  margin: 0; padding: 14px 16px 14px 44px; border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--surface); cursor: pointer;
+}
+.payment-option-card:has(input:checked), .package-option-card:has(input:checked) { border: 2px solid var(--accent); }
+.payment-option-card .form-check-input, .package-option-card .form-check-input { margin-left: -28px; }
+.payment-option-content strong, .package-header { color: var(--text); }
+.package-price { font-weight: 700; color: var(--text); }
+.package-description { color: var(--muted); font-size: 13px; }
+.total-amount-card { background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; }
+.total-amount-card .text-primary { color: var(--text) !important; }
+.payment-method-selection { cursor: pointer; transition: border-color 0.15s; }
+.payment-method-selection:hover { border-color: var(--text-2) !important; }
+.payment-method-selection.selected { border: 2px solid var(--accent) !important; }
+.payment-method-selection .card-body { padding: 18px 14px; }
+.payment-method-selection i.fa-3x { font-size: 1.8em; color: var(--text) !important; }
+.payment-method-selection h6 { font-size: 17px; font-weight: 700; }
+.payment-details, .recipient-details { background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; }
+.payment-details .text-success { color: var(--text) !important; }
+.copy-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 6px; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 6px 6px 6px 12px; }
+.copy-row .copy-value { font-weight: 700; color: var(--text); word-break: break-word; }
+.qr-code-container > div { border-radius: var(--radius) !important; }
+
+/* ---------- Confirmation & waitlist ---------- */
+.success-animation i { color: var(--accent) !important; }
+.confirmation-details { text-align: left; }
+.confirmation-item { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line-soft); }
+.confirmation-label { color: var(--muted); }
+.confirmation-value { font-weight: 600; text-align: right; }
+.waitlist-success-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); }
+.waitlist-success-icon i { color: var(--accent) !important; }
+.waitlist-position-badge { background: var(--accent); color: var(--on-accent); border-radius: 999px; font-weight: 700; }
+.goumo-text-logo { font-family: var(--font-display); text-transform: uppercase; font-size: 22px; }
+
+/* Crew-practice pages keep the same dark look; the header swaps to DDC branding */
+body.crew-practice-mode { background: var(--bg); }
+
+@media (max-width: 575px) {
+  .card-body { padding: 16px; }
+  .card-header h3 { font-size: 24px; }
+  .step-title { font-size: 32px; }
+}

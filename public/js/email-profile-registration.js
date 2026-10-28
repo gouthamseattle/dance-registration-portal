@@ -26,6 +26,7 @@ class EmailProfileRegistrationApp {
     async init() {
         try {
             await this.loadSettings();
+            await this.showSelectedClassSummary();
             this.setupEventListeners();
             this.hideLoading();
             this.showEmailEntry();
@@ -33,6 +34,37 @@ class EmailProfileRegistrationApp {
             console.error('Initialization error:', error);
             this.showError('Failed to load registration portal. Please refresh the page.');
             this.hideLoading();
+        }
+    }
+
+    // Arrived from a Register button on the home page (?course=ID):
+    // show the chosen class above the email box ("Almost there").
+    async showSelectedClassSummary() {
+        if (!this.preselectCourseId) return;
+        try {
+            const list = await fetch('/api/courses?active_only=true&include_crew=true').then(r => r.json());
+            const course = (Array.isArray(list) ? list : []).find(c => String(c.id) === String(this.preselectCourseId));
+            if (!course) return;
+            const esc = (v) => String(v ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+            const kinds = { 'drop_in': 'Drop-in', 'crew_practice': 'Crew practice' };
+            const kind = kinds[course.course_type] || 'Series';
+            const slot = (course.slots || [])[0] || {};
+            const when = [slot.day_of_week, slot.start_time].filter(Boolean).join(' · ');
+            const perClass = course.course_type === 'drop_in' || course.course_type === 'crew_practice';
+            const price = perClass ? (course.per_class_price || course.full_course_price) : (course.full_course_price || course.per_class_price);
+            const box = document.getElementById('selectedClassSummary');
+            box.innerHTML = `
+                <div>
+                    <span class="kind">${esc(kind)}</span>
+                    <span class="name">${esc(course.name)}</span>
+                    <span class="when">${esc(when)}</span>
+                </div>
+                ${price ? `<span class="amount">$${Number(price).toFixed(0)}</span>` : ''}`;
+            box.hidden = false;
+            document.getElementById('emailStepTitle').textContent = 'Almost there';
+            document.getElementById('emailStepSub').textContent = "Enter your email. If you've danced with us before, we'll take you straight to payment.";
+        } catch (e) {
+            console.warn('Could not load the selected class', e);
         }
     }
 
