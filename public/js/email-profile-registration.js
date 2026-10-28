@@ -32,6 +32,13 @@ class EmailProfileRegistrationApp {
             this.setupEventListeners();
             this.hideLoading();
             this.showEmailEntry();
+            // Already signed in on this device (My classes, or an earlier checkout):
+            // when a class or combo was chosen, carry on without asking for the email again.
+            const saved = this.savedEmail();
+            if (saved) {
+                document.getElementById('email').value = saved;
+                if (this.preselectCourseId || this.preselectComboId) this.handleEmailEntry();
+            }
         } catch (error) {
             console.error('Initialization error:', error);
             this.showError('Failed to load registration portal. Please refresh the page.');
@@ -140,12 +147,17 @@ class EmailProfileRegistrationApp {
         });
     }
 
+    savedEmail() {
+        try { return localStorage.getItem('goumo_email') || ''; } catch (e) { return ''; }
+    }
+
     showEmailEntry() {
         this.currentStep = 'email-entry';
         this.hideAllSections();
         document.getElementById('emailEntrySection').style.display = 'block';
         
-        // Clear previous data
+        // Clear previous data (a manual "use a different email" also forgets the saved one)
+        if (this.currentEmail) { try { localStorage.removeItem('goumo_email'); } catch (e) { /* private mode */ } }
         this.currentEmail = '';
         this.currentStudent = null;
         this.eligibleCourses = [];
