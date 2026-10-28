@@ -521,6 +521,12 @@ test('admin email status and test email report clearly', async () => {
     assert.ok(sent.body.method, 'reports which method it tried');
 });
 
+test('privacy page is served', async () => {
+    const res = await fetch(`${BASE}/privacy`);
+    assert.equal(res.status, 200);
+    assert.ok((await res.text()).includes('Privacy'));
+});
+
 test('removed features are gone', async () => {
     for (const [method, url] of [
         ['POST', '/api/competition/register'],
