@@ -2767,6 +2767,32 @@ app.post('/api/admin/courses/:courseId/waitlist/notify-next', requireAuth, async
 }));
 
 // Students and Registrations
+// 'venmo' / 'zelle' from the checkout page -> 'Venmo' / 'Zelle' (anything else: not recorded)
+function paymentMethodLabel(value) {
+    const v = String(value || '').toLowerCase();
+    return v === 'venmo' ? 'Venmo' : v === 'zelle' ? 'Zelle' : null;
+}
+
+// Admin: every student with how many classes they've paid for
+app.get('/api/admin/students', requireAuth, asyncHandler(async (req, res) => {
+    const students = await dbConfig.all(`
+        SELECT s.id, s.first_name, s.last_name, s.email, s.instagram_handle, s.dance_experience,
+               s.student_type, s.created_at,
+               SUM(CASE WHEN r.payment_status = 'completed' THEN 1 ELSE 0 END) AS paid_classes,
+               SUM(CASE WHEN r.payment_status = 'pending' THEN 1 ELSE 0 END) AS pending_classes,
+               MAX(r.registration_date) AS last_registered
+        FROM students s
+        LEFT JOIN registrations r ON r.student_id = s.id
+        GROUP BY s.id
+        ORDER BY s.created_at DESC
+    `);
+    res.json(students.map(st => ({
+        ...st,
+        paid_classes: Number(st.paid_classes) || 0,
+        pending_classes: Number(st.pending_classes) || 0
+    })));
+}));
+
 // ===================== Combos =====================
 // A combo bundles 2+ classes at one price. Registering creates one pending
 // registration per class, sharing a combo_group; the combo price is split
@@ -2957,9 +2983,9 @@ app.post('/api/register-combo', asyncHandler(async (req, res) => {
     for (let i = 0; i < n; i++) {
         const amount = i === n - 1 ? Math.round((combo.price - share * (n - 1)) * 100) / 100 : share;
         const result = await dbConfig.run(`
-            INSERT INTO registrations (student_id, course_id, payment_amount, payment_status, special_requests, registration_type, combo_id, combo_group)
-            VALUES ($1, $2, $3, 'pending', $4, 'combo', $5, $6) ${dbConfig.isProduction ? 'RETURNING id' : ''}
-        `, [student.id, combo.classes[i].id, amount, special_requests || null, combo.id, group]);
+            INSERT INTO registrations (student_id, course_id, payment_amount, payment_status, special_requests, registration_type, combo_id, combo_group, payment_method)
+            VALUES ($1, $2, $3, 'pending', $4, 'combo', $5, $6, $7) ${dbConfig.isProduction ? 'RETURNING id' : ''}
+        `, [student.id, combo.classes[i].id, amount, special_requests || null, combo.id, group, paymentMethodLabel(req.body.payment_method)]);
         registrationIds.push(dbConfig.isProduction ? result[0]?.id : result.lastID);
     }
 
@@ -3166,8 +3192,8 @@ app.post('/api/register', asyncHandler(async (req, res) => {
     if (existingPending) {
         // Same student, same class, not paid yet: update their choice instead of duplicating
         await dbConfig.run(
-            'UPDATE registrations SET payment_amount = $1, selected_dates = $2, registration_type = $3, updated_at = CURRENT_TIMESTAMP WHERE id = $4',
-            [payment_amount, pickedDatesJson, registration_type || null, existingPending.id]
+            'UPDATE registrations SET payment_amount = $1, selected_dates = $2, registration_type = $3, payment_method = $4, updated_at = CURRENT_TIMESTAMP WHERE id = $5',
+            [payment_amount, pickedDatesJson, registration_type || null, paymentMethodLabel(req.body.payment_method), existingPending.id]
         );
         console.log('ℹ️ Updated existing pending registration', { id: existingPending.id, student_id: student.id, course_id });
         return res.json({ 
@@ -3183,10 +3209,10 @@ app.post('/api/register', asyncHandler(async (req, res) => {
     const registrationResult = await dbConfig.run(`
         INSERT INTO registrations (
             student_id, course_id, payment_amount, payment_status, special_requests,
-            registration_type, selected_dates
-        ) VALUES ($1, $2, $3, 'pending', $4, $5, $6)
+            registration_type, selected_dates, payment_method
+        ) VALUES ($1, $2, $3, 'pending', $4, $5, $6, $7)
         ${dbConfig.isProduction ? 'RETURNING id' : ''}
-    `, [student.id, course_id, payment_amount, special_requests, registration_type || null, pickedDatesJson]);
+    `, [student.id, course_id, payment_amount, special_requests, registration_type || null, pickedDatesJson, paymentMethodLabel(req.body.payment_method)]);
     
     // Handle different return formats for SQLite vs PostgreSQL
     let registrationId;
@@ -3213,10 +3239,11 @@ app.get('/api/registrations', requireAuth, asyncHandler(async (req, res) => {
     
     let query = `
         SELECT r.*, s.id AS student_id, s.first_name, s.last_name, s.email, s.phone, s.dance_experience, s.instagram_handle AS instagram_id,
-               c.name as course_name, c.course_type, c.price
+               c.name as course_name, c.course_type, c.price, cb.name AS combo_name
         FROM registrations r
         LEFT JOIN students s ON r.student_id = s.id
         LEFT JOIN courses c ON r.course_id = c.id
+        LEFT JOIN combos cb ON r.combo_id = cb.id
     `;
     
     const params = [];
@@ -3476,7 +3503,7 @@ app.put('/api/admin/registrations/:id/confirm-payment', requireAuth, asyncHandle
         await dbConfig.run(`
             UPDATE registrations SET
                 payment_status = 'completed',
-                payment_method = 'Venmo',
+                payment_method = COALESCE(payment_method, 'Venmo'),
                 paypal_transaction_id = $1,
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = $2
