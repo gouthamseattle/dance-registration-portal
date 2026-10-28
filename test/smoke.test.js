@@ -410,7 +410,7 @@ test('admin students list, crew toggle and payment method', async () => {
                   start_time: '18:00', end_time: '19:00', location: 'Test Studio', pricing: { full_package: 100 } }]
     }, { admin: true });
     assert.equal(cls.status, 200, JSON.stringify(cls.body));
-    const email = `student.${unique}@example.com`;
+    const email = `asha.${unique}@example.com`;
     const reg = await api('POST', '/api/register', {
         first_name: 'Asha', last_name: 'Student', email, course_id: cls.body.courseId, payment_amount: 100, payment_method: 'zelle'
     });
