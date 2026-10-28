@@ -51,20 +51,23 @@ class AdminDashboard {
 
     async loadInitialData() {
         try {
-            const [settingsResponse, coursesResponse, registrationsResponse] = await Promise.all([
+            const [settingsResponse, coursesResponse, registrationsResponse, waitlistResponse] = await Promise.all([
                 this.apiFetch('/api/settings'),
                 this.apiFetch('/api/courses'),
-                this.apiFetch('/api/registrations')
+                this.apiFetch('/api/registrations'),
+                this.apiFetch('/api/admin/waitlists')
             ]);
 
             this.settings = await settingsResponse.json();
             this.courses = await coursesResponse.json();
             this.registrations = await registrationsResponse.json();
+            this.waitlists = waitlistResponse.ok ? await waitlistResponse.json().catch(() => []) : [];
+            if (!Array.isArray(this.waitlists)) this.waitlists = this.waitlists.waitlists || [];
 
             this.updateDashboardStats();
             this.updateRegistrationToggle();
-            this.loadRecentRegistrations();
             this.populateFilters();
+            if (this.currentSection === 'courses') this.filterCourses();
         } catch (error) {
             console.error('Error loading initial data:', error);
             this.showError('Failed to load dashboard data');
@@ -117,6 +120,9 @@ class AdminDashboard {
             this.filterRegistrations();
         });
         document.getElementById('regPaymentMethodFilter').addEventListener('change', () => {
+            this.filterRegistrations();
+        });
+        document.getElementById('regSearch').addEventListener('input', () => {
             this.filterRegistrations();
         });
     }
@@ -201,10 +207,10 @@ class AdminDashboard {
 
     showSection(sectionName) {
         // Update navigation
-        document.querySelectorAll('.nav-link').forEach(link => {
-            link.classList.remove('active');
+        document.querySelectorAll('.admin-nav .nav-link').forEach(link => {
+            link.classList.toggle('active', link.dataset.section === sectionName);
         });
-        document.querySelector(`[data-section="${sectionName}"]`).classList.add('active');
+        window.scrollTo(0, 0);
 
         // Hide all sections
         document.querySelectorAll('.content-section').forEach(section => {
@@ -236,9 +242,6 @@ class AdminDashboard {
             case 'registrations':
                 this.loadRegistrations();
                 break;
-            case 'reports':
-                this.loadReports();
-                break;
             case 'students':
                 this.loadStudentManagement();
                 break;
@@ -251,68 +254,154 @@ class AdminDashboard {
         }
     }
 
+    // ---------- Dashboard ----------
+    // Everything here is worked out from the classes and registrations
+    // already loaded, so the dashboard needs no extra report queries.
+    regsList() { return Array.isArray(this.registrations) ? this.registrations : []; }
+
+    money(n) { return `$${(Number(n) || 0).toLocaleString('en-US', { maximumFractionDigits: 2 })}`; }
+
+    // Paid / pending counts and revenue for one class
+    classStats(courseId) {
+        const regs = this.regsList().filter(r => Number(r.course_id) === Number(courseId));
+        const paid = regs.filter(r => r.payment_status === 'completed');
+        return {
+            paid: paid.length,
+            pending: regs.filter(r => r.payment_status === 'pending').length,
+            revenue: paid.reduce((sum, r) => sum + (Number(r.payment_amount) || 0), 0)
+        };
+    }
+
+    capacityOf(course) {
+        const slots = course.slots || [];
+        const fromSlots = slots.length ? Math.min(...slots.map(s => Number(s.capacity) || 0)) : 0;
+        return fromSlots || Number(course.capacity) || 0;
+    }
+
     updateDashboardStats() {
-        // Ensure data is always an array to prevent filter errors
-        const registrations = Array.isArray(this.registrations) ? this.registrations : [];
+        const C = window.ClassInfo;
+        const regs = this.regsList();
         const courses = Array.isArray(this.courses) ? this.courses : [];
-        
-        const totalRegs = registrations.length;
-        const completedRegs = registrations.filter(r => r.payment_status === 'completed');
-        const pendingRegs = registrations.filter(r => r.payment_status === 'pending');
-        const activeCourses = courses.filter(c => c.is_active).length;
-        
-        const totalRevenue = completedRegs.reduce((sum, reg) => sum + parseFloat(reg.payment_amount || 0), 0);
+        const active = courses.filter(c => c.is_active);
+        const pending = regs.filter(r => r.payment_status === 'pending');
+        const live = regs.filter(r => r.payment_status === 'completed' || r.payment_status === 'pending');
+        const revenue = regs.filter(r => r.payment_status === 'completed').reduce((sum, r) => sum + (Number(r.payment_amount) || 0), 0);
+        const pendingTotal = pending.reduce((sum, r) => sum + (Number(r.payment_amount) || 0), 0);
 
-        document.getElementById('totalRegistrations').textContent = totalRegs;
-        document.getElementById('totalRevenue').textContent = `$${totalRevenue.toFixed(2)}`;
-        document.getElementById('activeCourses').textContent = activeCourses;
-        document.getElementById('pendingPayments').textContent = pendingRegs.length;
+        document.getElementById('pendingPayments').textContent = pending.length;
+        document.getElementById('pendingAmount').textContent = pending.length ? `${this.money(pendingTotal)} to confirm →` : 'Nothing to confirm';
+        document.getElementById('totalRegistrations').textContent = live.length;
+        document.getElementById('classCount').textContent = `across ${active.length} active class${active.length === 1 ? '' : 'es'}`;
+        document.getElementById('totalRevenue').textContent = this.money(revenue);
+        document.getElementById('waitlistCount').textContent = Array.isArray(this.waitlists) ? this.waitlists.length : 0;
 
-        // Add click handlers to stat cards for navigation
+        const navCount = document.getElementById('navPendingCount');
+        navCount.textContent = pending.length;
+        navCount.hidden = pending.length === 0;
+
+        // "Nov 4 – Dec 16 · 6 active classes"
+        const allDates = active.flatMap(c => C.dates(c)).sort();
+        const range = allDates.length ? `${C.formatOneDate(allDates[0])} – ${C.formatOneDate(allDates[allDates.length - 1])}` : 'No dates yet';
+        document.getElementById('sessionSummary').textContent = `${range} · ${active.length} active class${active.length === 1 ? '' : 'es'}`;
+
+        this.renderClassReport(active);
+        this.renderPendingList(pending);
         this.addStatCardClickHandlers();
     }
 
+    // "Classes this session": filled, paid, pending and revenue per class
+    renderClassReport(active) {
+        const C = window.ClassInfo;
+        const el = document.getElementById('classReport');
+        if (!active.length) {
+            el.innerHTML = '<p class="empty-line">No active classes. <a href="#" onclick="admin.showCreateCourse();return false">Create one</a>.</p>';
+            return;
+        }
+        const sorted = [...active].sort((a, b) => (C.dates(a)[0] || '9999').localeCompare(C.dates(b)[0] || '9999'));
+        el.innerHTML = `
+            <div class="table-responsive">
+                <table class="table admin-table class-report mb-0">
+                    <thead><tr><th>Class</th><th>Filled</th><th class="text-end">Paid</th><th class="text-end">Pending</th><th class="text-end">Revenue</th></tr></thead>
+                    <tbody>
+                        ${sorted.map(c => {
+                            const s = this.classStats(c.id);
+                            const cap = this.capacityOf(c);
+                            const pct = cap ? Math.min(100, Math.round((s.paid / cap) * 100)) : 0;
+                            const crew = c.required_student_type === 'crew_member' ? ' <span class="pill pill-muted">Crew only</span>' : '';
+                            return `<tr>
+                                <td><a href="#" class="row-link" onclick="admin.showRegistrationsFor(${c.id});return false">${C.esc(c.name)}</a>${crew}<div class="cell-sub">${C.esc(C.kicker(c))}</div></td>
+                                <td><div class="fill"><div class="fill-bar"><span style="width:${pct}%"></span></div><span class="fill-num">${s.paid}/${cap || '—'}</span></div></td>
+                                <td class="text-end">${s.paid}</td>
+                                <td class="text-end">${s.pending ? `<span class="accent fw-semibold">${s.pending}</span>` : '0'}</td>
+                                <td class="text-end">${this.money(s.revenue)}</td>
+                            </tr>`;
+                        }).join('')}
+                    </tbody>
+                </table>
+            </div>`;
+    }
+
+    // One line per payment to check; a combo shows once with its total
+    pendingGroups(pending) {
+        const groups = [];
+        const seen = new Map();
+        [...pending].sort((a, b) => new Date(b.registration_date) - new Date(a.registration_date)).forEach(r => {
+            const key = r.combo_group || `reg-${r.id}`;
+            if (seen.has(key)) {
+                const g = seen.get(key);
+                g.amount += Number(r.payment_amount) || 0;
+                return;
+            }
+            const g = { id: r.id, reg: r, amount: Number(r.payment_amount) || 0, title: r.combo_name ? `${r.combo_name} (combo)` : (r.course_name || 'Class') };
+            seen.set(key, g);
+            groups.push(g);
+        });
+        return groups;
+    }
+
+    studentName(r) {
+        return [r.first_name, r.last_name].filter(Boolean).join(' ').trim() || r.email || '(No name)';
+    }
+
+    renderPendingList(pending) {
+        const C = window.ClassInfo;
+        const el = document.getElementById('pendingList');
+        const groups = this.pendingGroups(pending);
+        if (!groups.length) {
+            el.innerHTML = '<p class="empty-line">All payments are confirmed.</p>';
+            return;
+        }
+        el.innerHTML = groups.slice(0, 8).map(g => `
+            <div class="pending-row">
+                <div class="min-w-0">
+                    <div class="fw-semibold text-truncate">${C.esc(this.studentName(g.reg))}</div>
+                    <div class="cell-sub text-truncate">${C.esc(g.title)} · ${this.money(g.amount)}${g.reg.payment_method ? ` · ${C.esc(g.reg.payment_method)}` : ''}</div>
+                </div>
+                <button class="btn btn-primary btn-sm" onclick="window.quickConfirmPayment(${g.id}, this)">Confirm</button>
+            </div>`).join('') + (groups.length > 8 ? `<p class="empty-line">+ ${groups.length - 8} more</p>` : '');
+    }
+
+    showRegistrationsFor(courseId, status = '') {
+        this.showSection('registrations');
+        document.getElementById('regCourseFilter').value = courseId || '';
+        document.getElementById('regStatusFilter').value = status;
+        this.filterRegistrations();
+    }
+
     addStatCardClickHandlers() {
-        // Add click handler to Active Courses card
-        const activeCoursesCard = document.getElementById('activeCourses').closest('.card');
-        if (activeCoursesCard) {
-            activeCoursesCard.style.cursor = 'pointer';
-            activeCoursesCard.onclick = () => this.showSection('courses');
-        }
-
-        // Add click handler to Total Registrations card
-        const totalRegsCard = document.getElementById('totalRegistrations').closest('.card');
-        if (totalRegsCard) {
-            totalRegsCard.style.cursor = 'pointer';
-            totalRegsCard.onclick = () => this.showSection('registrations');
-        }
-
-        // Add click handler to Pending Payments card
-        const pendingPaymentsCard = document.getElementById('pendingPayments').closest('.card');
-        if (pendingPaymentsCard) {
-            pendingPaymentsCard.style.cursor = 'pointer';
-            pendingPaymentsCard.onclick = () => {
-                this.showSection('registrations');
-                // Set filter to pending after a short delay to ensure section loads
-                setTimeout(() => {
-                    const statusFilter = document.getElementById('regStatusFilter');
-                    if (statusFilter) {
-                        statusFilter.value = 'pending';
-                        this.filterRegistrations();
-                    }
-                }, 100);
-            };
-        }
+        if (this._statsWired) return;
+        this._statsWired = true;
+        document.getElementById('statPending').onclick = () => this.showRegistrationsFor('', 'pending');
+        document.getElementById('seeAllPending').onclick = (e) => { e.preventDefault(); this.showRegistrationsFor('', 'pending'); };
+        document.getElementById('statRegistered').onclick = () => this.showRegistrationsFor('', '');
+        document.getElementById('statWaitlist').onclick = () => this.showSection('waitlist');
     }
 
     updateRegistrationToggle() {
-        const toggle = document.getElementById('registrationToggle');
-        const status = document.getElementById('registrationStatus');
-        
         const isOpen = this.settings.registration_open === 'true';
-        toggle.checked = isOpen;
-        status.textContent = isOpen ? 'Open' : 'Closed';
-        status.className = `form-check-label ${isOpen ? 'text-success' : 'text-danger'}`;
+        document.getElementById('registrationToggle').checked = isOpen;
+        document.getElementById('registrationStatus').textContent = isOpen ? 'open' : 'closed';
+        document.querySelector('.registration-toggle').classList.toggle('on', isOpen);
     }
 
     async toggleRegistration(isOpen) {
@@ -338,128 +427,9 @@ class AdminDashboard {
         }
     }
 
-    loadRecentRegistrations() {
-        const container = document.getElementById('recentRegistrations');
-        
-        // Ensure registrations is always an array to prevent sort errors
-        const registrations = Array.isArray(this.registrations) ? this.registrations : [];
-        const recentRegs = registrations
-            .sort((a, b) => new Date(b.registration_date) - new Date(a.registration_date))
-            .slice(0, 10);
-
-        if (recentRegs.length === 0) {
-            container.innerHTML = '<p class="text-muted text-center">No registrations yet</p>';
-            return;
-        }
-
-        const table = document.createElement('div');
-        table.className = 'table-responsive';
-        table.innerHTML = `
-            <table class="table table-hover">
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>Student</th>
-                        <th>Course</th>
-                        <th>Amount</th>
-                        <th>Payment Method</th>
-                        <th>Status</th>
-                        <th>Date</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${recentRegs.map(reg => `
-                        <tr>
-                            <td><code>#${reg.id}</code></td>
-                            <td>
-                                <div>
-                                    <strong>${([reg.first_name, reg.last_name].filter(Boolean).join(' ').trim()) || '(No name)'}</strong><br>
-                                    <small class="text-muted">${reg.email}</small><br>
-                                    ${reg.instagram_id ? `<small class="text-muted">@${reg.instagram_id}</small>` : ''}
-                                </div>
-                            </td>
-                            <td>${reg.course_name || 'Drop-in Class'}</td>
-                            <td>$${parseFloat(reg.payment_amount).toFixed(2)}</td>
-                            <td>${this.getPaymentMethodBadge(reg.payment_method)}</td>
-                            <td>
-                                <span class="status-badge status-${reg.payment_status}">
-                                    ${reg.payment_status}
-                                </span>
-                            </td>
-                            <td>${new Date(reg.registration_date).toLocaleDateString()}</td>
-                        </tr>
-                    `).join('')}
-                </tbody>
-            </table>
-        `;
-        container.innerHTML = '';
-        container.appendChild(table);
-    }
-
     // Reports: load analytics and render
-    async loadReports() {
-        try {
-            const seriesEl = document.getElementById('reportsBySeries');
-            if (seriesEl) seriesEl.innerHTML = '<div class="text-muted">Loading...</div>';
-
-            const seriesRes = await this.apiFetch('/api/admin/analytics/registrations-by-series');
-            const seriesData = await seriesRes.json();
-            this.renderReportsBySeries(seriesData);
-
-            const btn = document.getElementById('refreshReportsBtn');
-            if (btn && !btn._wired) {
-                btn._wired = true;
-                btn.addEventListener('click', () => this.loadReports());
-            }
-        } catch (e) {
-            console.error('Reports load error:', e);
-            const seriesEl = document.getElementById('reportsBySeries');
-            if (seriesEl) seriesEl.innerHTML = '<div class="text-danger">Failed to load reports</div>';
-            this.showError('Failed to load reports');
-        }
-    }
-
-    renderReportsBySeries(series) {
-        const el = document.getElementById('reportsBySeries');
-        if (!el) return;
-        if (!Array.isArray(series) || series.length === 0) {
-            el.innerHTML = '<div class="text-muted">No data</div>';
-            return;
-        }
-        const table = document.createElement('div');
-        table.className = 'table-responsive';
-        table.innerHTML = `
-            <table class="table table-striped">
-                <thead>
-                    <tr>
-                        <th>Series</th>
-                        <th class="text-end">Total</th>
-                        <th class="text-end text-success">Completed</th>
-                        <th class="text-end text-warning">Pending</th>
-                        <th class="text-end text-danger">Failed</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${series.map(r => `
-                        <tr>
-                            <td>${r.course_name}</td>
-                            <td class="text-end">${r.total}</td>
-                            <td class="text-end text-success">${r.completed}</td>
-                            <td class="text-end text-warning">${r.pending}</td>
-                            <td class="text-end text-danger">${r.failed}</td>
-                        </tr>
-                    `).join('')}
-                </tbody>
-            </table>
-        `;
-        el.innerHTML = '';
-        el.appendChild(table);
-    }
-
-
     loadDashboard() {
         this.updateDashboardStats();
-        this.loadRecentRegistrations();
     }
 
 
@@ -483,98 +453,43 @@ class AdminDashboard {
     }
 
     renderCoursesGrid(courses) {
+        const C = window.ClassInfo;
         const container = document.getElementById('coursesGrid');
-        
-        if (courses.length === 0) {
+        if (!courses.length) {
             container.innerHTML = `
                 <div class="empty-state">
-                    <i class="fas fa-graduation-cap"></i>
-                    <h4>No Dance Series Found</h4>
-                    <p>Create your first dance series to start accepting registrations.</p>
-                    <button class="btn btn-primary" onclick="admin.showCreateCourse()">
-                        <i class="fas fa-plus"></i>
-                        Create Dance Series
-                    </button>
-                </div>
-            `;
+                    <h4>No classes yet</h4>
+                    <p>Create your first class to start taking registrations.</p>
+                    <button class="btn btn-primary" onclick="admin.showCreateCourse()"><i class="fas fa-plus"></i> New class</button>
+                </div>`;
             return;
         }
-
-        const grid = document.createElement('div');
-        grid.className = 'row';
-        
-        courses.forEach(course => {
-            const col = document.createElement('div');
-            col.className = 'col-lg-6 col-xl-4 course-grid-item';
-            
-            const availableSpots = course.available_spots || 0;
-            const capacity = course.capacity || 0;
-            const fillPercentage = capacity > 0 ? ((capacity - availableSpots) / capacity) * 100 : 0;
-            
-            col.innerHTML = `
-                <div class="card course-card">
-                    <div class="card-header">
-                        <h6 class="card-title">${course.name}</h6>
-                        <p class="card-subtitle">${course.level || 'All Levels'}</p>
-                    </div>
-                    <div class="card-body">
-                        ${course.description ? `<p class="text-muted small mb-3">${course.description}</p>` : ''}
-                        
-                        <div class="course-info mb-3">
-                            <div class="course-info-item">
-                                <i class="fas fa-users"></i>
-                                <span>${course.registration_count || 0}/${capacity} registered</span>
-                            </div>
-                            ${course.duration_weeks ? `
-                                <div class="course-info-item">
-                                    <i class="fas fa-calendar"></i>
-                                    <span>${course.duration_weeks} weeks</span>
-                                </div>
-                            ` : ''}
-                            ${course.schedule_info ? `
-                                <div class="course-info-item">
-                                    <i class="fas fa-clock"></i>
-                                    <span>${course.schedule_info}</span>
-                                </div>
-                            ` : ''}
-                        </div>
-
-                        <div class="progress mb-3" style="height: 8px;">
-                            <div class="progress-bar ${fillPercentage > 80 ? 'bg-warning' : 'bg-success'}" 
-                                 style="width: ${fillPercentage}%"></div>
-                        </div>
-
-                        <div class="d-flex justify-content-between align-items-center mb-3">
-                            <div>
-                                ${course.full_course_price ? `<strong>$${course.full_course_price}</strong> full` : ''}
-                                ${course.per_class_price ? `<br><strong>$${course.per_class_price}</strong> per class` : ''}
-                            </div>
-                            <span class="status-badge ${course.is_active ? 'status-completed' : 'status-pending'}">
-                                ${course.is_active ? 'Active' : 'Inactive'}
-                            </span>
-                        </div>
-
-                        <div class="course-actions">
-                            <button class="btn btn-outline-primary btn-sm" onclick="admin.editCourse(${course.id})">
-                                <i class="fas fa-edit"></i> Edit
-                            </button>
-                            <button class="btn btn-outline-success btn-sm" onclick="admin.toggleCourseStatus(${course.id}, ${!course.is_active})">
-                                <i class="fas fa-${course.is_active ? 'pause' : 'play'}"></i>
-                                ${course.is_active ? 'Deactivate' : 'Activate'}
-                            </button>
-                            <button class="btn btn-outline-danger btn-sm" onclick="admin.deleteCourse(${course.id})">
-                                <i class="fas fa-trash"></i> Delete
-                            </button>
-                        </div>
-                    </div>
+        const sorted = [...courses].sort((a, b) => (b.is_active ? 1 : 0) - (a.is_active ? 1 : 0) || (C.dates(a)[0] || '9999').localeCompare(C.dates(b)[0] || '9999'));
+        container.innerHTML = `<div class="class-grid">${sorted.map(c => {
+            const s = this.classStats(c.id);
+            const cap = this.capacityOf(c);
+            const pct = cap ? Math.min(100, Math.round((s.paid / cap) * 100)) : 0;
+            const crew = c.required_student_type === 'crew_member' ? '<span class="pill pill-muted">Crew only</span>' : '';
+            return `
+            <article class="panel class-tile ${c.is_active ? '' : 'is-off'}">
+                <div class="d-flex justify-content-between align-items-start gap-2">
+                    <span class="kicker">${C.esc(C.kicker(c))}</span>
+                    <span class="pill ${c.is_active ? 'pill-ok' : 'pill-muted'}">${c.is_active ? 'Active' : 'Inactive'}</span>
                 </div>
-            `;
-            
-            grid.appendChild(col);
-        });
-        
-        container.innerHTML = '';
-        container.appendChild(grid);
+                <h3>${C.esc(c.name)} ${crew}</h3>
+                ${c.instructor ? `<div class="cell-sub">with ${C.esc(c.instructor)}</div>` : ''}
+                <dl class="class-rows small my-3">
+                    ${C.rows(c).map(([k, v]) => `<div><dt>${C.esc(k)}</dt><dd>${C.esc(v)}</dd></div>`).join('')}
+                </dl>
+                <div class="fill mb-3"><div class="fill-bar"><span style="width:${pct}%"></span></div><span class="fill-num">${s.paid}/${cap || '—'} paid${s.pending ? ` · ${s.pending} pending` : ''}</span></div>
+                <div class="tile-actions">
+                    <button class="btn btn-outline-secondary btn-sm" onclick="admin.editCourse(${c.id})">Edit</button>
+                    <button class="btn btn-outline-secondary btn-sm" onclick="admin.showRegistrationsFor(${c.id})">Registrations</button>
+                    <button class="btn btn-outline-secondary btn-sm" onclick="admin.toggleCourseStatus(${c.id}, ${!c.is_active})">${c.is_active ? 'Turn off' : 'Turn on'}</button>
+                    <button class="btn btn-outline-danger btn-sm" onclick="admin.deleteCourse(${c.id})">Delete</button>
+                </div>
+            </article>`;
+        }).join('')}</div>`;
     }
 
     loadRegistrations() {
@@ -584,122 +499,61 @@ class AdminDashboard {
     filterRegistrations() {
         const courseFilter = document.getElementById('regCourseFilter').value;
         const statusFilter = document.getElementById('regStatusFilter').value;
-        const paymentMethodFilter = document.getElementById('regPaymentMethodFilter').value;
-        
-        let filteredRegs = [...this.registrations];
-        
-        if (courseFilter) {
-            filteredRegs = filteredRegs.filter(r => Number(r.course_id) === Number(courseFilter));
-        }
-        
-        if (statusFilter) {
-            filteredRegs = filteredRegs.filter(r => r.payment_status === statusFilter);
-        }
+        const methodFilter = document.getElementById('regPaymentMethodFilter').value;
+        const q = (document.getElementById('regSearch').value || '').trim().toLowerCase();
 
-        if (paymentMethodFilter) {
-            filteredRegs = filteredRegs.filter(r => {
-                const method = String(r.payment_method || '').toLowerCase();
-                return method === paymentMethodFilter.toLowerCase();
-            });
-        }
+        let regs = [...this.regsList()];
+        if (courseFilter) regs = regs.filter(r => Number(r.course_id) === Number(courseFilter));
+        if (statusFilter) regs = regs.filter(r => r.payment_status === statusFilter);
+        if (methodFilter) regs = regs.filter(r => String(r.payment_method || '').toLowerCase() === methodFilter);
+        if (q) regs = regs.filter(r => [r.first_name, r.last_name, r.email, r.instagram_id].join(' ').toLowerCase().includes(q));
+        regs.sort((a, b) => (a.payment_status === 'pending' ? 0 : 1) - (b.payment_status === 'pending' ? 0 : 1) || new Date(b.registration_date) - new Date(a.registration_date));
 
-        this.renderRegistrationsTable(filteredRegs);
+        const pending = regs.filter(r => r.payment_status === 'pending').length;
+        document.getElementById('regSummary').textContent = `${regs.length} registration${regs.length === 1 ? '' : 's'}${pending ? ` · ${pending} waiting for payment check` : ''}`;
+        this.renderRegistrationsTable(regs);
     }
 
+    // One row per registration. On a phone each row stacks into a card.
     renderRegistrationsTable(registrations) {
+        const C = window.ClassInfo;
         const container = document.getElementById('registrationsTable');
-        
-        if (registrations.length === 0) {
-            container.innerHTML = `
-                <div class="empty-state">
-                    <i class="fas fa-users"></i>
-                    <h4>No Registrations Found</h4>
-                    <p>No registrations match your current filters.</p>
-                </div>
-            `;
+        if (!registrations.length) {
+            container.innerHTML = '<div class="empty-state"><h4>No registrations found</h4><p>Nothing matches these filters.</p></div>';
             return;
         }
-
-        const table = document.createElement('div');
-        table.className = 'table-responsive';
-        table.innerHTML = `
-            <table class="table table-hover">
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>Student</th>
-                        <th>Course</th>
-                        <th>Type</th>
-                        <th>Amount</th>
-                        <th>Payment Method</th>
-                        <th>Status</th>
-                        <th>Date</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${registrations.map(reg => `
-                        <tr>
-                            <td><code>#${reg.id}</code></td>
-                            <td>
-                                <div>
-                                    <strong>${([reg.first_name, reg.last_name].filter(Boolean).join(' ').trim()) || '(No name)'}</strong><br>
-                                    ${reg.email ? `<small class="text-muted">${reg.email}</small><br>` : `<small class="text-muted">(no email)</small><br>`}
-                                    ${reg.instagram_id ? `<small class="text-muted">@${reg.instagram_id}</small><br>` : ''}
-                                    ${reg.dance_experience ? `<small class="text-muted">${reg.dance_experience}</small>` : ''}
-                                </div>
-                            </td>
-                            <td>
-                                <strong>${reg.course_name || 'Drop-in Class'}</strong>${reg.combo_name ? `<br><small class="text-muted">Combo: ${window.ClassInfo.esc(reg.combo_name)} · confirm or cancel applies to the whole combo</small>` : ''}${(() => { try { const d = JSON.parse(reg.selected_dates || 'null'); return Array.isArray(d) && d.length ? `<br><small class="text-muted">Dates: ${window.ClassInfo.formatDates(d)}</small>` : ''; } catch (e) { return ''; } })()}
-                                ${reg.class_date ? `<br><small class="text-muted">${new Date(reg.class_date).toLocaleDateString()}</small>` : ''}
-                            </td>
-                            <td>
-                                <span class="badge bg-secondary">${reg.registration_type || '—'}</span>
-                            </td>
-                            <td>$${parseFloat(reg.payment_amount).toFixed(2)}</td>
-                            <td>${this.getPaymentMethodBadge(reg.payment_method)}</td>
-                            <td>
-                                <span class="status-badge status-${reg.payment_status}">
-                                    ${reg.payment_status}
-                                </span>
-                            </td>
-                            <td>${new Date(reg.registration_date).toLocaleDateString()}</td>
-                            <td>
-                                <div class="btn-group btn-group-sm">
-                                    ${!reg.email ? `
-                                    <button class="btn btn-outline-warning" onclick="admin.assignStudent(${reg.id})" title="Assign Student">
-                                        <i class="fas fa-user-plus"></i>
-                                    </button>
-                                    ` : ''}
-                                    <button class="btn btn-outline-info" onclick="admin.viewRegistration(${reg.id})" title="View Details">
-                                        <i class="fas fa-eye"></i>
-                                    </button>
-                                    ${reg.payment_status === 'canceled' ? `
-                                    <button class="btn btn-outline-secondary" onclick="admin.uncancelRegistration(${reg.id})" title="Uncancel Registration">
-                                        <i class="fas fa-undo"></i>
-                                    </button>
-                                    ` : `
-                                    <button class="btn btn-outline-danger" onclick="admin.cancelRegistration(${reg.id})" title="Cancel Registration">
-                                        <i class="fas fa-ban"></i>
-                                    </button>
-                                    `}
-                                    ${reg.payment_status === 'pending' ? `
-                                    <button class="btn btn-outline-success" onclick="window.markPaidModal(${reg.id}, this)" title="Mark as Paid (with note)">
-                                        <i class="fas fa-pen"></i>
-                                    </button>
-                                    <button class="btn btn-success" onclick="window.quickConfirmPayment(${reg.id}, this)" title="Quick Confirm Payment">
-                                        <i class="fas fa-check"></i>
-                                    </button>
-                                    ` : ''}
-                                </div>
-                            </td>
-                        </tr>
-                    `).join('')}
-                </tbody>
-            </table>
-        `;
-        container.innerHTML = '';
-        container.appendChild(table);
+        const STATUS = { completed: ['Paid', 'pill-ok'], pending: ['Pending', 'pill-warn'], canceled: ['Canceled', 'pill-muted'], failed: ['Failed', 'pill-bad'] };
+        container.innerHTML = `<div class="reg-list">${registrations.map(r => {
+            let picked = '';
+            try { const d = JSON.parse(r.selected_dates || 'null'); if (Array.isArray(d) && d.length) picked = `Dates: ${C.formatDates(d)}`; } catch (e) { /* ignore */ }
+            const [label, cls] = STATUS[r.payment_status] || [r.payment_status || '—', 'pill-muted'];
+            const contact = [r.email, r.instagram_id ? `@${r.instagram_id}` : ''].filter(Boolean).join(' · ');
+            return `
+            <div class="reg-row status-${C.esc(r.payment_status)}">
+                <div class="reg-who">
+                    <div class="fw-semibold">${C.esc(this.studentName(r))}</div>
+                    <div class="cell-sub">${C.esc(contact || '(no email)')}</div>
+                </div>
+                <div class="reg-what">
+                    <div>${C.esc(r.course_name || 'Class')}</div>
+                    ${r.combo_name ? `<div class="cell-sub">Combo: ${C.esc(r.combo_name)} · actions apply to the whole combo</div>` : ''}
+                    ${picked ? `<div class="cell-sub">${C.esc(picked)}</div>` : ''}
+                </div>
+                <div class="reg-pay">
+                    <div class="fw-semibold">${this.money(r.payment_amount)}</div>
+                    <div class="cell-sub">${C.esc(r.payment_method || '—')} · ${r.registration_date ? new Date(r.registration_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}</div>
+                </div>
+                <div class="reg-status"><span class="pill ${cls}">${C.esc(label)}</span></div>
+                <div class="reg-actions">
+                    ${r.payment_status === 'pending' ? `<button class="btn btn-primary btn-sm" onclick="window.quickConfirmPayment(${r.id}, this)">Confirm</button>` : ''}
+                    ${!r.email ? `<button class="btn btn-outline-secondary btn-sm" onclick="admin.assignStudent(${r.id})">Link student</button>` : ''}
+                    <button class="btn btn-outline-secondary btn-sm" onclick="admin.viewRegistration(${r.id})">Details</button>
+                    ${r.payment_status === 'canceled'
+                        ? `<button class="btn btn-outline-secondary btn-sm" onclick="admin.uncancelRegistration(${r.id})">Restore</button>`
+                        : `<button class="btn btn-outline-danger btn-sm" onclick="admin.cancelRegistration(${r.id})">Cancel</button>`}
+                </div>
+            </div>`;
+        }).join('')}</div>`;
     }
 
     loadSettings() {
@@ -713,13 +567,15 @@ class AdminDashboard {
     populateFilters() {
         // Populate course filter for registrations
         const courseSelect = document.getElementById('regCourseFilter');
-        courseSelect.innerHTML = '<option value="">All Dance Series</option>';
+        const keep = courseSelect.value;
+        courseSelect.innerHTML = '<option value="">All classes</option>';
         this.courses.forEach(course => {
             const option = document.createElement('option');
             option.value = course.id;
             option.textContent = course.name;
             courseSelect.appendChild(option);
         });
+        courseSelect.value = keep;
     }
 
 
@@ -1022,7 +878,7 @@ class AdminDashboard {
                         </div>
                         <button class="btn btn-sm btn-outline-secondary" onclick="admin.toggleCombo(${combo.id}, ${!combo.is_active})">${combo.is_active ? 'Turn off' : 'Turn on'}</button>
                         <button class="btn btn-sm btn-outline-primary" onclick="admin.editCombo(${combo.id})">Edit</button>
-                        <button class="btn btn-sm btn-outline-danger" onclick="admin.deleteCombo(${combo.id})" aria-label="Delete combo"><i class="fas fa-trash"></i></button>
+                        <button class="btn btn-sm btn-outline-danger" onclick="admin.deleteCombo(${combo.id})">Delete</button>
                     </div>
                 </div>
             </div>`).join('');
@@ -1670,7 +1526,7 @@ class AdminDashboard {
         const select = document.getElementById('waitlistCourseFilter');
         if (!select) return;
         
-        select.innerHTML = '<option value="">All Courses</option>';
+        select.innerHTML = '<option value="">All classes</option>';
         this.courses.forEach(course => {
             const option = document.createElement('option');
             option.value = course.id;
@@ -1934,262 +1790,102 @@ class AdminDashboard {
     // Student Management (Phase 1)
     // =========================
 
+    // ---------- Students ----------
     async loadStudentManagement() {
-        await this.refreshStudentData();
-        await this.loadCrewMembersList();
-    }
-
-    async refreshStudentData() {
-        try {
-            const [pendingResponse, candidatesResponse] = await Promise.all([
-                this.apiFetch('/api/admin/students/pending'),
-                this.apiFetch('/api/admin/crew-member-candidates')
-            ]);
-
-            const pendingStudents = await pendingResponse.json();
-            const crewCandidates = await candidatesResponse.json();
-
-            this.renderPendingStudents(pendingStudents);
-            this.renderCrewCandidates(crewCandidates);
-
-        } catch (error) {
-            console.error('Error loading student data:', error);
-            this.showError('Failed to load student data');
+        const list = document.getElementById('studentsList');
+        if (!this._studentsWired) {
+            this._studentsWired = true;
+            document.getElementById('studentSearch').addEventListener('input', () => this.renderStudents());
+            document.getElementById('studentTypeChips').addEventListener('click', (e) => {
+                const chip = e.target.closest('.chip');
+                if (!chip) return;
+                this.studentType = chip.dataset.type;
+                document.querySelectorAll('#studentTypeChips .chip').forEach(c => c.setAttribute('aria-pressed', String(c === chip)));
+                this.renderStudents();
+            });
         }
-    }
-
-    renderPendingStudents(students) {
-        const pendingRow = document.getElementById('pendingStudentsRow');
-        const pendingList = document.getElementById('pendingStudentsList');
-        const pendingCount = document.getElementById('pendingCount');
-
-        if (students.length === 0) {
-            pendingRow.style.display = 'none';
+        try {
+            const response = await this.apiFetch('/api/admin/students');
+            this.students = response.ok ? await response.json() : [];
+        } catch (e) {
+            this.students = [];
+            list.innerHTML = '<p class="empty-line">Could not load students.</p>';
             return;
         }
-
-        pendingRow.style.display = 'block';
-        pendingCount.textContent = students.length;
-
-        const studentsHtml = students.map(student => `
-            <div class="card mb-3 border-warning">
-                <div class="card-body">
-                    <div class="row align-items-center">
-                        <div class="col-md-6">
-                            <h6 class="mb-1">${student.first_name} ${student.last_name}</h6>
-                            <small class="text-muted">${student.email}</small>
-                            ${student.instagram_handle ? `<br><small class="text-muted">@${student.instagram_handle}</small>` : ''}
-                        </div>
-                        <div class="col-md-4">
-                            <small><strong>Experience:</strong> ${this.formatExperience(student.dance_experience)}</small><br>
-                            <small><strong>Registrations:</strong> ${student.registration_count}</small><br>
-                            <small><strong>Joined:</strong> ${new Date(student.created_at).toLocaleDateString()}</small>
-                        </div>
-                        <div class="col-md-2">
-                            <div class="btn-group-vertical w-100">
-                                <button class="btn btn-warning btn-sm" onclick="admin.classifyStudent(${student.id}, 'crew_member')">
-                                    <i class="fas fa-users"></i> Crew Member
-                                </button>
-                                <button class="btn btn-outline-secondary btn-sm" onclick="admin.classifyStudent(${student.id}, 'general')">
-                                    <i class="fas fa-user"></i> General Student
-                                </button>
-                                <button class="btn btn-outline-info btn-sm" onclick="admin.classifyStudent(${student.id}, 'test')">
-                                    <i class="fas fa-vial"></i> Test
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `).join('');
-
-        pendingList.innerHTML = studentsHtml;
+        this.renderStudents();
     }
 
-    renderCrewCandidates(candidates) {
-        const candidatesRow = document.getElementById('crewCandidatesRow');
-        const candidatesList = document.getElementById('crewCandidatesList');
-        const candidatesCount = document.getElementById('candidatesCount');
+    renderStudents() {
+        const C = window.ClassInfo;
+        const all = Array.isArray(this.students) ? this.students : [];
+        const type = this.studentType || '';
+        const q = (document.getElementById('studentSearch').value || '').trim().toLowerCase();
+        const isCrew = s => s.student_type === 'crew_member';
+        let shown = all;
+        if (type === 'crew_member') shown = shown.filter(isCrew);
+        if (type === 'general') shown = shown.filter(s => !isCrew(s));
+        if (q) shown = shown.filter(s => [s.first_name, s.last_name, s.email, s.instagram_handle].join(' ').toLowerCase().includes(q));
 
-        if (candidates.length === 0) {
-            candidatesRow.style.display = 'none';
+        const crew = all.filter(isCrew).length;
+        document.getElementById('studentSummary').textContent = `${all.length} students · ${all.length - crew} GouMo students · ${crew} crew members`;
+
+        const el = document.getElementById('studentsList');
+        if (!shown.length) {
+            el.innerHTML = '<div class="empty-state"><h4>No students found</h4><p>Nothing matches this search.</p></div>';
             return;
         }
-
-        candidatesRow.style.display = 'block';
-        candidatesCount.textContent = candidates.length;
-
-        const candidatesHtml = candidates.map(candidate => `
-            <div class="card mb-3 border-success">
-                <div class="card-body">
-                    <div class="row align-items-center">
-                        <div class="col-md-5">
-                            <h6 class="mb-1">${candidate.first_name} ${candidate.last_name}</h6>
-                            <small class="text-muted">${candidate.email}</small>
-                            ${candidate.instagram_handle ? `<br><small class="text-muted">@${candidate.instagram_handle}</small>` : ''}
-                        </div>
-                        <div class="col-md-4">
-                            <small><strong>Crew Registrations:</strong> ${candidate.crew_registrations}</small><br>
-                            <small><strong>Classes:</strong> ${candidate.crew_courses}</small><br>
-                            <small><strong>Current Type:</strong> 
-                                <span class="badge ${candidate.current_student_type === 'crew_member' ? 'bg-warning' : 'bg-info'}">
-                                    ${candidate.current_student_type === 'crew_member' ? 'Crew Member' : 'General Student'}
-                                </span>
-                            </small>
-                        </div>
-                        <div class="col-md-3">
-                            ${candidate.current_student_type !== 'crew_member' ? `
-                                <button class="btn btn-success btn-sm w-100" onclick="admin.classifyStudent(${candidate.id}, 'crew_member')">
-                                    <i class="fas fa-user-check"></i> Promote to Crew Member
-                                </button>
-                            ` : `
-                                <span class="text-success">
-                                    <i class="fas fa-check-circle"></i> Already Crew Member
-                                </span>
-                            `}
-                        </div>
-                    </div>
+        el.innerHTML = `
+            <div class="panel p-0">
+                <div class="table-responsive">
+                    <table class="table admin-table students-table mb-0">
+                        <thead><tr><th>Student</th><th>Instagram</th><th>Experience</th><th class="text-end">Classes paid</th><th>Type</th><th></th></tr></thead>
+                        <tbody>
+                            ${shown.map(s => `
+                            <tr>
+                                <td><div class="fw-semibold">${C.esc([s.first_name, s.last_name].filter(Boolean).join(' ') || '(No name)')}</div><div class="cell-sub">${C.esc(s.email || '')}</div></td>
+                                <td>${s.instagram_handle ? `<a href="https://instagram.com/${encodeURIComponent(String(s.instagram_handle).replace(/^@/, ''))}" target="_blank" rel="noopener">@${C.esc(String(s.instagram_handle).replace(/^@/, ''))}</a>` : '<span class="cell-sub">—</span>'}</td>
+                                <td>${C.esc(this.formatExperience(s.dance_experience))}</td>
+                                <td class="text-end">${s.paid_classes}${s.pending_classes ? ` <span class="cell-sub">+${s.pending_classes} pending</span>` : ''}</td>
+                                <td><span class="pill ${isCrew(s) ? 'pill-accent' : 'pill-muted'}">${isCrew(s) ? 'Crew member' : 'GouMo student'}</span></td>
+                                <td class="text-end">
+                                    <button class="btn btn-outline-secondary btn-sm text-nowrap" onclick="admin.classifyStudent(${s.id}, '${isCrew(s) ? 'general' : 'crew_member'}')">${isCrew(s) ? 'Make GouMo student' : 'Make crew member'}</button>
+                                </td>
+                            </tr>`).join('')}
+                        </tbody>
+                    </table>
                 </div>
-            </div>
-        `).join('');
-
-        candidatesList.innerHTML = candidatesHtml;
+            </div>`;
     }
-
-    async loadCrewMemberCandidates() {
-        try {
-            const response = await this.apiFetch('/api/admin/crew-member-candidates');
-            const candidates = await response.json();
-            this.renderCrewCandidates(candidates);
-        } catch (error) {
-            console.error('Error loading crew candidates:', error);
-            this.showError('Failed to load crew member candidates');
-        }
-    }
-
-    hideCrewCandidates() {
-        document.getElementById('crewCandidatesRow').style.display = 'none';
-    }
-
 
     async classifyStudent(studentId, studentType) {
         try {
             const response = await this.apiFetch(`/api/admin/students/${studentId}/classify`, {
                 method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ student_type: studentType })
             });
-
-            const result = await response.json();
-
-            if (response.ok) {
-                const label = studentType === 'crew_member' ? 'Crew Member' : (studentType === 'test' ? 'Test' : 'General Student');
-                this.showSuccess(`Student classified as ${label}`);
-                await this.refreshStudentData();
-            } else {
-                this.showError(result.error || 'Failed to classify student');
+            const result = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                this.showError(result.error || 'Failed to update student');
+                return;
             }
+            this.showSuccess(studentType === 'crew_member' ? 'Now a crew member: crew-only classes are open to them' : 'Now a GouMo student');
+            await this.loadStudentManagement();
         } catch (error) {
             console.error('Error classifying student:', error);
-            this.showError('Failed to classify student');
+            this.showError('Failed to update student');
         }
     }
 
     formatExperience(experience) {
         const experiences = {
-            'beginner': 'Beginner - New to dance',
-            'some_experience': 'Some Experience - 1-2 years',
-            'intermediate': 'Intermediate - 2-5 years',
-            'advanced': 'Advanced - 5+ years',
-            'professional': 'Professional/Instructor'
+            beginner: 'Beginner',
+            some_experience: '1–2 years',
+            intermediate: '2–5 years',
+            advanced: '5+ years',
+            professional: 'Professional'
         };
-        return experiences[experience] || experience || 'Not specified';
-    }
-
-
-    async loadCrewMembersList() {
-        try {
-            const response = await this.apiFetch('/api/admin/crew-members');
-            
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
-            
-            const crewMembers = await response.json();
-            this.renderCrewMembersList(crewMembers);
-        } catch (error) {
-            console.error('Error loading crew members list:', error);
-            this.showError(`Failed to load crew members: ${error.message}`);
-            // Render empty state on error
-            this.renderCrewMembersList([]);
-        }
-    }
-
-    renderCrewMembersList(crewMembers) {
-        // Add crew members section at the top of student management if we have crew members
-        // Ensure crewMembers is an array to prevent .map() errors
-        if (!crewMembers || !Array.isArray(crewMembers) || crewMembers.length === 0) return;
-
-        const studentsSection = document.getElementById('studentsSection');
-        if (!studentsSection) return;
-
-        // Check if crew members section already exists
-        let crewSection = document.getElementById('crewMembersOverview');
-        if (!crewSection) {
-            // Insert after the main header but before pending students
-            const headerRow = studentsSection.querySelector('.row');
-            crewSection = document.createElement('div');
-            crewSection.id = 'crewMembersOverview';
-            crewSection.className = 'row mb-4';
-            headerRow.insertAdjacentElement('afterend', crewSection);
-        }
-
-        crewSection.innerHTML = `
-            <div class="col-12">
-                <div class="card border-warning">
-                    <div class="card-header bg-warning text-dark">
-                        <h5 class="mb-0">
-                            <i class="fas fa-crown me-2"></i>
-                            Current Crew Members
-                            <span class="badge bg-dark ms-2">${crewMembers.length}</span>
-                        </h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="row">
-                            ${crewMembers.map(member => {
-                                const name = `${member.first_name} ${member.last_name}`.trim() || 'Unknown Name';
-                                return `
-                                    <div class="col-md-6 col-lg-4 mb-3">
-                                        <div class="card border-warning">
-                                            <div class="card-body py-2">
-                                                <div class="d-flex align-items-center">
-                                                    <i class="fas fa-crown text-warning me-2"></i>
-                                                    <div>
-                                                        <strong>${name}</strong><br>
-                                                        <small class="text-muted">
-                                                            <i class="fas fa-envelope me-1"></i>${member.email}
-                                                        </small>
-                                                        ${member.instagram_handle ? `<br><small class="text-muted"><i class="fab fa-instagram me-1"></i>@${member.instagram_handle}</small>` : ''}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                `;
-                            }).join('')}
-                        </div>
-                        ${crewMembers.length === 0 ? `
-                            <div class="text-muted text-center py-3">
-                                <i class="fas fa-users me-2"></i>
-                                No crew members classified yet. Use the classification tools below to identify crew members.
-                            </div>
-                        ` : ''}
-                    </div>
-                </div>
-            </div>
-        `;
+        return experiences[experience] || experience || '—';
     }
 
 

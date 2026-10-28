@@ -401,6 +401,55 @@ test('admin can save payment settings', async () => {
     assert.equal(settings.body.zelle_phone, '5555550199');
 });
 
+test('admin students list, crew toggle and payment method', async () => {
+    assert.equal((await api('GET', '/api/admin/students')).status, 401, 'admin only');
+
+    const cls = await api('POST', '/api/courses', {
+        name: `Students Test ${unique}`, course_type: 'multi-week', session_dates: ['2030-06-02', '2030-06-09', '2030-06-16'],
+        slots: [{ slot_name: 'Main Session', difficulty_level: 'All Levels', capacity: 10, day_of_week: 'Tuesday',
+                  start_time: '18:00', end_time: '19:00', location: 'Test Studio', pricing: { full_package: 100 } }]
+    }, { admin: true });
+    assert.equal(cls.status, 200, JSON.stringify(cls.body));
+    const email = `student.${unique}@example.com`;
+    const reg = await api('POST', '/api/register', {
+        first_name: 'Asha', last_name: 'Student', email, course_id: cls.body.courseId, payment_amount: 100, payment_method: 'zelle'
+    });
+    assert.equal(reg.status, 200, JSON.stringify(reg.body));
+
+    let list = await api('GET', '/api/admin/students', null, { admin: true });
+    assert.equal(list.status, 200, JSON.stringify(list.body));
+    let me = list.body.find((s) => s.email === email);
+    assert.ok(me, 'student listed');
+    assert.equal(me.pending_classes, 1);
+    assert.equal(me.paid_classes, 0);
+
+    const regs = await api('GET', '/api/registrations', null, { admin: true });
+    assert.equal(regs.body.find((r) => Number(r.id) === Number(reg.body.registrationId)).payment_method, 'Zelle', 'chosen payment method recorded');
+
+    const confirm = await api('PUT', `/api/admin/registrations/${reg.body.registrationId}/confirm-payment`, {}, { admin: true });
+    assert.equal(confirm.status, 200);
+    const after = await api('GET', '/api/registrations', null, { admin: true });
+    assert.equal(after.body.find((r) => Number(r.id) === Number(reg.body.registrationId)).payment_method, 'Zelle', 'confirming keeps Zelle');
+
+    const crew = await api('PUT', `/api/admin/students/${me.id}/classify`, { student_type: 'crew_member' }, { admin: true });
+    assert.equal(crew.status, 200, JSON.stringify(crew.body));
+    list = await api('GET', '/api/admin/students', null, { admin: true });
+    me = list.body.find((s) => s.email === email);
+    assert.equal(me.student_type, 'crew_member');
+    assert.equal(me.paid_classes, 1);
+});
+
+test('admin page uses the GouMo design system', async () => {
+    const res = await fetch(`${BASE}/admin`);
+    const html = await res.text();
+    assert.ok(html.includes('/css/admin.css'), 'new admin stylesheet');
+    assert.ok(!html.includes('admin-styles.css'), 'old stylesheet gone');
+    assert.ok(!html.includes('reportsSection'), 'reports merged into the dashboard');
+    for (const id of ['classReport', 'pendingList', 'studentsList', 'registrationsTable']) {
+        assert.ok(html.includes(`id="${id}"`), `${id} present`);
+    }
+});
+
 test('removed features are gone', async () => {
     for (const [method, url] of [
         ['POST', '/api/competition/register'],
