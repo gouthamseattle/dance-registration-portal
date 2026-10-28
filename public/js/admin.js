@@ -259,11 +259,15 @@ class AdminDashboard {
     // already loaded, so the dashboard needs no extra report queries.
     regsList() { return Array.isArray(this.registrations) ? this.registrations : []; }
 
+    // Registrations that count in numbers (test accounts' registrations don't)
+    isTestReg(r) { return r.is_test === true || r.is_test === 1 || r.is_test === '1' || r.is_test === 't'; }
+    countable() { return this.regsList().filter(r => !this.isTestReg(r)); }
+
     money(n) { return `$${(Number(n) || 0).toLocaleString('en-US', { maximumFractionDigits: 2 })}`; }
 
     // Paid / pending counts and revenue for one class
     classStats(courseId) {
-        const regs = this.regsList().filter(r => Number(r.course_id) === Number(courseId));
+        const regs = this.countable().filter(r => Number(r.course_id) === Number(courseId));
         const paid = regs.filter(r => r.payment_status === 'completed');
         return {
             paid: paid.length,
@@ -280,7 +284,7 @@ class AdminDashboard {
 
     updateDashboardStats() {
         const C = window.ClassInfo;
-        const regs = this.regsList();
+        const regs = this.countable();
         const courses = Array.isArray(this.courses) ? this.courses : [];
         const active = courses.filter(c => c.is_active);
         const pending = regs.filter(r => r.payment_status === 'pending');
@@ -305,7 +309,8 @@ class AdminDashboard {
         document.getElementById('sessionSummary').textContent = `${range} · ${active.length} active class${active.length === 1 ? '' : 'es'}`;
 
         this.renderClassReport(active);
-        this.renderPendingList(pending);
+        // The payment-check list still shows test registrations (marked "Test") so they can be confirmed
+        this.renderPendingList(this.regsList().filter(r => r.payment_status === 'pending'));
         this.addStatCardClickHandlers();
     }
 
@@ -376,7 +381,7 @@ class AdminDashboard {
             <div class="pending-row">
                 <div class="min-w-0">
                     <div class="text-truncate">${g.reg.student_id ? `<a href="#" class="row-link" onclick="admin.openStudent(${g.reg.student_id});return false">${C.esc(this.studentName(g.reg))}</a>` : `<span class="fw-semibold">${C.esc(this.studentName(g.reg))}</span>`}</div>
-                    <div class="cell-sub text-truncate">${C.esc(g.title)} · ${this.money(g.amount)}${g.reg.payment_method ? ` · ${C.esc(g.reg.payment_method)}` : ''}</div>
+                    <div class="cell-sub text-truncate">${this.isTestReg(g.reg) ? 'Test · ' : ''}${C.esc(g.title)} · ${this.money(g.amount)}${g.reg.payment_method ? ` · ${C.esc(g.reg.payment_method)}` : ''}</div>
                 </div>
                 <button class="btn btn-primary btn-sm" onclick="window.quickConfirmPayment(${g.id}, this)">Confirm</button>
             </div>`).join('') + (groups.length > 8 ? `<p class="empty-line">+ ${groups.length - 8} more</p>` : '');
@@ -553,7 +558,7 @@ class AdminDashboard {
                     <div class="cell-sub">${C.esc(contact || '(no email)')}</div>
                 </div>
                 <div class="reg-what">
-                    <div>${C.esc(r.course_name || 'Class')}</div>
+                    <div>${C.esc(r.course_name || 'Class')}${this.isTestReg(r) ? ' <span class="pill pill-muted">Test</span>' : ''}</div>
                     ${r.combo_name ? `<div class="cell-sub">Combo: ${C.esc(r.combo_name)} · actions apply to the whole combo</div>` : ''}
                     ${picked ? `<div class="cell-sub">${C.esc(picked)}</div>` : ''}
                 </div>
@@ -1859,6 +1864,7 @@ class AdminDashboard {
         }
         const st = data.student;
         const isCrew = st.student_type === 'crew_member';
+        const tester = st.is_tester === true || st.is_tester === 1 || st.is_tester === 't';
         const name = [st.first_name, st.last_name].filter(Boolean).join(' ') || '(No name)';
         document.getElementById('studentModalTitle').textContent = name;
         const STATUS = { completed: ['Paid', 'pill-ok'], pending: ['Pending', 'pill-warn'], canceled: ['Canceled', 'pill-muted'], failed: ['Failed', 'pill-bad'] };
@@ -1869,7 +1875,9 @@ class AdminDashboard {
                     <div>${C.esc(st.email || '')}</div>
                     <div class="cell-sub">${ig ? `<a href="https://instagram.com/${encodeURIComponent(ig)}" target="_blank" rel="noopener">@${C.esc(ig)}</a> · ` : ''}${C.esc(this.formatExperience(st.dance_experience))}${st.created_at ? ` · since ${new Date(st.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}` : ''}</div>
                 </div>
-                <div class="d-flex align-items-center gap-2">
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    ${st.archived_at ? '<span class="pill pill-muted">Hidden</span>' : ''}
+                    ${tester ? '<span class="pill pill-bad">Test account</span>' : ''}
                     <span class="pill ${isCrew ? 'pill-accent' : 'pill-muted'}">${isCrew ? 'Crew member' : 'GouMo student'}</span>
                     <button class="btn btn-outline-secondary btn-sm" onclick="admin.classifyStudent(${st.id}, '${isCrew ? 'general' : 'crew_member'}').then(() => admin.openStudent(${st.id}))">${isCrew ? 'Make GouMo student' : 'Make crew member'}</button>
                 </div>
@@ -1897,9 +1905,47 @@ class AdminDashboard {
                 </div>`;
             }).join('')}</div>` : '<p class="empty-line mb-3">No classes yet.</p>'}
             ${data.waitlists.length ? `<h6 class="mb-2">Waitlists</h6><ul class="mb-3">${data.waitlists.map(w => `<li>${C.esc(w.course_name)} · #${w.position}</li>`).join('')}</ul>` : ''}
+            ${data.totals.attended_old_records ? `<p class="cell-sub mb-3">Attended (old records): ${data.totals.attended_old_records} class${data.totals.attended_old_records === 1 ? '' : 'es'} marked present before Oct 2026.</p>` : ''}
             <h6 class="mb-2">Private notes <span class="cell-sub">(only you see these)</span></h6>
             <textarea class="form-control mb-2" id="studentNotes" rows="3" placeholder="e.g. missed week 2, strong in footwork">${C.esc(st.admin_notes || '')}</textarea>
-            <button class="btn btn-primary btn-sm" onclick="admin.saveStudentNotes(${st.id})">Save notes</button>`;
+            <button class="btn btn-primary btn-sm" onclick="admin.saveStudentNotes(${st.id})">Save notes</button>
+            <div class="border-top mt-4 pt-3 d-flex flex-wrap gap-2 align-items-center">
+                <button class="btn btn-outline-secondary btn-sm" onclick="admin.setStudentHidden(${st.id}, ${!st.archived_at})">${st.archived_at ? 'Restore profile' : 'Hide profile'}</button>
+                <button class="btn btn-outline-secondary btn-sm" onclick="admin.setTester(${st.id}, ${!tester})">${tester ? 'Make a normal account' : 'Make a test account'}</button>
+                ${tester ? `<button class="btn btn-outline-danger btn-sm" onclick="admin.resetTestData(${st.id})">Reset test data</button>` : ''}
+                <span class="cell-sub">Test accounts can register when classes are full, closed or crew-only, and never count in numbers.</span>
+            </div>`;
+    }
+
+    async setStudentHidden(id, hide) {
+        const r = await this.apiFetch('/api/admin/students/bulk', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: [id], action: hide ? 'archive' : 'restore' })
+        });
+        if (!r.ok) { this.showError('Could not update this student'); return; }
+        this.showSuccess(hide ? 'Profile hidden. Restore it from the Hidden filter.' : 'Profile restored');
+        if (this.currentSection === 'students') await this.loadStudentManagement();
+        this.openStudent(id);
+    }
+
+    async setTester(id, on) {
+        const r = await this.apiFetch(`/api/admin/students/${id}/tester`, {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ is_tester: on })
+        });
+        if (!r.ok) { this.showError('Could not update this student'); return; }
+        this.showSuccess(on ? 'Now a test account: its registrations no longer count in numbers' : 'Back to a normal account');
+        await this.loadInitialData();
+        if (this.currentSection === 'students') await this.loadStudentManagement();
+        this.openStudent(id);
+    }
+
+    async resetTestData(id) {
+        if (!confirm('Remove all registrations and waitlist spots for this test account? This cannot be undone.')) return;
+        const r = await this.apiFetch(`/api/admin/students/${id}/test-data`, { method: 'DELETE' });
+        const res = await r.json().catch(() => ({}));
+        if (!r.ok) { this.showError(res.error || 'Could not reset'); return; }
+        this.showSuccess(`Removed ${res.removed} test registration${res.removed === 1 ? '' : 's'}`);
+        await this.loadInitialData();
+        this.openStudent(id);
     }
 
     async saveStudentNotes(id) {
@@ -1935,19 +1981,119 @@ class AdminDashboard {
         this.renderStudents();
     }
 
+    toggleStudentSelection(id, on) {
+        this.studentSelection = this.studentSelection || new Set();
+        if (on) this.studentSelection.add(id); else this.studentSelection.delete(id);
+        this.updateBulkBar();
+    }
+
+    selectAllStudents(on) {
+        document.querySelectorAll('#studentsList .student-check').forEach(cb => {
+            cb.checked = on;
+            this.toggleStudentSelection(Number(cb.value), on);
+        });
+    }
+
+    clearStudentSelection() {
+        this.studentSelection = new Set();
+        this.renderStudents();
+    }
+
+    updateBulkBar() {
+        const n = (this.studentSelection || new Set()).size;
+        document.getElementById('studentBulkBar').hidden = n === 0;
+        document.getElementById('studentBulkCount').textContent = `${n} selected`;
+    }
+
+    async bulkStudents(action) {
+        const ids = [...(this.studentSelection || [])];
+        if (!ids.length) return;
+        const words = { archive: 'Hide', restore: 'Restore', make_crew: 'Make crew members:', make_general: 'Make GouMo students:' };
+        if (action === 'archive' && !confirm(`Hide ${ids.length} student${ids.length === 1 ? '' : 's'}? Their registrations and payments stay; you can restore them from the Hidden filter.`)) return;
+        const r = await this.apiFetch('/api/admin/students/bulk', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids, action })
+        });
+        const res = await r.json().catch(() => ({}));
+        if (!r.ok) { this.showError(res.error || 'Could not update students'); return; }
+        this.showSuccess(`${words[action].replace(':', '')} · ${res.updated} student${res.updated === 1 ? '' : 's'}`);
+        this.studentSelection = new Set();
+        await this.loadStudentManagement();
+    }
+
+    // ---------- Data check ----------
+    async openDataCheck() {
+        const body = document.getElementById('dataCheckBody');
+        body.innerHTML = '<p class="empty-line">Checking…</p>';
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('dataCheckModal')).show();
+        let d;
+        try {
+            const r = await this.apiFetch('/api/admin/data-check');
+            d = await r.json();
+        } catch (e) { body.innerHTML = '<p class="empty-line">Could not run the check.</p>'; return; }
+        const C = window.ClassInfo;
+        const legacy = Object.entries(d.legacy_tables || {});
+        const LEGACY_NAMES = { attendance_records: 'Old attendance records', class_sessions: 'Old class sessions', competition_registrations: 'Old competition sign-ups', dance_series: 'Old choreography packages' };
+        body.innerHTML = `
+            <div class="check-item">
+                <h6>${d.duplicate_students.length ? '⚠️' : '✅'} Students saved more than once</h6>
+                ${d.duplicate_students.length ? `
+                    <p class="cell-sub">The same email belongs to more than one profile, so their classes are split across profiles and the counts look too low.</p>
+                    <ul>${d.duplicate_students.map(g => `<li>${C.esc(g.email)}: ${g.students.map(s => `#${s.id} (${s.registrations} registration${s.registrations === 1 ? '' : 's'})`).join(', ')}</li>`).join('')}</ul>
+                    <button class="btn btn-primary btn-sm" onclick="admin.mergeDuplicates()">Merge duplicates</button>
+                    <span class="cell-sub ms-2">Keeps the oldest profile, moves all classes to it, hides the extra ones.</span>`
+                : '<p class="cell-sub">None.</p>'}
+            </div>
+            <div class="check-item">
+                <h6>${d.unlinked_registrations.length ? '⚠️' : '✅'} Registrations not linked to a student</h6>
+                ${d.unlinked_registrations.length ? `
+                    <p class="cell-sub">These count in revenue but don't show on any profile. Use <strong>Link student</strong> on each to attach it to the right person.</p>
+                    <ul>${d.unlinked_registrations.slice(0, 15).map(r => `<li>#${r.id} · ${C.esc(r.course_name || 'Class')} · ${this.money(r.payment_amount)} · ${C.esc(r.payment_status || '')} <a href="#" onclick="admin.assignStudent(${r.id});return false">Link student</a></li>`).join('')}</ul>
+                    ${d.unlinked_registrations.length > 15 ? `<p class="cell-sub">+ ${d.unlinked_registrations.length - 15} more</p>` : ''}`
+                : '<p class="cell-sub">None.</p>'}
+            </div>
+            <div class="check-item">
+                <h6>ℹ️ Students with no registrations</h6>
+                <p class="cell-sub">${d.students_without_registrations} profile${d.students_without_registrations === 1 ? '' : 's'} never registered for a class. You can hide them from the Students list (select, then Hide).</p>
+            </div>
+            <div class="check-item">
+                <h6>ℹ️ Data from the old system</h6>
+                ${legacy.length ? `<ul>${legacy.map(([t, n]) => `<li>${C.esc(LEGACY_NAMES[t] || t)}: ${n}</li>`).join('')}</ul>
+                    <p class="cell-sub">Old attendance (present / late) is shown on each student's profile as "Attended (old records)". The other old tables aren't counted anywhere.</p>`
+                : '<p class="cell-sub">No old tables found.</p>'}
+            </div>`;
+    }
+
+    async mergeDuplicates() {
+        if (!confirm('Merge students saved more than once? Their classes move to the oldest profile and the extra profiles are hidden.')) return;
+        const r = await this.apiFetch('/api/admin/data-check/merge-duplicates', { method: 'POST' });
+        const res = await r.json().catch(() => ({}));
+        if (!r.ok) { this.showError(res.error || 'Could not merge'); return; }
+        this.showSuccess(`Merged ${res.merged} duplicate profile${res.merged === 1 ? '' : 's'}`);
+        await this.loadInitialData();
+        if (this.currentSection === 'students') await this.loadStudentManagement();
+        this.openDataCheck();
+    }
+
     renderStudents() {
         const C = window.ClassInfo;
         const all = Array.isArray(this.students) ? this.students : [];
         const type = this.studentType || '';
         const q = (document.getElementById('studentSearch').value || '').trim().toLowerCase();
         const isCrew = s => s.student_type === 'crew_member';
-        let shown = all;
+        const hidden = s => !!s.archived_at;
+        let shown = type === 'archived' ? all.filter(hidden) : all.filter(s => !hidden(s));
         if (type === 'crew_member') shown = shown.filter(isCrew);
         if (type === 'general') shown = shown.filter(s => !isCrew(s));
+        this.studentSelection = this.studentSelection || new Set();
+        document.getElementById('bulkArchiveBtn').hidden = type === 'archived';
+        document.getElementById('bulkRestoreBtn').hidden = type !== 'archived';
         if (q) shown = shown.filter(s => [s.first_name, s.last_name, s.email, s.instagram_handle].join(' ').toLowerCase().includes(q));
 
-        const crew = all.filter(isCrew).length;
-        document.getElementById('studentSummary').textContent = `${all.length} students · ${all.length - crew} GouMo students · ${crew} crew members`;
+        const visible = all.filter(s => !hidden(s));
+        const crew = visible.filter(isCrew).length;
+        const hiddenCount = all.length - visible.length;
+        document.getElementById('studentSummary').textContent = `${visible.length} students · ${visible.length - crew} GouMo students · ${crew} crew members${hiddenCount ? ` · ${hiddenCount} hidden` : ''}`;
+        this.updateBulkBar();
 
         const el = document.getElementById('studentsList');
         if (!shown.length) {
@@ -1958,15 +2104,16 @@ class AdminDashboard {
             <div class="panel p-0">
                 <div class="table-responsive">
                     <table class="table admin-table students-table mb-0">
-                        <thead><tr><th>Student</th><th>Instagram</th><th>Experience</th><th class="text-end">Classes paid</th><th>Type</th><th></th></tr></thead>
+                        <thead><tr><th class="sel"><input type="checkbox" class="form-check-input" aria-label="Select all" onchange="admin.selectAllStudents(this.checked)"></th><th>Student</th><th>Instagram</th><th>Experience</th><th class="text-end">Classes paid</th><th>Type</th><th></th></tr></thead>
                         <tbody>
                             ${shown.map(s => `
                             <tr>
+                                <td class="sel"><input type="checkbox" class="form-check-input student-check" value="${s.id}" ${this.studentSelection.has(s.id) ? 'checked' : ''} onchange="admin.toggleStudentSelection(${s.id}, this.checked)" aria-label="Select student"></td>
                                 <td><a href="#" class="row-link" onclick="admin.openStudent(${s.id});return false">${C.esc([s.first_name, s.last_name].filter(Boolean).join(' ') || '(No name)')}</a><div class="cell-sub">${C.esc(s.email || '')}</div></td>
                                 <td>${s.instagram_handle ? `<a href="https://instagram.com/${encodeURIComponent(String(s.instagram_handle).replace(/^@/, ''))}" target="_blank" rel="noopener">@${C.esc(String(s.instagram_handle).replace(/^@/, ''))}</a>` : '<span class="cell-sub">—</span>'}</td>
                                 <td>${C.esc(this.formatExperience(s.dance_experience))}</td>
                                 <td class="text-end">${s.paid_classes}${s.pending_classes ? ` <span class="cell-sub">+${s.pending_classes} pending</span>` : ''}</td>
-                                <td><span class="pill ${isCrew(s) ? 'pill-accent' : 'pill-muted'}">${isCrew(s) ? 'Crew member' : 'GouMo student'}</span></td>
+                                <td><span class="pill ${isCrew(s) ? 'pill-accent' : 'pill-muted'}">${isCrew(s) ? 'Crew member' : 'GouMo student'}</span>${s.is_tester ? ' <span class="pill pill-bad">Test account</span>' : ''}</td>
                                 <td class="text-end">
                                     <button class="btn btn-outline-secondary btn-sm text-nowrap" onclick="admin.classifyStudent(${s.id}, '${isCrew(s) ? 'general' : 'crew_member'}')">${isCrew(s) ? 'Make GouMo student' : 'Make crew member'}</button>
                                 </td>

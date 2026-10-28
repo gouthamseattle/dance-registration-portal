@@ -36,7 +36,7 @@ async function getCourseAvailability(dbConfig, courseId, courseType = null) {
             registrationResult = await dbConfig.get(`
                 SELECT COUNT(*) as registered_count
                 FROM registrations r
-                WHERE r.course_id = $1 
+                WHERE r.course_id = $1 AND ${dbConfig.isProduction ? '(r.is_test IS NOT TRUE)' : '(r.is_test IS NULL OR r.is_test = 0)'} 
                 AND r.payment_status IN ('pending', 'completed')
                 AND r.payment_status != 'canceled'
             `, [courseId]);
@@ -44,7 +44,7 @@ async function getCourseAvailability(dbConfig, courseId, courseType = null) {
             registrationResult = await dbConfig.get(`
                 SELECT COUNT(*) as registered_count
                 FROM registrations r
-                WHERE r.course_id = $1 AND r.payment_status = 'completed'
+                WHERE r.course_id = $1 AND ${dbConfig.isProduction ? '(r.is_test IS NOT TRUE)' : '(r.is_test IS NULL OR r.is_test = 0)'} AND r.payment_status = 'completed'
             `, [courseId]);
         }
         

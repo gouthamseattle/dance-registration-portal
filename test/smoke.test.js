@@ -601,6 +601,79 @@ test('pages are never served from an old cached copy', async () => {
     }
 });
 
+test('student cleanup: bulk hide/restore/type, test accounts, data check', async () => {
+    const mkClass = async (name, capacity) => {
+        const r = await api('POST', '/api/courses', {
+            name: `${name} ${unique}`, course_type: 'multi-week', session_dates: ['2030-09-01', '2030-09-08', '2030-09-15'],
+            slots: [{ slot_name: 'Main Session', difficulty_level: 'All Levels', capacity, day_of_week: 'Tuesday',
+                      start_time: '18:00', end_time: '19:00', location: 'Cleanup Studio', pricing: { full_package: 50 } }]
+        }, { admin: true });
+        assert.equal(r.status, 200, JSON.stringify(r.body));
+        return r.body.courseId;
+    };
+    const tiny = await mkClass('Cleanup Tiny', 1);
+    const findStudent = async (email) => (await api('GET', '/api/admin/students', null, { admin: true })).body.find((s) => s.email === email);
+
+    // A normal student fills the only spot
+    const a = `clean.a.${unique}@example.com`;
+    const ra = await api('POST', '/api/register', { first_name: 'Ann', email: a, course_id: tiny, payment_amount: 50 });
+    await api('PUT', `/api/admin/registrations/${ra.body.registrationId}/confirm-payment`, {}, { admin: true });
+    const sa = await findStudent(a);
+
+    // Bulk: make crew, hide, restore
+    assert.equal((await api('POST', '/api/admin/students/bulk', { ids: [sa.id], action: 'make_crew' })).status, 401, 'admin only');
+    assert.equal((await api('POST', '/api/admin/students/bulk', { ids: [sa.id], action: 'make_crew' }, { admin: true })).status, 200);
+    assert.equal((await findStudent(a)).student_type, 'crew_member');
+    await api('POST', '/api/admin/students/bulk', { ids: [sa.id], action: 'archive' }, { admin: true });
+    assert.ok((await findStudent(a)).archived_at, 'hidden');
+    const stillPaid = (await api('GET', '/api/registrations', null, { admin: true })).body.find((r) => Number(r.id) === Number(ra.body.registrationId));
+    assert.equal(stillPaid.payment_status, 'completed', 'hiding keeps registrations');
+    await api('POST', '/api/admin/students/bulk', { ids: [sa.id], action: 'restore' }, { admin: true });
+    assert.ok(!(await findStudent(a)).archived_at, 'restored');
+
+    // Test account: can register when full and closed; doesn't use up spots
+    const t = `clean.tester.${unique}@example.com`;
+    const blocked = await api('POST', '/api/register', { first_name: 'Tess', email: t, course_id: tiny, payment_amount: 50 });
+    assert.equal(blocked.status, 400, 'class is full for a normal account');
+    const other = await mkClass('Cleanup Other', 5);
+    await api('POST', '/api/register', { first_name: 'Tess', email: t, course_id: other, payment_amount: 50 });
+    const st = await findStudent(t);
+    assert.equal((await api('PUT', `/api/admin/students/${st.id}/tester`, { is_tester: true }, { admin: true })).status, 200);
+    await api('PUT', `/api/courses/${tiny}/registration-open`, { open: false }, { admin: true });
+    const testerReg = await api('POST', '/api/register', { first_name: 'Tess', email: t, course_id: tiny, payment_amount: 50 });
+    assert.equal(testerReg.status, 200, JSON.stringify(testerReg.body));
+    await api('PUT', `/api/admin/registrations/${testerReg.body.registrationId}/confirm-payment`, {}, { admin: true });
+    const regs = (await api('GET', '/api/registrations', null, { admin: true })).body.filter((r) => r.email === t);
+    assert.ok(regs.length >= 2 && regs.every((r) => r.is_test === true || r.is_test === 1), 'all tester registrations flagged');
+    await api('PUT', `/api/courses/${tiny}/registration-open`, { open: true }, { admin: true });
+
+    // Tester can switch its own type; others can't
+    assert.equal((await api('PUT', '/api/my/tester-type', { email: t, student_type: 'crew_member' })).status, 200);
+    assert.equal((await api('PUT', '/api/my/tester-type', { email: a, student_type: 'general' })).status, 403);
+    const mine = await api('POST', '/api/my/profile', { email: t });
+    assert.ok(mine.body.student.is_tester === true || mine.body.student.is_tester === 1);
+
+    // Reset test data
+    const reset = await api('DELETE', `/api/admin/students/${st.id}/test-data`, null, { admin: true });
+    assert.equal(reset.status, 200, JSON.stringify(reset.body));
+    assert.ok(reset.body.removed >= 2);
+    assert.equal((await api('DELETE', `/api/admin/students/${sa.id}/test-data`, null, { admin: true })).status, 400, 'only test accounts');
+
+    // Data check: the same person saved twice (email case differs) gets merged
+    const dupLower = `clean.dup.${unique}@example.com`;
+    await api('POST', '/api/register', { first_name: 'Dup', email: dupLower, course_id: other, payment_amount: 50 });
+    await api('POST', '/api/register', { first_name: 'Dup', email: dupLower.toUpperCase(), course_id: tiny, payment_amount: 50 });
+    const check = await api('GET', '/api/admin/data-check', null, { admin: true });
+    assert.equal(check.status, 200, JSON.stringify(check.body));
+    assert.ok(check.body.duplicate_students.some((g) => g.email === dupLower), 'duplicate found');
+    const merge = await api('POST', '/api/admin/data-check/merge-duplicates', {}, { admin: true });
+    assert.equal(merge.status, 200);
+    const after = await api('GET', '/api/admin/data-check', null, { admin: true });
+    assert.ok(!after.body.duplicate_students.some((g) => g.email === dupLower), 'merged');
+    const keeper = (await api('GET', '/api/admin/students', null, { admin: true })).body.find((s) => s.email === dupLower && !s.archived_at);
+    assert.equal((await api('GET', `/api/admin/students/${keeper.id}`, null, { admin: true })).body.registrations.length, 2, 'classes moved to one profile');
+});
+
 test('removed features are gone', async () => {
     for (const [method, url] of [
         ['POST', '/api/competition/register'],

@@ -14,7 +14,7 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="/css/site.css?v=2" rel="stylesheet">
     <link href="/css/registration.css?v=3" rel="stylesheet">
-    <link href="/css/admin.css?v=3" rel="stylesheet">
+    <link href="/css/admin.css?v=4" rel="stylesheet">
 </head>
 <body class="admin">
     <!-- Loading Overlay -->
@@ -221,6 +221,9 @@
                     <h1 class="page-title">Students</h1>
                     <p class="page-sub" id="studentSummary">GouMo students and crew members</p>
                 </div>
+                <div class="page-actions">
+                    <button class="btn btn-outline-secondary" onclick="admin.openDataCheck()"><i class="fas fa-stethoscope"></i> Data check</button>
+                </div>
             </div>
             <div class="filter-bar">
                 <input type="search" class="form-control" id="studentSearch" placeholder="Search name, email or Instagram" aria-label="Search students">
@@ -228,7 +231,16 @@
                     <button type="button" class="chip" data-type="" aria-pressed="true">All</button>
                     <button type="button" class="chip" data-type="general" aria-pressed="false">GouMo students</button>
                     <button type="button" class="chip" data-type="crew_member" aria-pressed="false">Crew members</button>
+                    <button type="button" class="chip" data-type="archived" aria-pressed="false">Hidden</button>
                 </div>
+            </div>
+            <div class="bulk-bar" id="studentBulkBar" hidden>
+                <span id="studentBulkCount">0 selected</span>
+                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="admin.bulkStudents('make_crew')">Make crew members</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="admin.bulkStudents('make_general')">Make GouMo students</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="bulkArchiveBtn" onclick="admin.bulkStudents('archive')">Hide</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="bulkRestoreBtn" onclick="admin.bulkStudents('restore')" hidden>Restore</button>
+                <button type="button" class="btn btn-link btn-sm" onclick="admin.clearStudentSelection()">Clear</button>
             </div>
             <div id="studentsList"></div>
         </section>
@@ -287,6 +299,19 @@
     <!-- Modals -->
 
     <!-- Course Modal -->
+    <!-- Data check modal -->
+    <div class="modal fade" id="dataCheckModal" tabindex="-1">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Data check</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" id="dataCheckBody"></div>
+            </div>
+        </div>
+    </div>
+
     <!-- Student profile modal -->
     <div class="modal fade" id="studentModal" tabindex="-1">
         <div class="modal-dialog modal-lg modal-dialog-scrollable">
@@ -496,7 +521,7 @@
 
     <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="/js/class-info.js?v=4"></script>
-    <script src="/js/admin.js?v=33"></script>
+    <script src="/js/class-info.js?v=5"></script>
+    <script src="/js/admin.js?v=34"></script>
 </body>
 </html>

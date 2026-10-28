@@ -26,6 +26,11 @@ const PORT = process.env.PORT || 3000;
 const dbConfig = new DatabaseConfig();
 let db = null;
 
+// Test accounts (students.is_tester): their registrations are flagged is_test
+// and left out of spot counts, revenue and dashboard numbers.
+const isTrue = (v) => v === true || v === 1 || v === '1' || v === 't' || v === 'true';
+const NOT_TEST = dbConfig.isProduction ? '(r.is_test IS NOT TRUE)' : '(r.is_test IS NULL OR r.is_test = 0)';
+
 // Middleware
 app.use(cors());
 app.use(bodyParser.json());
@@ -210,7 +215,7 @@ app.get('/api/courses', asyncHandler(async (req, res) => {
         SELECT c.*,
                COUNT(DISTINCT r.id) as registration_count
         FROM courses c
-        LEFT JOIN registrations r ON c.id = r.course_id AND r.payment_status = 'completed'
+        LEFT JOIN registrations r ON c.id = r.course_id AND r.payment_status = 'completed' AND ${NOT_TEST}
     `;
     
     const params = [];
@@ -231,9 +236,9 @@ app.get('/api/courses', asyncHandler(async (req, res) => {
     let studentType = 'general'; // Default to general access
     if (student_email) {
         try {
-            const student = await dbConfig.get('SELECT student_type FROM students WHERE email = $1', [student_email]);
+            const student = await dbConfig.get('SELECT student_type, is_tester FROM students WHERE email = $1', [student_email]);
             if (student) {
-                studentType = student.student_type || 'general';
+                studentType = isTrue(student.is_tester) ? 'crew_member' : (student.student_type || 'general');
             }
         } catch (error) {
             console.warn('Error fetching student type for course access:', error);
@@ -294,7 +299,7 @@ app.get('/api/courses', asyncHandler(async (req, res) => {
                    COUNT(DISTINCT r.id) as slot_registration_count,
                    (cs.capacity - COUNT(DISTINCT r.id)) as available_spots
             FROM course_slots cs
-            LEFT JOIN registrations r ON cs.course_id = r.course_id AND r.payment_status = 'completed'
+            LEFT JOIN registrations r ON cs.course_id = r.course_id AND r.payment_status = 'completed' AND ${NOT_TEST}
             WHERE cs.course_id = $1
             GROUP BY cs.id
             ORDER BY cs.created_at ASC
@@ -402,7 +407,7 @@ app.get('/api/drop-in-classes', asyncHandler(async (req, res) => {
         SELECT c.*,
                COUNT(DISTINCT r.id) as registration_count
         FROM courses c
-        LEFT JOIN registrations r ON c.id = r.course_id AND r.payment_status = 'completed'
+        LEFT JOIN registrations r ON c.id = r.course_id AND r.payment_status = 'completed' AND ${NOT_TEST}
         WHERE c.is_active = ${dbConfig.isProduction ? 'true' : '1'}
         AND c.course_type = 'drop_in'
     `;
@@ -411,9 +416,9 @@ app.get('/api/drop-in-classes', asyncHandler(async (req, res) => {
     let studentType = 'general';
     if (student_email) {
         try {
-            const student = await dbConfig.get('SELECT student_type FROM students WHERE email = $1', [student_email]);
+            const student = await dbConfig.get('SELECT student_type, is_tester FROM students WHERE email = $1', [student_email]);
             if (student) {
-                studentType = student.student_type || 'general';
+                studentType = isTrue(student.is_tester) ? 'crew_member' : (student.student_type || 'general');
             }
         } catch (error) {
             console.warn('Error fetching student type for drop-in access:', error);
@@ -438,7 +443,7 @@ app.get('/api/drop-in-classes', asyncHandler(async (req, res) => {
                    COUNT(DISTINCT r.id) as slot_registration_count,
                    (cs.capacity - COUNT(DISTINCT r.id)) as available_spots
             FROM course_slots cs
-            LEFT JOIN registrations r ON cs.course_id = r.course_id AND r.payment_status = 'completed'
+            LEFT JOIN registrations r ON cs.course_id = r.course_id AND r.payment_status = 'completed' AND ${NOT_TEST}
             WHERE cs.course_id = $1
             GROUP BY cs.id
             ORDER BY cs.created_at ASC
@@ -1347,7 +1352,7 @@ app.post('/api/check-student-profile', asyncHandler(async (req, res) => {
         const newStudentCourseQuery = `
             SELECT c.*, COUNT(DISTINCT r.id) as registration_count
             FROM courses c
-            LEFT JOIN registrations r ON c.id = r.course_id AND r.payment_status = 'completed'
+            LEFT JOIN registrations r ON c.id = r.course_id AND r.payment_status = 'completed' AND ${NOT_TEST}
             WHERE c.is_active = ${dbConfig.isProduction ? 'true' : '1'}
             AND c.required_student_type = 'any'
             GROUP BY c.id ORDER BY c.created_at DESC
@@ -1362,7 +1367,7 @@ app.post('/api/check-student-profile', asyncHandler(async (req, res) => {
                        COUNT(DISTINCT r.id) as slot_registration_count,
                        (cs.capacity - COUNT(DISTINCT r.id)) as available_spots
                 FROM course_slots cs
-                LEFT JOIN registrations r ON cs.course_id = r.course_id AND r.payment_status = 'completed'
+                LEFT JOIN registrations r ON cs.course_id = r.course_id AND r.payment_status = 'completed' AND ${NOT_TEST}
                 WHERE cs.course_id = $1
                 GROUP BY cs.id
                 ORDER BY cs.created_at ASC
@@ -1452,14 +1457,14 @@ app.post('/api/check-student-profile', asyncHandler(async (req, res) => {
     let courseQuery = `
         SELECT c.*, COUNT(DISTINCT r.id) as registration_count
         FROM courses c
-        LEFT JOIN registrations r ON c.id = r.course_id AND r.payment_status = 'completed'
+        LEFT JOIN registrations r ON c.id = r.course_id AND r.payment_status = 'completed' AND ${NOT_TEST}
         WHERE c.is_active = ${dbConfig.isProduction ? 'true' : '1'}
     `;
     
     const params = [];
     
     // Filter courses based on student access level
-    if (student.student_type === 'crew_member') {
+    if (student.student_type === 'crew_member' || isTrue(student.is_tester)) {
         // Crew members can access all courses
         courseQuery += ' AND (c.required_student_type = \'any\' OR c.required_student_type = \'crew_member\')';
     } else {
@@ -1500,7 +1505,7 @@ app.post('/api/check-student-profile', asyncHandler(async (req, res) => {
                    COUNT(DISTINCT r.id) as slot_registration_count,
                    (cs.capacity - COUNT(DISTINCT r.id)) as available_spots
             FROM course_slots cs
-            LEFT JOIN registrations r ON cs.course_id = r.course_id AND r.payment_status = 'completed'
+            LEFT JOIN registrations r ON cs.course_id = r.course_id AND r.payment_status = 'completed' AND ${NOT_TEST}
             WHERE cs.course_id = $1
             GROUP BY cs.id
             ORDER BY cs.created_at ASC
@@ -1655,7 +1660,7 @@ app.post('/api/create-student-profile', asyncHandler(async (req, res) => {
     let courseQuery = `
         SELECT c.*, COUNT(DISTINCT r.id) as registration_count
         FROM courses c
-        LEFT JOIN registrations r ON c.id = r.course_id AND r.payment_status = 'completed'
+        LEFT JOIN registrations r ON c.id = r.course_id AND r.payment_status = 'completed' AND ${NOT_TEST}
         WHERE c.is_active = ${dbConfig.isProduction ? 'true' : '1'} 
         AND c.required_student_type = 'any'
         GROUP BY c.id ORDER BY c.created_at DESC
@@ -1670,7 +1675,7 @@ app.post('/api/create-student-profile', asyncHandler(async (req, res) => {
                    COUNT(DISTINCT r.id) as slot_registration_count,
                    (cs.capacity - COUNT(DISTINCT r.id)) as available_spots
             FROM course_slots cs
-            LEFT JOIN registrations r ON cs.course_id = r.course_id AND r.payment_status = 'completed'
+            LEFT JOIN registrations r ON cs.course_id = r.course_id AND r.payment_status = 'completed' AND ${NOT_TEST}
             WHERE cs.course_id = $1
             GROUP BY cs.id
             ORDER BY cs.created_at ASC
@@ -1762,7 +1767,7 @@ app.post('/api/update-student-profile', asyncHandler(async (req, res) => {
     let courseQuery = `
         SELECT c.*, COUNT(DISTINCT r.id) as registration_count
         FROM courses c
-        LEFT JOIN registrations r ON c.id = r.course_id AND r.payment_status = 'completed'
+        LEFT JOIN registrations r ON c.id = r.course_id AND r.payment_status = 'completed' AND ${NOT_TEST}
         WHERE c.is_active = ${dbConfig.isProduction ? 'true' : '1'}
     `;
     if (updated.student_type === 'crew_member') {
@@ -1781,7 +1786,7 @@ app.post('/api/update-student-profile', asyncHandler(async (req, res) => {
                    COUNT(DISTINCT r.id) as slot_registration_count,
                    (cs.capacity - COUNT(DISTINCT r.id)) as available_spots
             FROM course_slots cs
-            LEFT JOIN registrations r ON cs.course_id = r.course_id AND r.payment_status = 'completed'
+            LEFT JOIN registrations r ON cs.course_id = r.course_id AND r.payment_status = 'completed' AND ${NOT_TEST}
             WHERE cs.course_id = $1
             GROUP BY cs.id
             ORDER BY cs.created_at ASC
@@ -2805,6 +2810,139 @@ function paymentMethodLabel(value) {
     return v === 'venmo' ? 'Venmo' : v === 'zelle' ? 'Zelle' : null;
 }
 
+// ===================== Student cleanup & test accounts =====================
+const tableCache = {};
+async function tableExists(name) {
+    if (name in tableCache) return tableCache[name];
+    let exists = false;
+    try {
+        const row = dbConfig.isProduction
+            ? await dbConfig.get('SELECT to_regclass($1) AS t', [name])
+            : await dbConfig.get("SELECT name AS t FROM sqlite_master WHERE type = 'table' AND name = $1", [name]);
+        exists = !!(row && row.t);
+    } catch (e) { exists = false; }
+    tableCache[name] = exists;
+    return exists;
+}
+
+const dbBool = (v) => (dbConfig.isProduction ? !!v : (v ? 1 : 0));
+
+async function setTester(studentId, on) {
+    await dbConfig.run('UPDATE students SET is_tester = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2', [dbBool(on), studentId]);
+    await dbConfig.run('UPDATE registrations SET is_test = $1 WHERE student_id = $2', [dbBool(on), studentId]);
+}
+
+// Bulk actions on students: hide (archive), restore, or change type
+app.post('/api/admin/students/bulk', requireAuth, asyncHandler(async (req, res) => {
+    const { action } = req.body || {};
+    const ids = [...new Set(((req.body || {}).ids || []).map(Number).filter(Boolean))];
+    if (!ids.length) return res.status(400).json({ error: 'Select at least one student' });
+    const classified = dbConfig.isProduction ? 'true' : '1';
+    const actions = {
+        archive: 'UPDATE students SET archived_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = $1',
+        restore: 'UPDATE students SET archived_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = $1',
+        make_crew: `UPDATE students SET student_type = 'crew_member', admin_classified = ${classified}, updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
+        make_general: `UPDATE students SET student_type = 'general', admin_classified = ${classified}, updated_at = CURRENT_TIMESTAMP WHERE id = $1`
+    };
+    if (!actions[action]) return res.status(400).json({ error: 'Unknown action' });
+    for (const id of ids) await dbConfig.run(actions[action], [id]);
+    res.json({ success: true, updated: ids.length });
+}));
+
+// Mark / unmark a test account (its registrations stop counting in numbers)
+app.put('/api/admin/students/:id/tester', requireAuth, asyncHandler(async (req, res) => {
+    const student = await dbConfig.get('SELECT id FROM students WHERE id = $1', [req.params.id]);
+    if (!student) return res.status(404).json({ error: 'Student not found' });
+    await setTester(student.id, !!(req.body || {}).is_tester);
+    res.json({ success: true });
+}));
+
+// Reset a test account: remove all its registrations and waitlist spots
+app.delete('/api/admin/students/:id/test-data', requireAuth, asyncHandler(async (req, res) => {
+    const student = await dbConfig.get('SELECT id, is_tester FROM students WHERE id = $1', [req.params.id]);
+    if (!student) return res.status(404).json({ error: 'Student not found' });
+    if (!isTrue(student.is_tester)) return res.status(400).json({ error: 'Only test accounts can be reset' });
+    const regs = await dbConfig.get('SELECT COUNT(*) AS n FROM registrations WHERE student_id = $1', [student.id]);
+    await dbConfig.run('DELETE FROM registrations WHERE student_id = $1', [student.id]);
+    await dbConfig.run('DELETE FROM waitlist WHERE student_id = $1', [student.id]);
+    res.json({ success: true, removed: Number(regs?.n) || 0 });
+}));
+
+// Data check: things in the data that don't add up, with safe fixes
+app.get('/api/admin/data-check', requireAuth, asyncHandler(async (req, res) => {
+    const unlinked = await dbConfig.all(`
+        SELECT r.id, r.course_id, r.payment_status, r.payment_amount, r.registration_date, c.name AS course_name
+        FROM registrations r
+        LEFT JOIN students s ON s.id = r.student_id
+        LEFT JOIN courses c ON c.id = r.course_id
+        WHERE s.id IS NULL
+        ORDER BY r.registration_date DESC
+    `);
+    const dupRows = await dbConfig.all(`
+        SELECT s.id, s.email, s.first_name, s.last_name, s.created_at,
+               (SELECT COUNT(*) FROM registrations r WHERE r.student_id = s.id) AS registrations
+        FROM students s
+        WHERE s.archived_at IS NULL AND LOWER(TRIM(s.email)) IN (
+            SELECT LOWER(TRIM(email)) FROM students WHERE archived_at IS NULL GROUP BY LOWER(TRIM(email)) HAVING COUNT(*) > 1
+        )
+        ORDER BY s.id
+    `);
+    const groups = {};
+    dupRows.forEach(r => {
+        const k = String(r.email || '').trim().toLowerCase();
+        (groups[k] = groups[k] || []).push({ ...r, registrations: Number(r.registrations) || 0 });
+    });
+    const noRegs = await dbConfig.get(`
+        SELECT COUNT(*) AS n FROM students s
+        WHERE s.archived_at IS NULL AND NOT EXISTS (SELECT 1 FROM registrations r WHERE r.student_id = s.id)
+    `);
+    const legacy = {};
+    for (const t of ['attendance_records', 'class_sessions', 'competition_registrations', 'dance_series']) {
+        if (await tableExists(t)) {
+            const row = await dbConfig.get(`SELECT COUNT(*) AS n FROM ${t}`);
+            legacy[t] = Number(row?.n) || 0;
+        }
+    }
+    res.json({
+        unlinked_registrations: unlinked,
+        duplicate_students: Object.entries(groups).map(([email, students]) => ({ email, students })),
+        students_without_registrations: Number(noRegs?.n) || 0,
+        legacy_tables: legacy
+    });
+}));
+
+// Merge students saved twice under one email: keep the oldest profile, move the
+// others' registrations and waitlist spots to it, and hide the extra profiles.
+app.post('/api/admin/data-check/merge-duplicates', requireAuth, asyncHandler(async (req, res) => {
+    const rows = await dbConfig.all(`
+        SELECT id, LOWER(TRIM(email)) AS k FROM students
+        WHERE archived_at IS NULL AND LOWER(TRIM(email)) IN (
+            SELECT LOWER(TRIM(email)) FROM students WHERE archived_at IS NULL GROUP BY LOWER(TRIM(email)) HAVING COUNT(*) > 1
+        )
+        ORDER BY id
+    `);
+    const keep = {};
+    let merged = 0;
+    for (const r of rows) {
+        if (!keep[r.k]) { keep[r.k] = r.id; continue; }
+        await dbConfig.run('UPDATE registrations SET student_id = $1 WHERE student_id = $2', [keep[r.k], r.id]);
+        await dbConfig.run('UPDATE waitlist SET student_id = $1 WHERE student_id = $2', [keep[r.k], r.id]);
+        await dbConfig.run('UPDATE students SET archived_at = CURRENT_TIMESTAMP, admin_notes = $1 WHERE id = $2', [`Merged into student #${keep[r.k]}`, r.id]);
+        merged++;
+    }
+    res.json({ success: true, merged });
+}));
+
+// Test accounts only: switch between crew member and GouMo student from My classes
+app.put('/api/my/tester-type', asyncHandler(async (req, res) => {
+    const { email, student_type } = req.body || {};
+    const student = await dbConfig.get('SELECT id, is_tester FROM students WHERE LOWER(email) = LOWER($1)', [String(email || '').trim()]);
+    if (!student || !isTrue(student.is_tester)) return res.status(403).json({ error: 'Only test accounts can do this' });
+    if (!['crew_member', 'general'].includes(student_type)) return res.status(400).json({ error: 'Unknown type' });
+    await dbConfig.run('UPDATE students SET student_type = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2', [student_type, student.id]);
+    res.json({ success: true, student_type });
+}));
+
 // ===================== Student profiles =====================
 // One student's classes (with time and location for the student page)
 // and active waitlists. Used by the admin profile and the "My GouMo" page.
@@ -2837,6 +2975,12 @@ async function studentHistory(studentId) {
     `, [studentId]);
     const paid = registrations.filter(r => r.payment_status === 'completed');
     const crewPaid = paid.filter(r => r.course_type === 'crew_practice').length;
+    // Attendance marked in the old (pre-Oct 2026) roll-call screens, if that table is still there
+    let attendedOld = 0;
+    if (await tableExists('attendance_records')) {
+        const row = await dbConfig.get("SELECT COUNT(*) AS n FROM attendance_records WHERE student_id = $1 AND status IN ('present', 'late')", [studentId]);
+        attendedOld = Number(row?.n) || 0;
+    }
     return {
         registrations,
         waitlists,
@@ -2845,13 +2989,14 @@ async function studentHistory(studentId) {
             // Crew members: crew practices are counted apart from regular classes
             crew_practices: crewPaid,
             regular_classes: paid.length - crewPaid,
+            attended_old_records: attendedOld,
             amount_paid: Math.round(paid.reduce((sum, r) => sum + (Number(r.payment_amount) || 0), 0) * 100) / 100,
             pending: registrations.filter(r => r.payment_status === 'pending').length
         }
     };
 }
 
-const STUDENT_PUBLIC_FIELDS = 'id, first_name, last_name, email, instagram_handle, dance_experience, student_type, created_at';
+const STUDENT_PUBLIC_FIELDS = 'id, first_name, last_name, email, instagram_handle, dance_experience, student_type, created_at, is_tester, archived_at';
 
 // Admin: one student's profile, history and private notes
 app.get('/api/admin/students/:id', requireAuth, asyncHandler(async (req, res) => {
@@ -2901,7 +3046,7 @@ app.get('/my', (req, res) => {
 app.get('/api/admin/students', requireAuth, asyncHandler(async (req, res) => {
     const students = await dbConfig.all(`
         SELECT s.id, s.first_name, s.last_name, s.email, s.instagram_handle, s.dance_experience,
-               s.student_type, s.created_at,
+               s.student_type, s.created_at, s.archived_at, s.is_tester,
                SUM(CASE WHEN r.payment_status = 'completed' THEN 1 ELSE 0 END) AS paid_classes,
                SUM(CASE WHEN r.payment_status = 'pending' THEN 1 ELSE 0 END) AS pending_classes,
                MAX(r.registration_date) AS last_registered
@@ -2912,6 +3057,7 @@ app.get('/api/admin/students', requireAuth, asyncHandler(async (req, res) => {
     `);
     res.json(students.map(st => ({
         ...st,
+        is_tester: isTrue(st.is_tester),
         paid_classes: Number(st.paid_classes) || 0,
         pending_classes: Number(st.pending_classes) || 0
     })));
@@ -3054,7 +3200,9 @@ app.post('/api/register-combo', asyncHandler(async (req, res) => {
     if (!email || !combo_id) return res.status(400).json({ error: 'Required fields missing: email and combo_id' });
 
     const settings = await dbConfig.get('SELECT setting_value FROM system_settings WHERE setting_key = $1', ['registration_open']);
-    if (settings && settings.setting_value !== 'true') {
+    const testerRow = await dbConfig.get('SELECT is_tester FROM students WHERE LOWER(email) = LOWER($1)', [email]);
+    const tester = isTrue(testerRow?.is_tester);
+    if (!tester && settings && settings.setting_value !== 'true') {
         return res.status(400).json({ error: 'Registration is currently closed' });
     }
 
@@ -3081,10 +3229,10 @@ app.post('/api/register-combo', asyncHandler(async (req, res) => {
         if (!(course.is_active === true || course.is_active === 1)) {
             return res.status(400).json({ error: `${course.name} is no longer open` });
         }
-        if (!isRegistrationOpen(course.registration_open)) {
+        if (!tester && !isRegistrationOpen(course.registration_open)) {
             return res.status(400).json({ error: `Registration for ${course.name} is closed`, registration_closed: true });
         }
-        if (course.required_student_type === 'crew_member' && student.student_type !== 'crew_member') {
+        if (!tester && course.required_student_type === 'crew_member' && student.student_type !== 'crew_member') {
             return res.status(403).json({ error: `${course.name} is for crew members only` });
         }
         const paid = await dbConfig.get(
@@ -3092,7 +3240,7 @@ app.post('/api/register-combo', asyncHandler(async (req, res) => {
             [student.id, course.id]
         );
         if (paid) return res.status(400).json({ error: `You are already registered for ${course.name}` });
-        if (course.available_spots <= 0) {
+        if (!tester && course.available_spots <= 0) {
             return res.status(400).json({ error: `${course.name} is full`, course_full: true, course_name: course.name });
         }
     }
@@ -3116,9 +3264,10 @@ app.post('/api/register-combo', asyncHandler(async (req, res) => {
     for (let i = 0; i < n; i++) {
         const amount = i === n - 1 ? Math.round((combo.price - share * (n - 1)) * 100) / 100 : share;
         const result = await dbConfig.run(`
-            INSERT INTO registrations (student_id, course_id, payment_amount, payment_status, special_requests, registration_type, combo_id, combo_group, payment_method)
-            VALUES ($1, $2, $3, 'pending', $4, 'combo', $5, $6, $7) ${dbConfig.isProduction ? 'RETURNING id' : ''}
-        `, [student.id, combo.classes[i].id, amount, special_requests || null, combo.id, group, paymentMethodLabel(req.body.payment_method)]);
+            INSERT INTO registrations (student_id, course_id, payment_amount, payment_status, special_requests, registration_type, combo_id, combo_group, payment_method, is_test)
+            VALUES ($1, $2, $3, 'pending', $4, 'combo', $5, $6, $7, $8) ${dbConfig.isProduction ? 'RETURNING id' : ''}
+        `, [student.id, combo.classes[i].id, amount, special_requests || null, combo.id, group, paymentMethodLabel(req.body.payment_method),
+            dbConfig.isProduction ? tester : (tester ? 1 : 0)]);
         registrationIds.push(dbConfig.isProduction ? result[0]?.id : result.lastID);
     }
 
@@ -3202,9 +3351,13 @@ app.post('/api/register', asyncHandler(async (req, res) => {
         return res.status(400).json({ error: 'Required fields missing: email, course_id, and payment_amount are required' });
     }
     
+    // Test accounts can register even when registration is closed or a class is full
+    const testerRow = await dbConfig.get('SELECT is_tester FROM students WHERE LOWER(email) = LOWER($1)', [email]);
+    const tester = isTrue(testerRow?.is_tester);
+
     // Check if registration is open
     const settings = await dbConfig.get('SELECT setting_value FROM system_settings WHERE setting_key = $1', ['registration_open']);
-    if (settings && settings.setting_value !== 'true') {
+    if (!tester && settings && settings.setting_value !== 'true') {
         return res.status(400).json({ error: 'Registration is currently closed' });
     }
     
@@ -3218,7 +3371,7 @@ app.post('/api/register', asyncHandler(async (req, res) => {
     if (!courseCheck) {
         return res.status(400).json({ error: 'Course not found or inactive' });
     }
-    if (!isRegistrationOpen(courseCheck.registration_open)) {
+    if (!tester && !isRegistrationOpen(courseCheck.registration_open)) {
         return res.status(400).json({ error: `Registration for ${courseCheck.name} is closed`, registration_closed: true });
     }
 
@@ -3236,7 +3389,7 @@ app.post('/api/register', asyncHandler(async (req, res) => {
         return res.status(400).json({ error: 'Course has no available slots configured' });
     }
     
-    if (availability.available <= 0) {
+    if (!tester && availability.available <= 0) {
         return res.status(400).json({ 
             error: 'Course is full',
             course_full: true,
@@ -3360,10 +3513,11 @@ app.post('/api/register', asyncHandler(async (req, res) => {
     const registrationResult = await dbConfig.run(`
         INSERT INTO registrations (
             student_id, course_id, payment_amount, payment_status, special_requests,
-            registration_type, selected_dates, payment_method
-        ) VALUES ($1, $2, $3, 'pending', $4, $5, $6, $7)
+            registration_type, selected_dates, payment_method, is_test
+        ) VALUES ($1, $2, $3, 'pending', $4, $5, $6, $7, $8)
         ${dbConfig.isProduction ? 'RETURNING id' : ''}
-    `, [student.id, course_id, payment_amount, special_requests, registration_type || null, pickedDatesJson, paymentMethodLabel(req.body.payment_method)]);
+    `, [student.id, course_id, payment_amount, special_requests, registration_type || null, pickedDatesJson, paymentMethodLabel(req.body.payment_method),
+        dbConfig.isProduction ? tester : (tester ? 1 : 0)]);
     
     // Handle different return formats for SQLite vs PostgreSQL
     let registrationId;
@@ -4145,7 +4299,7 @@ app.get('/api/admin/debug/course-capacity/:courseId', requireAuth, asyncHandler(
                    COUNT(DISTINCT r.id) as slot_registration_count,
                    (cs.capacity - COUNT(DISTINCT r.id)) as available_spots
             FROM course_slots cs
-            LEFT JOIN registrations r ON cs.course_id = r.course_id AND r.payment_status = 'completed'
+            LEFT JOIN registrations r ON cs.course_id = r.course_id AND r.payment_status = 'completed' AND ${NOT_TEST}
             WHERE cs.course_id = $1
             GROUP BY cs.id
             ORDER BY cs.created_at ASC
