@@ -13,7 +13,7 @@ function createTransporter() {
   const pass = process.env.GMAIL_APP_PASSWORD || process.env.EMAIL_PASSWORD;
 
   if (!user || !pass) {
-    console.warn('⚠️ Gmail credentials not configured (GMAIL_USER / GMAIL_APP_PASSWORD)');
+    if (!gmailApiConfigured()) console.warn('⚠️ Email not configured: set the Gmail API values or GMAIL_APP_PASSWORD');
     return null;
   }
 
@@ -24,6 +24,100 @@ function createTransporter() {
 }
 
 let transporter = createTransporter();
+
+/*
+ * Two ways to send, picked automatically:
+ *  1. Gmail API over HTTPS (when GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET and
+ *     GMAIL_REFRESH_TOKEN are set). Works on Railway plans that block SMTP.
+ *  2. Gmail SMTP with an app password (GMAIL_APP_PASSWORD), the old way.
+ * Either way the email comes from GMAIL_USER.
+ */
+function gmailApiConfigured() {
+  return !!(process.env.GMAIL_CLIENT_ID && process.env.GMAIL_CLIENT_SECRET && process.env.GMAIL_REFRESH_TOKEN);
+}
+
+function emailMethod() {
+  if (gmailApiConfigured()) return 'Gmail API';
+  if (process.env.GMAIL_APP_PASSWORD || process.env.EMAIL_PASSWORD) return 'Gmail SMTP';
+  return 'not configured';
+}
+
+function ensureConfigured() {
+  if (gmailApiConfigured()) return;
+  if (!transporter) transporter = createTransporter();
+  if (!transporter) {
+    throw new Error('Email is not configured. Set GMAIL_USER plus either the Gmail API values (GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_REFRESH_TOKEN) or GMAIL_APP_PASSWORD.');
+  }
+}
+
+let cachedToken = null; // { value, expiresAt }
+async function gmailAccessToken() {
+  if (cachedToken && cachedToken.expiresAt > Date.now() + 60000) return cachedToken.value;
+  const res = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: process.env.GMAIL_CLIENT_ID,
+      client_secret: process.env.GMAIL_CLIENT_SECRET,
+      refresh_token: process.env.GMAIL_REFRESH_TOKEN,
+      grant_type: 'refresh_token'
+    })
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.access_token) {
+    // invalid_grant usually means the refresh token expired or was revoked
+    throw new Error(`Gmail sign-in failed: ${data.error || res.status}${data.error_description ? ` (${data.error_description})` : ''}`);
+  }
+  cachedToken = { value: data.access_token, expiresAt: Date.now() + (Number(data.expires_in) || 3000) * 1000 };
+  return cachedToken.value;
+}
+
+// Header values with non-ASCII characters (e.g. "·" in class names) must be encoded
+function encodeHeader(value) {
+  const v = String(value || '');
+  return /^[\x00-\x7F]*$/.test(v) ? v : `=?UTF-8?B?${Buffer.from(v, 'utf8').toString('base64')}?=`;
+}
+
+async function sendViaGmailApi({ from, to, subject, html, text, replyTo }) {
+  const boundary = `goumo-${Date.now().toString(36)}`;
+  const mime = [
+    `From: ${from}`,
+    `To: ${to}`,
+    replyTo ? `Reply-To: ${replyTo}` : null,
+    `Subject: ${encodeHeader(subject)}`,
+    'MIME-Version: 1.0',
+    `Content-Type: multipart/alternative; boundary="${boundary}"`,
+    '',
+    `--${boundary}`,
+    'Content-Type: text/plain; charset="UTF-8"',
+    'Content-Transfer-Encoding: base64',
+    '',
+    Buffer.from(text || '', 'utf8').toString('base64'),
+    `--${boundary}`,
+    'Content-Type: text/html; charset="UTF-8"',
+    'Content-Transfer-Encoding: base64',
+    '',
+    Buffer.from(html || '', 'utf8').toString('base64'),
+    `--${boundary}--`
+  ].filter(line => line !== null).join('\r\n');
+  const raw = Buffer.from(mime, 'utf8').toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const res = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${await gmailAccessToken()}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ raw })
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(`Gmail API error ${res.status}: ${body.error?.message || 'unknown'}`);
+  }
+  return res.json();
+}
+
+async function deliver(message) {
+  ensureConfigured();
+  if (gmailApiConfigured()) return sendViaGmailApi(message);
+  return transporter.sendMail(message);
+}
 
 function getFromAddress() {
   const email = process.env.GMAIL_USER || process.env.EMAIL_USER || 'goumo.dancechronicles@gmail.com';
@@ -36,20 +130,15 @@ function getReplyTo() {
 }
 
 function isEmailConfigured() {
-  return !!(process.env.GMAIL_USER || process.env.EMAIL_USER) && 
-         !!(process.env.GMAIL_APP_PASSWORD || process.env.EMAIL_PASSWORD);
+  return !!(process.env.GMAIL_USER || process.env.EMAIL_USER) &&
+         (gmailApiConfigured() || !!(process.env.GMAIL_APP_PASSWORD || process.env.EMAIL_PASSWORD));
 }
 
 /**
  * Sends a registration confirmation email via Gmail SMTP.
  */
 async function sendRegistrationConfirmationEmail(to, data = {}) {
-  if (!transporter) {
-    transporter = createTransporter();
-    if (!transporter) {
-      throw new Error('Gmail SMTP is not configured. Set GMAIL_USER and GMAIL_APP_PASSWORD.');
-    }
-  }
+  ensureConfigured();
 
   const { courseName, scheduleInfo, amount, registrationId, studentName } = data;
   const from = getFromAddress();
@@ -95,7 +184,7 @@ async function sendRegistrationConfirmationEmail(to, data = {}) {
   dbg('sending confirmation email', { to, from, subject, registrationId });
 
   try {
-    await transporter.sendMail({ from, to, subject, html, text, replyTo: getReplyTo() });
+    await deliver({ from, to, subject, html, text, replyTo: getReplyTo() });
     console.log('✅ Registration confirmation email sent to:', to);
   } catch (error) {
     console.error('❌ Failed to send email:', error.message || error);
@@ -108,25 +197,21 @@ function escapeHtml(str) {
 }
 
 async function verifyEmailTransport() {
-  if (!isEmailConfigured()) {
-    throw new Error('Gmail SMTP is not configured');
-  }
-  if (!transporter) {
-    transporter = createTransporter();
+  ensureConfigured();
+  if (gmailApiConfigured()) {
+    await gmailAccessToken();
+    return { success: true, method: 'Gmail API', message: 'Signed in to the Gmail API' };
   }
   await transporter.verify();
   dbg('✅ Gmail SMTP verified');
-  return { success: true, message: 'Gmail SMTP connection verified' };
+  return { success: true, method: 'Gmail SMTP', message: 'Gmail SMTP connection verified' };
 }
 
 /**
  * Sends a registration cancellation email via Gmail SMTP.
  */
 async function sendRegistrationCancellationEmail(to, data = {}) {
-  if (!transporter) {
-    transporter = createTransporter();
-    if (!transporter) throw new Error('Gmail SMTP is not configured.');
-  }
+  ensureConfigured();
 
   const { courseName, scheduleInfo, amount, registrationId, studentName, cancellationReason } = data;
   const from = getFromAddress();
@@ -167,7 +252,7 @@ async function sendRegistrationCancellationEmail(to, data = {}) {
   dbg('sending cancellation email', { to, from, subject, registrationId });
 
   try {
-    await transporter.sendMail({ from, to, subject, html, text, replyTo: getReplyTo() });
+    await deliver({ from, to, subject, html, text, replyTo: getReplyTo() });
     console.log('✅ Registration cancellation email sent to:', to);
   } catch (error) {
     console.error('❌ Failed to send cancellation email:', error.message || error);
@@ -179,10 +264,7 @@ async function sendRegistrationCancellationEmail(to, data = {}) {
  * Sends a waitlist notification email via Gmail SMTP.
  */
 async function sendWaitlistNotificationEmail(to, data = {}) {
-  if (!transporter) {
-    transporter = createTransporter();
-    if (!transporter) throw new Error('Gmail SMTP is not configured.');
-  }
+  ensureConfigured();
 
   const { courseName, scheduleInfo, amount, studentName, position, registrationUrl, expiresAt, expiresHours = 48 } = data;
   const from = getFromAddress();
@@ -240,7 +322,7 @@ async function sendWaitlistNotificationEmail(to, data = {}) {
   dbg('sending waitlist email', { to, from, subject, courseName, position, expiresHours });
 
   try {
-    await transporter.sendMail({ from, to, subject, html, text, replyTo: getReplyTo() });
+    await deliver({ from, to, subject, html, text, replyTo: getReplyTo() });
     console.log('✅ Waitlist notification email sent to:', to);
   } catch (error) {
     console.error('❌ Failed to send waitlist email:', error.message || error);
@@ -270,5 +352,6 @@ module.exports = {
   sendWaitlistNotificationEmail,
   sendEmailWithFallback,
   verifyEmailTransport,
-  isEmailConfigured
+  isEmailConfigured,
+  emailMethod
 };

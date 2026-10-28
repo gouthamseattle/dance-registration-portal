@@ -510,6 +510,17 @@ test('checkout saves nothing until "I\'ve sent the payment"; per-class registrat
     assert.ok((await api('GET', '/api/combos')).body.some((c) => c.id === combo.body.id), 'combo back once reopened');
 });
 
+test('admin email status and test email report clearly', async () => {
+    assert.equal((await api('GET', '/api/admin/email-status')).status, 401, 'admin only');
+    const st = await api('GET', '/api/admin/email-status', null, { admin: true });
+    assert.equal(st.status, 200, JSON.stringify(st.body));
+    assert.ok(['Gmail API', 'Gmail SMTP', 'not configured'].includes(st.body.method), st.body.method);
+    const sent = await api('POST', '/api/admin/send-test-email', { to: 'nobody@example.com' }, { admin: true });
+    assert.equal(sent.status, 200);
+    if (st.body.method === 'not configured') assert.equal(sent.body.success, false, 'no email set up in CI, so it reports why');
+    assert.ok(sent.body.method, 'reports which method it tried');
+});
+
 test('removed features are gone', async () => {
     for (const [method, url] of [
         ['POST', '/api/competition/register'],

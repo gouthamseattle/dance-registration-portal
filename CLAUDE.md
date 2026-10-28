@@ -38,7 +38,7 @@ web concepts in plain terms when they come up.
 | DB connection (SQLite locally, Postgres when `DATABASE_URL` is set) | `database-config.js` |
 | Schema creation and migrations, run at startup | `database/initialize.js`, `scripts/migrate-to-postgres.js` |
 | Login check, async error wrapper | `middleware/auth.js` |
-| Email (Gmail SMTP via nodemailer) | `utils/mailer.js` |
+| Email: Gmail API over HTTPS when `GMAIL_CLIENT_ID`/`GMAIL_CLIENT_SECRET`/`GMAIL_REFRESH_TOKEN` are set (Railway Hobby blocks SMTP), else Gmail SMTP. Admin → Settings → Test email shows the method and errors | `utils/mailer.js` |
 | Capacity, schedule helpers | `utils/courseAvailability.js`, `utils/schedule.js` |
 | Home page (served at `/`): brand, live class list, instructors | `public/home.html`, `public/js/home.js` |
 | Design system (colors, fonts, buttons, cards), use it for every new page | `public/css/site.css` |
@@ -79,5 +79,5 @@ npm test             # smoke tests (needs DATABASE_URL to a throwaway Postgres, 
   - `SESSION_SECRET`
   - `ADMIN_PASSWORD` (sets the admin login password on each startup)
   - `GMAIL_USER`
-  - `GMAIL_APP_PASSWORD`
+  - Email: `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`, `GMAIL_REFRESH_TOKEN` (Gmail API, works on Railway Hobby). `GMAIL_APP_PASSWORD` is the SMTP fallback, which Railway blocks below the Pro plan.
 - If production breaks, first check that the Railway variables above are all present.

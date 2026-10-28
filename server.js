@@ -12,7 +12,7 @@ const DatabaseConfig = require('./database-config');
 const { initializeDatabase } = require('./database/initialize');
 
 // Import utilities
-const { sendRegistrationConfirmationEmail, sendWaitlistNotificationEmail, sendEmailWithFallback, verifyEmailTransport } = require('./utils/mailer');
+const { sendRegistrationConfirmationEmail, sendWaitlistNotificationEmail, sendEmailWithFallback, verifyEmailTransport, emailMethod } = require('./utils/mailer');
 const { fetchCourseWithSlots } = require('./utils/schedule');
 const { getCourseAvailability, formatLocalDate, formatLocalDateShort } = require('./utils/courseAvailability');
 
@@ -3848,6 +3848,11 @@ app.get('/api/admin/debug-email-config', requireAuth, asyncHandler(async (req, r
 /**
  * Admin test email transport endpoint - verifies SMTP connectivity
  */
+// Admin: which email method is set up (shown in Settings)
+app.get('/api/admin/email-status', requireAuth, (req, res) => {
+    res.json({ method: emailMethod(), from: process.env.GMAIL_USER || process.env.EMAIL_USER || null });
+});
+
 app.post('/api/admin/test-email-transport', requireAuth, asyncHandler(async (req, res) => {
     try {
         const result = await verifyEmailTransport();
@@ -3876,16 +3881,9 @@ app.post('/api/admin/send-test-email', requireAuth, asyncHandler(async (req, res
     if (!to) return res.status(400).json({ error: 'Recipient email (to) is required' });
 
     try {
-        // Check email API key
+        // A test always sends, even if confirmation emails are switched off in Settings
         if (!(process.env.GMAIL_USER || process.env.EMAIL_USER)) {
-            return res.json({ success: false, error: 'Gmail SMTP is not configured (GMAIL_USER / GMAIL_APP_PASSWORD)' });
-        }
-
-        // Check if email notifications are enabled
-        const setting = await dbConfig.get('SELECT setting_value FROM system_settings WHERE setting_key = $1', ['email_notifications_enabled']);
-        const emailEnabled = setting && setting.setting_value === 'true';
-        if (!emailEnabled) {
-            return res.json({ success: false, error: 'Email notifications are disabled in Settings. Enable them first.' });
+            return res.json({ success: false, method: emailMethod(), error: 'GMAIL_USER is not set in Railway' });
         }
 
         // Try to send a real test email
@@ -3898,12 +3896,13 @@ app.post('/api/admin/send-test-email', requireAuth, asyncHandler(async (req, res
         });
 
         console.log('✅ Test email sent successfully to:', to);
-        res.json({ success: true, message: `Test email sent to ${to}. Check inbox and spam folder.` });
+        res.json({ success: true, method: emailMethod(), message: `Test email sent to ${to} using ${emailMethod()}. Check the inbox and spam folder.` });
     } catch (error) {
         console.error('❌ Test email failed:', error);
         // Return the full error details for diagnosis
         res.json({
             success: false,
+            method: emailMethod(),
             error: error.message || String(error),
             code: error.code,
             statusCode: error.statusCode,
