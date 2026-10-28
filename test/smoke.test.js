@@ -662,7 +662,9 @@ test('student cleanup: bulk hide/restore/type, test accounts, data check', async
     // Data check: the same person saved twice (email case differs) gets merged
     const dupLower = `clean.dup.${unique}@example.com`;
     await api('POST', '/api/register', { first_name: 'Dup', email: dupLower, course_id: other, payment_amount: 50 });
-    await api('POST', '/api/register', { first_name: 'Dup', email: dupLower.toUpperCase(), course_id: tiny, payment_amount: 50 });
+    const third = await mkClass('Cleanup Third', 5);
+    const dupReg = await api('POST', '/api/register', { first_name: 'Dup', email: dupLower.toUpperCase(), course_id: third, payment_amount: 50 });
+    assert.equal(dupReg.status, 200, JSON.stringify(dupReg.body));
     const check = await api('GET', '/api/admin/data-check', null, { admin: true });
     assert.equal(check.status, 200, JSON.stringify(check.body));
     assert.ok(check.body.duplicate_students.some((g) => g.email === dupLower), 'duplicate found');
