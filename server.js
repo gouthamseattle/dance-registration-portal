@@ -2437,7 +2437,7 @@ app.get('/api/admin/waitlists', requireAuth, asyncHandler(async (req, res) => {
         FROM waitlist w
         JOIN students s ON w.student_id = s.id
         JOIN courses c ON w.course_id = c.id
-        WHERE w.status = 'active'
+        WHERE w.status IN ('active', 'notified', 'registered', 'expired')
     `;
     
     const params = [];
@@ -2460,6 +2460,7 @@ app.get('/api/admin/waitlists', requireAuth, asyncHandler(async (req, res) => {
         status: entry.status,
         notification_sent: dbConfig.isProduction ? entry.notification_sent : Boolean(entry.notification_sent),
         notification_sent_at: entry.notification_sent_at,
+        notification_expires_at: entry.notification_expires_at,
         created_at: entry.created_at,
         first_name: entry.first_name || '',
         last_name: entry.last_name || '',
@@ -2837,6 +2838,141 @@ function paymentMethodLabel(value) {
     return v === 'venmo' ? 'Venmo' : v === 'zelle' ? 'Zelle' : null;
 }
 
+// ===================== Waitlist offers =====================
+// When a spot opens (the admin cancels a paid registration), the next person on
+// that class's waitlist is emailed a personal link and the spot is held for them
+// for the "waitlist hold" time (Settings, default 24 hours). If they don't
+// register in time, the offer expires and the next person is emailed, in order.
+async function waitlistHoldHours() {
+    const row = await dbConfig.get('SELECT setting_value FROM system_settings WHERE setting_key = $1', ['waitlist_hold_hours']);
+    const h = Number(row?.setting_value);
+    return h > 0 && h <= 168 ? h : 24;
+}
+
+// Spots held for students who were offered one (still within their time, or
+// registered through the offer and waiting for their payment to be confirmed)
+async function heldSpots(courseId) {
+    const row = await dbConfig.get(`
+        SELECT COUNT(*) AS n FROM waitlist w
+        WHERE w.course_id = $1 AND (
+            (w.status = 'notified' AND w.notification_expires_at > $2)
+            OR (w.status = 'registered' AND EXISTS (
+                SELECT 1 FROM registrations r WHERE r.id = w.registration_id AND r.payment_status = 'pending'))
+        )
+    `, [courseId, new Date().toISOString()]);
+    return Number(row?.n) || 0;
+}
+
+function siteUrl(req) {
+    if (process.env.PUBLIC_URL) return process.env.PUBLIC_URL.replace(/\/$/, '');
+    if (req) return `${req.protocol}://${req.get('host')}`;
+    return 'https://dance-registration-portal-production.up.railway.app';
+}
+
+// Email one waitlist entry a personal link and hold a spot for them
+async function offerSpot(entryId, req, hours) {
+    const entry = await dbConfig.get(`
+        SELECT w.*, s.first_name, s.last_name, s.email, c.name AS course_name
+        FROM waitlist w JOIN students s ON s.id = w.student_id JOIN courses c ON c.id = w.course_id
+        WHERE w.id = $1
+    `, [entryId]);
+    if (!entry) return null;
+    const holdHours = hours || await waitlistHoldHours();
+    const token = require('crypto').randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + holdHours * 60 * 60 * 1000);
+    await dbConfig.run(`
+        UPDATE waitlist SET notification_sent = ${dbConfig.isProduction ? 'true' : '1'}, notification_sent_at = CURRENT_TIMESTAMP,
+               notification_expires_at = $1, payment_link_token = $2, status = 'notified', updated_at = CURRENT_TIMESTAMP
+        WHERE id = $3
+    `, [expiresAt.toISOString(), token, entryId]);
+    const registrationUrl = `${siteUrl(req)}/waitlist-register/${token}`;
+    try {
+        const { schedule_info } = await fetchCourseWithSlots(dbConfig, entry.course_id);
+        const price = await dbConfig.get(`
+            SELECT cp.price FROM course_pricing cp JOIN course_slots cs ON cs.id = cp.course_slot_id
+            WHERE cs.course_id = $1 AND cp.pricing_type = 'full_package' ORDER BY cs.id LIMIT 1
+        `, [entry.course_id]);
+        await sendWaitlistNotificationEmail(entry.email, {
+            courseName: entry.course_name,
+            scheduleInfo: schedule_info,
+            amount: price ? String(price.price) : '',
+            studentName: [entry.first_name, entry.last_name].filter(Boolean).join(' '),
+            position: entry.waitlist_position,
+            registrationUrl,
+            expiresAt: expiresAt.toISOString(),
+            expiresHours: holdHours
+        });
+    } catch (err) {
+        console.error('❌ Waitlist offer email failed:', err.message || err);
+    }
+    return { id: entryId, email: entry.email, registration_url: registrationUrl, expires_at: expiresAt.toISOString() };
+}
+
+// Offer every open spot in a class to the next people waiting, in order
+async function offerOpenSpots(courseId, req) {
+    const offered = [];
+    const { available } = await getCourseAvailability(dbConfig, courseId);
+    let free = available - await heldSpots(courseId);
+    while (free > 0) {
+        const next = await dbConfig.get(
+            "SELECT id FROM waitlist WHERE course_id = $1 AND status = 'active' ORDER BY waitlist_position ASC, created_at ASC LIMIT 1",
+            [courseId]
+        );
+        if (!next) break;
+        const offer = await offerSpot(next.id, req);
+        if (offer) offered.push(offer);
+        free--;
+    }
+    return offered;
+}
+
+// Offers whose time ran out: mark expired and move on to the next person
+async function expireWaitlistOffers() {
+    const expired = await dbConfig.all(
+        "SELECT id, course_id FROM waitlist WHERE status = 'notified' AND notification_expires_at <= $1",
+        [new Date().toISOString()]
+    );
+    const courses = new Set();
+    for (const e of expired) {
+        await dbConfig.run("UPDATE waitlist SET status = 'expired', payment_link_token = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = $1", [e.id]);
+        courses.add(e.course_id);
+    }
+    for (const courseId of courses) await offerOpenSpots(courseId, null);
+    return expired.length;
+}
+// Check every 10 minutes while the server is running
+setInterval(() => { expireWaitlistOffers().catch(err => console.error('waitlist expiry check failed:', err.message || err)); }, 10 * 60 * 1000).unref();
+
+// A valid, unexpired offer for this class (and this student, when an email is given)
+async function validWaitlistOffer(token, courseId, email) {
+    if (!token) return null;
+    const offer = await dbConfig.get(`
+        SELECT w.id, w.course_id, w.notification_expires_at, s.email
+        FROM waitlist w JOIN students s ON s.id = w.student_id
+        WHERE w.payment_link_token = $1 AND w.status = 'notified'
+    `, [String(token)]);
+    if (!offer || new Date(offer.notification_expires_at) <= new Date()) return null;
+    if (courseId && Number(offer.course_id) !== Number(courseId)) return null;
+    if (email && String(offer.email).toLowerCase() !== String(email).trim().toLowerCase()) return null;
+    return offer;
+}
+
+// The link in the "spot available" email
+app.get('/waitlist-register/:token', asyncHandler(async (req, res) => {
+    const offer = await validWaitlistOffer(req.params.token);
+    if (!offer) {
+        res.set('Cache-Control', 'no-cache');
+        return res.status(410).send(`<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Offer expired · GouMo</title><link href="/css/site.css?v=2" rel="stylesheet"></head>
+<body><main style="max-width:560px;margin:0 auto;padding:48px 16px;text-align:center">
+<img src="/images/goumo-logo.png" alt="GouMo" style="height:56px">
+<h1 style="font-family:var(--font-display);text-transform:uppercase;font-weight:400">This link has expired</h1>
+<p style="color:var(--muted)">The spot was held for a limited time and has been offered to the next person on the waitlist. If you think this is a mistake, message us on Instagram <a class="accent" href="https://instagram.com/goumo_dancechronicles">@goumo_dancechronicles</a>.</p>
+<p><a class="btn btn-primary" href="/#classes">See classes</a></p></main></body></html>`);
+    }
+    res.redirect(`/email-profile.html?course=${encodeURIComponent(offer.course_id)}&waitlist=${encodeURIComponent(req.params.token)}`);
+}));
+
 // ===================== Student cleanup & test accounts =====================
 const tableCache = {};
 async function tableExists(name) {
@@ -2995,9 +3131,9 @@ async function studentHistory(studentId) {
         r.slots = slotCache[r.course_id] ? [slotCache[r.course_id]] : [];
     }
     const waitlists = await dbConfig.all(`
-        SELECT w.id, w.course_id, w.waitlist_position AS position, w.created_at, c.name AS course_name
+        SELECT w.id, w.course_id, w.waitlist_position AS position, w.created_at, w.status, w.notification_expires_at, c.name AS course_name
         FROM waitlist w JOIN courses c ON c.id = w.course_id
-        WHERE w.student_id = $1 AND w.status = 'active'
+        WHERE w.student_id = $1 AND w.status IN ('active', 'notified')
         ORDER BY w.created_at DESC
     `, [studentId]);
     const paid = registrations.filter(r => r.payment_status === 'completed');
@@ -3267,7 +3403,7 @@ app.post('/api/register-combo', asyncHandler(async (req, res) => {
             [student.id, course.id]
         );
         if (paid) return res.status(400).json({ error: `You are already registered for ${course.name}` });
-        if (!tester && course.available_spots <= 0) {
+        if (!tester && course.available_spots - await heldSpots(course.id) <= 0) {
             return res.status(400).json({ error: `${course.name} is full`, course_full: true, course_name: course.name });
         }
     }
@@ -3381,10 +3517,12 @@ app.post('/api/register', asyncHandler(async (req, res) => {
     // Test accounts can register even when registration is closed or a class is full
     const testerRow = await dbConfig.get('SELECT is_tester FROM students WHERE LOWER(email) = LOWER($1)', [email]);
     const tester = isTrue(testerRow?.is_tester);
+    // Came from a waitlist "spot available" email: the held spot is theirs
+    const offer = await validWaitlistOffer(req.body.waitlist_token, course_id, email);
 
     // Check if registration is open
     const settings = await dbConfig.get('SELECT setting_value FROM system_settings WHERE setting_key = $1', ['registration_open']);
-    if (!tester && settings && settings.setting_value !== 'true') {
+    if (!tester && !offer && settings && settings.setting_value !== 'true') {
         return res.status(400).json({ error: 'Registration is currently closed' });
     }
     
@@ -3398,7 +3536,7 @@ app.post('/api/register', asyncHandler(async (req, res) => {
     if (!courseCheck) {
         return res.status(400).json({ error: 'Course not found or inactive' });
     }
-    if (!tester && !isRegistrationOpen(courseCheck.registration_open)) {
+    if (!tester && !offer && !isRegistrationOpen(courseCheck.registration_open)) {
         return res.status(400).json({ error: `Registration for ${courseCheck.name} is closed`, registration_closed: true });
     }
 
@@ -3416,7 +3554,8 @@ app.post('/api/register', asyncHandler(async (req, res) => {
         return res.status(400).json({ error: 'Course has no available slots configured' });
     }
     
-    if (!tester && availability.available <= 0) {
+    // Spots held for waitlisted students who were offered one don't count as free
+    if (!tester && !offer && availability.available - await heldSpots(course_id) <= 0) {
         return res.status(400).json({ 
             error: 'Course is full',
             course_full: true,
@@ -3527,6 +3666,7 @@ app.post('/api/register', asyncHandler(async (req, res) => {
             [payment_amount, pickedDatesJson, registration_type || null, paymentMethodLabel(req.body.payment_method), existingPending.id]
         );
         console.log('ℹ️ Updated existing pending registration', { id: existingPending.id, student_id: student.id, course_id });
+        if (offer) await dbConfig.run("UPDATE waitlist SET status = 'registered', registration_id = $1, payment_link_token = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = $2", [existingPending.id, offer.id]);
         return res.json({ 
             success: true, 
             registrationId: existingPending.id, 
@@ -3555,6 +3695,7 @@ app.post('/api/register', asyncHandler(async (req, res) => {
         // SQLite returns { lastID: ... }
         registrationId = registrationResult.lastID;
     }
+    if (offer) await dbConfig.run("UPDATE waitlist SET status = 'registered', registration_id = $1, payment_link_token = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = $2", [registrationId, offer.id]);
     
     console.log('📝 Registration created', { id: registrationId, course_id, email });
     res.json({ 
@@ -3933,6 +4074,12 @@ app.put('/api/admin/registrations/:id/cancel', requireAuth, asyncHandler(async (
         // Update registration as canceled with audit fields
         // For a combo, cancel every class in it
         const groupIds = await registrationGroupIds(id);
+        // Classes where a paid spot is being freed (those get offered to the waitlist)
+        const freedCourses = [];
+        for (const regId of groupIds) {
+            const before = await dbConfig.get('SELECT course_id, payment_status FROM registrations WHERE id = $1', [regId]);
+            if (before && before.payment_status === 'completed' && before.course_id) freedCourses.push(before.course_id);
+        }
         for (const regId of groupIds) {
             await dbConfig.run(`
                 UPDATE registrations SET
@@ -3967,7 +4114,12 @@ app.put('/api/admin/registrations/:id/cancel', requireAuth, asyncHandler(async (
             console.error('❌ Error sending cancellation email:', err);
         }
 
-        res.json({ success: true, email_sent, email_skipped, email_error });
+        // A spot opened: email the next person on each class's waitlist, in order
+        const waitlist_offers = [];
+        for (const courseId of [...new Set(freedCourses)]) {
+            try { waitlist_offers.push(...await offerOpenSpots(courseId, req)); } catch (e) { console.error('waitlist offer failed:', e.message || e); }
+        }
+        res.json({ success: true, email_sent, email_skipped, email_error, waitlist_offers: waitlist_offers.map(o => ({ email: o.email, expires_at: o.expires_at, registration_url: o.registration_url })) });
     } catch (err) {
         console.error('❌ Cancel registration failed:', err);
         res.status(500).json({ error: 'Failed to cancel registration' });

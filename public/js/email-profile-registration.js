@@ -21,6 +21,8 @@ class EmailProfileRegistrationApp {
         this.preselectCourseId = new URLSearchParams(window.location.search).get('course');
         // Combo chosen on the home page (?combo=ID): after sign-in, go straight to its checkout.
         this.preselectComboId = new URLSearchParams(window.location.search).get('combo');
+        // From a waitlist "spot available" email: a spot is held for this student
+        this.waitlistToken = new URLSearchParams(window.location.search).get('waitlist');
         
         this.init();
     }
@@ -69,8 +71,10 @@ class EmailProfileRegistrationApp {
                 </div>
                 ${price ? `<span class="amount">$${Number(price).toFixed(0)}</span>` : ''}`;
             box.hidden = false;
-            document.getElementById('emailStepTitle').textContent = 'Almost there';
-            document.getElementById('emailStepSub').textContent = "Enter your email. If you've danced with us before, we'll take you straight to payment.";
+            document.getElementById('emailStepTitle').textContent = this.waitlistToken ? 'A spot is waiting for you' : 'Almost there';
+            document.getElementById('emailStepSub').textContent = this.waitlistToken
+                ? 'We\'re holding a spot for you from the waitlist. Enter the email you joined the waitlist with to claim it.'
+                : "Enter your email. If you've danced with us before, we'll take you straight to payment.";
         } catch (e) {
             console.warn('Could not load the selected class', e);
         }
@@ -121,7 +125,7 @@ class EmailProfileRegistrationApp {
             this.settings = await response.json();
             
             // Check if registration is open
-            if (this.settings.registration_open !== 'true' && !window.ClassInfo.isTesterDevice()) {
+            if (this.settings.registration_open !== 'true' && !window.ClassInfo.isTesterDevice() && !this.waitlistToken) {
                 this.showRegistrationClosed();
                 return;
             }
@@ -707,7 +711,8 @@ class EmailProfileRegistrationApp {
         }
 
         const tester = !!(this.currentStudent && (this.currentStudent.is_tester === true || this.currentStudent.is_tester === 1 || this.currentStudent.is_tester === 't'));
-        if (!tester && !window.ClassInfo.isOpen(course)) {
+        const held = !!this.waitlistToken; // a spot is held for them, so full/closed don't apply
+        if (!tester && !held && !window.ClassInfo.isOpen(course)) {
             this.showError(`Registration for ${course.name} is closed right now.`);
             return;
         }
@@ -718,7 +723,7 @@ class EmailProfileRegistrationApp {
         console.log('Course selected:', course.name, 'Available spots:', availableSpots);
 
         // Check if course is full and needs waitlist registration
-        if (!tester && availableSpots <= 0) {
+        if (!tester && !held && availableSpots <= 0) {
             console.log('Course is full, proceeding with waitlist registration');
             await this.handleWaitlistRegistration(course);
             return;
@@ -736,6 +741,7 @@ class EmailProfileRegistrationApp {
             dance_experience: this.currentStudent.dance_experience,
             profile_complete: true
         };
+        if (this.waitlistToken) registrationData.waitlist_token = this.waitlistToken;
 
         // Create URL with student and course data
         const params = new URLSearchParams(registrationData);

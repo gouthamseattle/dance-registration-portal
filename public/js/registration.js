@@ -42,7 +42,7 @@ class DanceRegistrationApp {
             this.settings = await response.json();
             
             // Check if registration is open
-            if (this.settings.registration_open !== 'true' && !window.ClassInfo.isTesterDevice()) {
+            if (this.settings.registration_open !== 'true' && !window.ClassInfo.isTesterDevice() && !new URLSearchParams(window.location.search).get('waitlist_token')) {
                 this.showRegistrationClosed();
                 return;
             }
@@ -911,7 +911,9 @@ class DanceRegistrationApp {
             last_name: preFilledLastName || formData.get('last_name'),
             instagram_handle: preFilledInstagram || formData.get('instagram_id') || formData.get('instagram_handle') || null,
             dance_experience: preFilledExperience || formData.get('dance_experience') || null,
-            student_id: studentId || null
+            student_id: studentId || null,
+            // From a waitlist offer email: lets the held spot be used
+            waitlist_token: new URLSearchParams(window.location.search).get('waitlist_token') || undefined
         };
 
         if (savedCombo) {

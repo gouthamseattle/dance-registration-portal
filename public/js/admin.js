@@ -297,7 +297,8 @@ class AdminDashboard {
         document.getElementById('totalRegistrations').textContent = live.length;
         document.getElementById('classCount').textContent = `across ${active.length} active class${active.length === 1 ? '' : 'es'}`;
         document.getElementById('totalRevenue').textContent = this.money(revenue);
-        document.getElementById('waitlistCount').textContent = Array.isArray(this.waitlists) ? this.waitlists.length : 0;
+        document.getElementById('waitlistCount').textContent = Array.isArray(this.waitlists)
+            ? this.waitlists.filter(w => !w.status || w.status === 'active' || w.status === 'notified').length : 0;
 
         const navCount = document.getElementById('navPendingCount');
         navCount.textContent = pending.length;
@@ -618,6 +619,7 @@ class AdminDashboard {
         document.getElementById('zelleRecipientName').value = this.settings.zelle_recipient_name || '';
         document.getElementById('zellePhone').value = this.settings.zelle_phone || '';
         document.getElementById('emailNotifications').checked = this.settings.email_notifications_enabled === 'true';
+        document.getElementById('waitlistHoldHours').value = this.settings.waitlist_hold_hours || '24';
     }
 
     populateFilters() {
@@ -652,7 +654,8 @@ class AdminDashboard {
             venmo_username: (formData.get('venmo_username') || '').trim().replace(/^@/, ''),
             zelle_recipient_name: (formData.get('zelle_recipient_name') || '').trim(),
             zelle_phone: (formData.get('zelle_phone') || '').replace(/\D/g, ''),
-            email_notifications_enabled: formData.has('email_notifications_enabled').toString()
+            email_notifications_enabled: formData.has('email_notifications_enabled').toString(),
+            waitlist_hold_hours: formData.get('waitlist_hold_hours') || '24'
         };
 
         try {
@@ -1462,7 +1465,8 @@ class AdminDashboard {
                 const msg = result.email_sent
                     ? 'Registration canceled. Cancellation email sent.'
                     : (result.email_skipped ? 'Registration canceled. Emails are disabled.' : 'Registration canceled.');
-                this.showSuccess(msg);
+                const offers = Array.isArray(result.waitlist_offers) ? result.waitlist_offers : [];
+                this.showSuccess(offers.length ? `${msg} The spot was offered to ${offers.map(o => o.email).join(', ')} from the waitlist.` : msg);
                 if (this.currentSection === 'registrations') {
                     this.loadRegistrations();
                 }
@@ -1667,8 +1671,9 @@ class AdminDashboard {
                                         <div class="waitlist-actions">
                                             <span class="badge bg-${entry.status === 'active' ? 'success' : 
                                                 entry.status === 'notified' ? 'warning' : 'secondary'}">
-                                                ${entry.status || 'active'}
+                                                ${({ active: 'Waiting', notified: 'Spot offered', registered: 'Registered', expired: 'Offer expired' })[entry.status] || 'Waiting'}
                                             </span>
+                                            ${entry.status === 'notified' && entry.notification_expires_at ? `<div class="cell-sub">until ${new Date(entry.notification_expires_at).toLocaleString('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit' })}</div>` : ''}
                                         </div>
                                     </div>
                                 `).join('')}
