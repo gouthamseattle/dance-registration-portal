@@ -51,6 +51,7 @@ web concepts in plain terms when they come up.
 | Admin student profile (history, totals, private `admin_notes`) | modal in `admin.js` (`openStudent`), API `/api/admin/students/:id` |
 | Student cleanup: hide/restore (`students.archived_at`, nothing deleted), bulk type change, Data check (duplicates by email, unlinked registrations, old tables) | `admin.js`, APIs `/api/admin/students/bulk`, `/api/admin/data-check` |
 | Test accounts: `students.is_tester`; their registrations get `registrations.is_test` and are left out of spot counts (`NOT_TEST` in SQL) and dashboard numbers; they bypass full/closed/crew-only; admin can reset them; the device flag `goumo_tester` (set by `/my`) only changes what pages show | `server.js`, `utils/courseAvailability.js`, `admin.js`, `my.js` |
+| Waitlist offers: cancelling a *paid* registration (admin only; students can't cancel) emails the next waitlisted student a `/waitlist-register/:token` link and holds the spot for `waitlist_hold_hours` (Settings, default 24). Held spots (`heldSpots`) don't count as free; expired offers move to the next person (10-minute check). The token rides along as `?waitlist=` / `waitlist_token` | `server.js` (`offerOpenSpots`, `expireWaitlistOffers`), `email-profile-registration.js`, `registration.js` |
 | Smoke tests | `test/smoke.test.js`, run in CI by `.github/workflows/test.yml` |
 
 `memory-bank/` and `docs/` are historical notes from earlier development. Read them only when a task needs that history.

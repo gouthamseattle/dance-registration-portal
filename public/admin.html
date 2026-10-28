@@ -281,6 +281,17 @@
                         <input type="tel" class="form-control" id="zellePhone" name="zelle_phone">
                     </div>
                 </div>
+                <h2>Waitlist</h2>
+                <div class="mb-4">
+                    <label for="waitlistHoldHours" class="form-label">When a spot opens, hold it for the next student for</label>
+                    <select class="form-select" id="waitlistHoldHours" name="waitlist_hold_hours" style="max-width:240px">
+                        <option value="6">6 hours</option>
+                        <option value="12">12 hours</option>
+                        <option value="24">24 hours</option>
+                        <option value="48">48 hours</option>
+                    </select>
+                    <div class="form-text">When you cancel a paid registration, the next student on that class's waitlist gets an email with a link to register. If they don't register in this time, the next student is emailed, in order.</div>
+                </div>
                 <h2>Email</h2>
                 <label class="switch-pill mb-4" for="emailNotifications">
                     <input class="form-check-input" type="checkbox" id="emailNotifications" name="email_notifications_enabled">
@@ -529,6 +540,6 @@
     <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="/js/class-info.js?v=5"></script>
-    <script src="/js/admin.js?v=34"></script>
+    <script src="/js/admin.js?v=35"></script>
 </body>
 </html>

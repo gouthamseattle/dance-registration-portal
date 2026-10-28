@@ -54,7 +54,9 @@
     const donePractices = showCrew ? sorted.filter((r) => isCrewPractice(r) && isFinished(r) && r.payment_status === 'completed') : [];
     const listed = sorted.filter((r) => !donePractices.includes(r));
     const rows = [
-      ...data.waitlists.map((w) => row(w.course_name, `Waitlist #${w.position}`, 'wait', false)),
+      ...data.waitlists.map((w) => w.status === 'notified'
+        ? row(w.course_name, 'Spot offered: check your email', 'ok', false)
+        : row(w.course_name, `Waitlist #${w.position}`, 'wait', false)),
       ...(donePractices.length ? [row('Crew practice', `${donePractices.length} attended`, 'ok', false)] : []),
       ...listed.map((r) => {
         const finished = isFinished(r) && r.payment_status === 'completed';

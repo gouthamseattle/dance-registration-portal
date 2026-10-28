@@ -691,6 +691,54 @@ test('admin works as a home-screen app and stays signed in', async () => {
     assert.ok(status.body.authenticated, 'still signed in through the database session store');
 });
 
+test('waitlist: admin cancels a paid spot, next student is offered it and can claim it', async () => {
+    const cls = await api('POST', '/api/courses', {
+        name: `Waitlist Flow ${unique}`, course_type: 'multi-week', session_dates: ['2030-10-06', '2030-10-13', '2030-10-20'],
+        slots: [{ slot_name: 'Main Session', difficulty_level: 'All Levels', capacity: 1, day_of_week: 'Tuesday',
+                  start_time: '18:00', end_time: '19:00', location: 'Waitlist Studio', pricing: { full_package: 60 } }]
+    }, { admin: true });
+    assert.equal(cls.status, 200, JSON.stringify(cls.body));
+    const id = cls.body.courseId;
+    const a = `wl.a.${unique}@example.com`, b = `wl.b.${unique}@example.com`, c = `wl.c.${unique}@example.com`;
+
+    const ra = await api('POST', '/api/register', { first_name: 'Ava', email: a, course_id: id, payment_amount: 60 });
+    await api('PUT', `/api/admin/registrations/${ra.body.registrationId}/confirm-payment`, {}, { admin: true });
+    const full = await api('POST', '/api/register', { first_name: 'Ben', email: b, course_id: id, payment_amount: 60 });
+    assert.equal(full.status, 400);
+    assert.ok(full.body.course_full, 'class is full');
+    const join = await api('POST', '/api/waitlist', { first_name: 'Ben', email: b, course_id: id, payment_amount: 60 });
+    assert.equal(join.status, 200, JSON.stringify(join.body));
+    await api('POST', '/api/waitlist', { first_name: 'Cat', email: c, course_id: id, payment_amount: 60 });
+
+    // Admin cancels the paid registration: Ben (first in line) is offered the spot
+    const cancel = await api('PUT', `/api/admin/registrations/${ra.body.registrationId}/cancel`, { reason: 'test' }, { admin: true });
+    assert.equal(cancel.status, 200, JSON.stringify(cancel.body));
+    assert.equal(cancel.body.waitlist_offers.length, 1);
+    assert.equal(cancel.body.waitlist_offers[0].email, b, 'offered in order');
+    const token = cancel.body.waitlist_offers[0].registration_url.split('/waitlist-register/')[1];
+
+    // The spot is held: Cat can't take it
+    const held = await api('POST', '/api/register', { first_name: 'Cat', email: c, course_id: id, payment_amount: 60, dry_run: true });
+    assert.equal(held.status, 400, 'held spot is not free');
+
+    // The email link opens registration for that class
+    const link = await fetch(`${BASE}/waitlist-register/${token}`, { redirect: 'manual' });
+    assert.equal(link.status, 302);
+    assert.ok(link.headers.get('location').includes(`course=${id}`));
+    assert.equal((await fetch(`${BASE}/waitlist-register/not-a-real-token`)).status, 410, 'bad or expired links get a friendly page');
+
+    // Ben claims it with the link; someone else can't use his link
+    assert.equal((await api('POST', '/api/register', { first_name: 'Cat', email: c, course_id: id, payment_amount: 60, waitlist_token: token })).status, 400);
+    const claim = await api('POST', '/api/register', { first_name: 'Ben', email: b, course_id: id, payment_amount: 60, waitlist_token: token });
+    assert.equal(claim.status, 200, JSON.stringify(claim.body));
+
+    const lists = await api('GET', `/api/admin/waitlists?course_id=${id}`, null, { admin: true });
+    const entries = Array.isArray(lists.body) ? lists.body : (lists.body.waitlists || []);
+    const ben = entries.find((e) => e.email === b);
+    assert.equal(ben.status, 'registered', 'admin sees Ben registered from the waitlist');
+    assert.equal(entries.find((e) => e.email === c).status, 'active', 'Cat still waiting');
+});
+
 test('removed features are gone', async () => {
     for (const [method, url] of [
         ['POST', '/api/competition/register'],
