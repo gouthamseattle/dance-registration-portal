@@ -174,6 +174,7 @@ hr { border-color: var(--line); opacity: 1; }
 .payment-option-content strong, .package-header { color: var(--text); }
 .package-price { font-weight: 700; color: var(--text); }
 .package-description { color: var(--muted); font-size: 13px; }
+.total-amount-card .h5 { font-size: 15px; font-weight: 600; color: var(--text-2); }
 .total-amount-card { background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; }
 .total-amount-card .text-primary { color: var(--text) !important; }
 .payment-method-selection { cursor: pointer; transition: border-color 0.15s; }
@@ -207,3 +208,13 @@ body.crew-practice-mode { background: var(--bg); }
   .card-header h3 { font-size: 24px; }
   .step-title { font-size: 32px; }
 }
+
+/* ---------- Class details and date picking at checkout ---------- */
+.class-rows { display: flex; flex-direction: column; gap: 6px; }
+.class-rows div { display: flex; gap: 10px; font-size: 14px; }
+.class-rows dt { width: 72px; flex: none; font-weight: 400; color: var(--faint); }
+.class-rows dd { margin: 0; color: var(--text-2); }
+.date-picker { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; margin-top: 10px; }
+.date-option { display: flex; align-items: center; gap: 8px; min-height: 48px; padding: 0 10px; white-space: nowrap; font-size: 15px; border: 1px solid var(--line); border-radius: 10px; font-weight: 600; cursor: pointer; }
+.date-option:has(input:checked) { border-color: var(--accent); }
+.date-option .form-check-input { margin: 0; }

@@ -70,6 +70,9 @@ async function ensureSchema(dbConfig) {
         // Ensure choreography columns exist on courses
         await ensureChoreographyColumns(dbConfig);
         
+        // Class fields: list of dates, instructor; registration: dates picked
+        await ensureClassFieldColumns(dbConfig);
+
         // Ensure student profile and access control columns exist
         await ensureStudentProfileColumns(dbConfig);
         
@@ -187,6 +190,32 @@ async function ensureWaitlistRegistrationColumns(dbConfig) {
         console.log('✅ Ensured registrations waitlist columns exist');
     } catch (e) {
         console.log('ℹ️ registrations waitlist columns check skipped:', e.message || e);
+    }
+}
+
+/**
+ * Class fields (Oct 2026): a class has a list of dates and an instructor;
+ * a registration can record the specific dates a student picked.
+ * Dates are stored as a JSON array of 'YYYY-MM-DD' strings.
+ */
+async function ensureClassFieldColumns(dbConfig) {
+    try {
+        if (dbConfig.isProduction) {
+            await dbConfig.run('ALTER TABLE courses ADD COLUMN IF NOT EXISTS session_dates TEXT');
+            await dbConfig.run('ALTER TABLE courses ADD COLUMN IF NOT EXISTS instructor VARCHAR(255)');
+            await dbConfig.run("ALTER TABLE courses ADD COLUMN IF NOT EXISTS required_student_type VARCHAR(20) DEFAULT 'any'");
+            await dbConfig.run('ALTER TABLE registrations ADD COLUMN IF NOT EXISTS selected_dates TEXT');
+            await dbConfig.run('ALTER TABLE registrations ADD COLUMN IF NOT EXISTS registration_type VARCHAR(50)');
+        } else {
+            await dbConfig.run('ALTER TABLE courses ADD COLUMN session_dates TEXT').catch(() => {});
+            await dbConfig.run('ALTER TABLE courses ADD COLUMN instructor TEXT').catch(() => {});
+            await dbConfig.run("ALTER TABLE courses ADD COLUMN required_student_type TEXT DEFAULT 'any'").catch(() => {});
+            await dbConfig.run('ALTER TABLE registrations ADD COLUMN selected_dates TEXT').catch(() => {});
+            await dbConfig.run('ALTER TABLE registrations ADD COLUMN registration_type TEXT').catch(() => {});
+        }
+        console.log('✅ Ensured class field columns exist');
+    } catch (e) {
+        console.log('ℹ️ class field columns check skipped:', e.message || e);
     }
 }
 

@@ -649,7 +649,7 @@ class AdminDashboard {
                                 </div>
                             </td>
                             <td>
-                                <strong>${reg.course_name || 'Drop-in Class'}</strong>
+                                <strong>${reg.course_name || 'Drop-in Class'}</strong>${(() => { try { const d = JSON.parse(reg.selected_dates || 'null'); return Array.isArray(d) && d.length ? `<br><small class="text-muted">Dates: ${window.ClassInfo.formatDates(d)}</small>` : ''; } catch (e) { return ''; } })()}
                                 ${reg.class_date ? `<br><small class="text-muted">${new Date(reg.class_date).toLocaleDateString()}</small>` : ''}
                             </td>
                             <td>
@@ -721,380 +721,15 @@ class AdminDashboard {
         });
     }
 
-    // Modal Functions
-    showCreateCourse() {
-        document.getElementById('courseModalTitle').textContent = 'Create Dance Series';
-        document.getElementById('courseForm').reset();
-        document.getElementById('courseId').value = '';
-        
-        // Clear slots container
-        document.getElementById('slotsContainer').innerHTML = '';
-        
-        // Add initial slot
-        this.addSlot();
-        
-        // Set up course type change listener
-        this.setupCourseTypeListener();
-        
-        const modal = new bootstrap.Modal(document.getElementById('courseModal'));
-        modal.show();
-    }
 
 
-    async saveCourse() {
-        const courseId = document.getElementById('courseId').value;
-        const name = document.getElementById('courseName').value.trim();
-        const courseType = document.getElementById('courseType').value;
-        const description = document.getElementById('courseDescription').value || null;
-        const duration = parseInt(document.getElementById('courseDuration').value) || 1;
-        const startDate = document.getElementById('startDate').value || null;
-        
-        // Validate required fields
-        if (!name || !courseType) {
-            this.showError('Required fields missing: name and course_type are required');
-            return;
-        }
-        
-        // Collect slots data
-        const slots = this.collectSlotsData();
-        if (slots.length === 0) {
-            this.showError('At least one slot is required');
-            return;
-        }
-        
-        // Validate course type constraints
-        if (courseType === 'crew_practice' && slots.length > 1) {
-            this.showError('Crew Practice can only have one slot');
-            return;
-        }
-        
-        const courseData = {
-            name: name,
-            description: description,
-            course_type: courseType,
-            duration_weeks: duration,
-            start_date: startDate,
-            slots: slots
-        };
-
-        try {
-            const url = courseId ? `/api/courses/${courseId}` : '/api/courses';
-            const method = courseId ? 'PUT' : 'POST';
-            
-            const response = await this.apiFetch(url, {
-                method: method,
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(courseData)
-            });
-
-            if (response.ok) {
-                const modal = bootstrap.Modal.getInstance(document.getElementById('courseModal'));
-                modal.hide();
-                
-                await this.loadInitialData();
-                this.showSuccess(`Course ${courseId ? 'updated' : 'created'} successfully`);
-                
-                if (this.currentSection === 'courses') {
-                    this.loadCourses();
-                }
-            } else {
-                const error = await response.json();
-                this.showError(error.error || 'Failed to save course');
-            }
-        } catch (error) {
-            console.error('Error saving course:', error);
-            this.showError('Failed to save course');
-        }
-    }
-
-    // Slot Management Functions
-    setupCourseTypeListener() {
-        const courseTypeField = document.getElementById('courseType');
-        const addSlotBtn = document.getElementById('addSlotBtn');
-        const slotInfoText = document.getElementById('slotInfoText');
-        
-        const updateSlotConstraints = () => {
-            const courseType = courseTypeField.value;
-            const slotsContainer = document.getElementById('slotsContainer');
-            const currentSlots = slotsContainer.children.length;
-            
-            if (courseType === 'crew_practice') {
-                addSlotBtn.style.display = currentSlots >= 1 ? 'none' : 'inline-block';
-                slotInfoText.textContent = 'Crew Practice is limited to one slot only.';
-                
-                // Remove extra slots if switching to crew practice
-                while (slotsContainer.children.length > 1) {
-                    slotsContainer.removeChild(slotsContainer.lastChild);
-                }
-            } else {
-                addSlotBtn.style.display = 'inline-block';
-                slotInfoText.textContent = 'Dance Series and Drop In Classes can have multiple slots. Crew Practice is limited to one slot.';
-            }
-        };
-        
-        courseTypeField.addEventListener('change', () => {
-            updateSlotConstraints();
-            this.updatePricingUIForCourseType();
-        });
-        updateSlotConstraints(); // Initial call
-        this.updatePricingUIForCourseType();
-    }
 
 
-    updatePricingUIForCourseType() {
-        const courseType = document.getElementById('courseType').value;
-        const slotsContainer = document.getElementById('slotsContainer');
-        Array.from(slotsContainer.children).forEach(slotCard => {
-            const fullGroup = slotCard.querySelector('.full-price-group');
-            const fullInput = slotCard.querySelector('.slot-full-price');
-            const dropInInput = slotCard.querySelector('.slot-drop-in-price');
-            const dayGroup = slotCard.querySelector('.day-of-week-group');
-            const practiceDateGroup = slotCard.querySelector('.practice-date-group');
-            const practiceDateInput = slotCard.querySelector('.slot-practice-date');
 
-            // Pricing visibility/requirements
-            if (!dropInInput) return;
-            if (courseType === 'dance_series') {
-                if (fullGroup) fullGroup.style.display = '';
-                if (fullInput) fullInput.required = true;
-                dropInInput.required = true;
-            } else {
-                if (fullGroup) fullGroup.style.display = 'none';
-                if (fullInput) {
-                    fullInput.required = false;
-                    fullInput.value = '';
-                }
-                dropInInput.required = true;
-            }
 
-            // Crew Practice: show practice date, hide day-of-week
-            if (courseType === 'crew_practice') {
-                if (dayGroup) dayGroup.style.display = 'none';
-                if (practiceDateGroup) practiceDateGroup.style.display = '';
-                if (practiceDateInput) practiceDateInput.required = true;
-            } else {
-                if (dayGroup) dayGroup.style.display = '';
-                if (practiceDateGroup) practiceDateGroup.style.display = 'none';
-                if (practiceDateInput) {
-                    practiceDateInput.required = false;
-                }
-            }
-        });
-    }
 
-    addSlot() {
-        const slotsContainer = document.getElementById('slotsContainer');
-        const courseType = document.getElementById('courseType').value;
-        const slotIndex = slotsContainer.children.length;
-        
-        // Check crew practice constraint
-        if (courseType === 'crew_practice' && slotIndex >= 1) {
-            this.showError('Crew Practice can only have one slot');
-            return;
-        }
-        
-        const slotHtml = `
-            <div class="slot-card card mb-3" data-slot-index="${slotIndex}">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <h6 class="mb-0">Slot ${slotIndex + 1}</h6>
-                    <button type="button" class="btn btn-outline-danger btn-sm" onclick="admin.removeSlot(${slotIndex})">
-                        <i class="fas fa-trash"></i>
-                    </button>
-                </div>
-                <div class="card-body">
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">Slot Name</label>
-                            <input type="text" class="form-control slot-name" placeholder="e.g., Beginner Session" value="Main Session">
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">Difficulty Level *</label>
-                            <select class="form-select slot-difficulty" required>
-                                <option value="All Levels">All Levels</option>
-                                <option value="Beginner">Beginner</option>
-                                <option value="Intermediate">Intermediate</option>
-                                <option value="Advanced">Advanced</option>
-                            </select>
-                        </div>
-                    </div>
-                    
-                    <div class="row">
-                        <div class="col-md-4 mb-3">
-                            <label class="form-label">Capacity *</label>
-                            <input type="number" class="form-control slot-capacity" min="1" max="100" required value="20">
-                        </div>
-                        <div class="col-md-4 mb-3 day-of-week-group">
-                            <label class="form-label">Day of Week</label>
-                            <select class="form-select slot-day">
-                                <option value="">Select Day</option>
-                                <option value="Monday">Monday</option>
-                                <option value="Tuesday">Tuesday</option>
-                                <option value="Wednesday">Wednesday</option>
-                                <option value="Thursday">Thursday</option>
-                                <option value="Friday">Friday</option>
-                                <option value="Saturday">Saturday</option>
-                                <option value="Sunday">Sunday</option>
-                            </select>
-                        </div>
-                        <div class="col-md-4 mb-3 practice-date-group" style="display: none;">
-                            <label class="form-label">Practice Date *</label>
-                            <input type="date" class="form-control slot-practice-date">
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <label class="form-label">Location</label>
-                            <input type="text" class="form-control slot-location" placeholder="e.g., Studio A">
-                        </div>
-                    </div>
-                    
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">Start Time</label>
-                            <input type="time" class="form-control slot-start-time">
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">End Time</label>
-                            <input type="time" class="form-control slot-end-time">
-                        </div>
-                    </div>
-                    
-                    <div class="pricing-section">
-                        <h6 class="mb-3">Pricing for this Slot</h6>
-                        <div class="row">
-                            <div class="col-md-6 mb-3 full-price-group">
-                                <label class="form-label">Full Package Price *</label>
-                                <div class="input-group">
-                                    <span class="input-group-text">$</span>
-                                    <input type="number" class="form-control slot-full-price" min="0" step="0.01" required>
-                                </div>
-                                <div class="form-text">Total price for entire series/class</div>
-                            </div>
-                            <div class="col-md-6 mb-3 drop-in-price-group">
-                                <label class="form-label">Drop In Fee (per class) *</label>
-                                <div class="input-group">
-                                    <span class="input-group-text">$</span>
-                                    <input type="number" class="form-control slot-drop-in-price" min="0" step="0.01" required>
-                                </div>
-                                <div class="form-text">Price per individual class session</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-        
-        slotsContainer.insertAdjacentHTML('beforeend', slotHtml);
-        
-        // Adjust pricing UI for current course type
-        this.updatePricingUIForCourseType();
 
-        // Update add button visibility
-        this.updateAddSlotButton();
-    }
 
-    removeSlot(slotIndex) {
-        const slotsContainer = document.getElementById('slotsContainer');
-        const slotCard = slotsContainer.querySelector(`[data-slot-index="${slotIndex}"]`);
-        
-        if (slotCard) {
-            // Don't allow removing the last slot
-            if (slotsContainer.children.length <= 1) {
-                this.showError('A course must have at least one slot');
-                return;
-            }
-            
-            slotCard.remove();
-            
-            // Re-index remaining slots
-            Array.from(slotsContainer.children).forEach((slot, index) => {
-                slot.setAttribute('data-slot-index', index);
-                const header = slot.querySelector('.card-header h6');
-                if (header) {
-                    header.textContent = `Slot ${index + 1}`;
-                }
-                const removeBtn = slot.querySelector('.btn-outline-danger');
-                if (removeBtn) {
-                    removeBtn.setAttribute('onclick', `admin.removeSlot(${index})`);
-                }
-            });
-        }
-        
-        // Update add button visibility
-        this.updateAddSlotButton();
-    }
-
-    updateAddSlotButton() {
-        const courseType = document.getElementById('courseType').value;
-        const slotsContainer = document.getElementById('slotsContainer');
-        const addSlotBtn = document.getElementById('addSlotBtn');
-        const currentSlots = slotsContainer.children.length;
-        
-        if (courseType === 'crew_practice') {
-            addSlotBtn.style.display = currentSlots >= 1 ? 'none' : 'inline-block';
-        } else {
-            addSlotBtn.style.display = 'inline-block';
-        }
-    }
-
-    collectSlotsData() {
-        const slotsContainer = document.getElementById('slotsContainer');
-        const slots = [];
-        
-        Array.from(slotsContainer.children).forEach(slotCard => {
-            const slotName = slotCard.querySelector('.slot-name').value || 'Main Session';
-            const difficulty = slotCard.querySelector('.slot-difficulty').value;
-            const capacity = parseInt(slotCard.querySelector('.slot-capacity').value);
-            const dayOfWeek = slotCard.querySelector('.slot-day').value || null;
-            const practiceDateEl = slotCard.querySelector('.slot-practice-date');
-            const practiceDate = practiceDateEl ? (practiceDateEl.value || null) : null;
-            const startTime = slotCard.querySelector('.slot-start-time').value || null;
-            const endTime = slotCard.querySelector('.slot-end-time').value || null;
-            const location = slotCard.querySelector('.slot-location').value || null;
-            const courseType = document.getElementById('courseType').value;
-            const fullPriceInput = slotCard.querySelector('.slot-full-price');
-            const dropInPriceInput = slotCard.querySelector('.slot-drop-in-price');
-            const fullPrice = fullPriceInput ? parseFloat(fullPriceInput.value) : NaN;
-            const dropInPrice = dropInPriceInput ? parseFloat(dropInPriceInput.value) : NaN;
-            
-            // Validate required fields (pricing depends on course type)
-            if (!difficulty || !capacity) {
-                return; // Skip invalid slots
-            }
-            // Crew practice requires a specific practice date
-            if (courseType === 'crew_practice' && !practiceDate) {
-                return; // practice_date required
-            }
-            
-            const pricing = {};
-            if (courseType === 'dance_series') {
-                if (isNaN(fullPrice) || isNaN(dropInPrice)) {
-                    return; // Both required for dance series
-                }
-                pricing.full_package = fullPrice;
-                pricing.drop_in = dropInPrice;
-            } else {
-                if (isNaN(dropInPrice)) {
-                    return; // Drop-in price required for drop_in and crew_practice
-                }
-                pricing.drop_in = dropInPrice;
-            }
-            
-            slots.push({
-                slot_name: slotName,
-                difficulty_level: difficulty,
-                capacity: capacity,
-                day_of_week: courseType === 'crew_practice' ? null : dayOfWeek,
-                practice_date: practiceDate,
-                start_time: startTime,
-                end_time: endTime,
-                location: location,
-                pricing: pricing
-            });
-        });
-        
-        return slots;
-    }
 
     async saveSettings() {
         const form = document.getElementById('settingsForm');
@@ -1162,76 +797,222 @@ class AdminDashboard {
     }
 
 
-    // Additional admin functions
+
+    // ---------- Class form (create / edit) ----------
+    // A class is one group at one time: a list of dates, start/end time,
+    // location, capacity, song/style, instructor and fees. It is stored as the
+    // class plus a single slot, so capacity and registration code is unchanged.
+
+    showCreateCourse() {
+        document.getElementById('courseModalTitle').textContent = 'New class';
+        document.getElementById('saveCourseBtn').textContent = 'Create class';
+        document.getElementById('courseForm').reset();
+        document.getElementById('courseId').value = '';
+        this.classDates = [];
+        this.setupClassForm();
+        new bootstrap.Modal(document.getElementById('courseModal')).show();
+    }
+
     async editCourse(courseId) {
-        const course = this.courses.find(c => c.id === courseId);
+        const course = this.courses.find(c => Number(c.id) === Number(courseId));
         if (!course) return;
+        const C = window.ClassInfo;
+        const slot = C.slot(course);
+        const pricing = slot.pricing || {};
+        const set = (id, v) => { document.getElementById(id).value = v ?? ''; };
 
-        // Set modal title and base fields
-        document.getElementById('courseModalTitle').textContent = 'Edit Dance Series';
-        document.getElementById('courseId').value = course.id;
-        document.getElementById('courseName').value = course.name || '';
-        document.getElementById('courseDescription').value = course.description || '';
-        document.getElementById('courseType').value = course.course_type || 'multi-week';
-        document.getElementById('courseDuration').value = course.duration_weeks || '1';
-        const startDateEl = document.getElementById('startDate');
-        if (startDateEl) {
-            startDateEl.value = course.start_date ? new Date(course.start_date).toISOString().split('T')[0] : '';
-        }
-
-        // Clear and populate slots based on existing course data
-        const slotsContainer = document.getElementById('slotsContainer');
-        slotsContainer.innerHTML = '';
-
-        const courseSlots = Array.isArray(course.slots) && course.slots.length > 0 ? course.slots : [];
-        if (courseSlots.length === 0) {
-            // Fallback: ensure at least one slot exists so form can be saved
-            this.addSlot();
+        document.getElementById('courseForm').reset();
+        document.getElementById('courseModalTitle').textContent = 'Edit class';
+        document.getElementById('saveCourseBtn').textContent = 'Save changes';
+        set('courseId', course.id);
+        const type = course.course_type === 'choreography' ? 'multi-week' : (course.course_type || 'multi-week');
+        const typeInput = document.querySelector(`input[name="classType"][value="${type}"]`);
+        if (typeInput) typeInput.checked = true;
+        set('courseName', course.name);
+        set('songStyle', course.song_name);
+        set('instructor', course.instructor);
+        set('courseDescription', course.description);
+        const who = document.querySelector(`input[name="whoCanRegister"][value="${course.required_student_type === 'crew_member' ? 'crew_member' : 'any'}"]`);
+        if (who) who.checked = true;
+        this.classDates = C.dates(course);
+        set('startTime', String(slot.start_time || '').slice(0, 5));
+        set('endTime', String(slot.end_time || '').slice(0, 5));
+        set('capacity', slot.capacity || 20);
+        set('location', slot.location);
+        if (type === 'drop_in') {
+            set('mainFee', pricing.drop_in ?? course.per_class_price);
+        } else if (type === 'crew_practice') {
+            set('mainFee', pricing.full_package ?? pricing.drop_in ?? course.full_course_price);
         } else {
-            // Ensure course type listener is set before adding slots (affects UI constraints)
-            this.setupCourseTypeListener();
+            set('mainFee', pricing.full_package ?? course.full_course_price);
+            set('perDateFee', pricing.drop_in ?? '');
+        }
+        if ((course.slots || []).length > 1) {
+            this.showError(`This class has ${course.slots.length} time slots from the old setup. Saving keeps only the first one; create the others as separate classes.`);
+        }
+        this.setupClassForm();
+        new bootstrap.Modal(document.getElementById('courseModal')).show();
+    }
 
-            courseSlots.forEach((slot, index) => {
-                // Add a new slot card
-                this.addSlot();
-                const slotCard = slotsContainer.children[index];
-
-                if (!slotCard) return;
-
-                // Populate slot fields
-                const nameEl = slotCard.querySelector('.slot-name');
-                const diffEl = slotCard.querySelector('.slot-difficulty');
-                const capEl = slotCard.querySelector('.slot-capacity');
-                const dayEl = slotCard.querySelector('.slot-day');
-                const stEl = slotCard.querySelector('.slot-start-time');
-                const etEl = slotCard.querySelector('.slot-end-time');
-                const locEl = slotCard.querySelector('.slot-location');
-                const pdEl = slotCard.querySelector('.slot-practice-date');
-                const fullPriceEl = slotCard.querySelector('.slot-full-price');
-                const dropInPriceEl = slotCard.querySelector('.slot-drop-in-price');
-
-                if (nameEl) nameEl.value = slot.slot_name || 'Main Session';
-                if (diffEl) diffEl.value = slot.difficulty_level || 'All Levels';
-                if (capEl) capEl.value = slot.capacity || 20;
-                if (dayEl) dayEl.value = slot.day_of_week || '';
-                if (stEl) stEl.value = slot.start_time || '';
-                if (etEl) etEl.value = slot.end_time || '';
-                if (locEl) locEl.value = slot.location || '';
-                if (pdEl) pdEl.value = slot.practice_date ? new Date(slot.practice_date).toISOString().split('T')[0] : '';
-
-                // Pricing
-                const pricing = slot.pricing || {};
-                if (fullPriceEl) fullPriceEl.value = pricing.full_package != null ? pricing.full_package : '';
-                if (dropInPriceEl) dropInPriceEl.value = pricing.drop_in != null ? pricing.drop_in : '';
+    setupClassForm() {
+        const form = document.getElementById('courseForm');
+        if (!form._wired) {
+            form._wired = true;
+            form.addEventListener('input', () => this.refreshClassForm());
+            form.addEventListener('change', () => this.refreshClassForm());
+            document.getElementById('dateChips').addEventListener('click', (e) => {
+                const btn = e.target.closest('[data-remove-date]');
+                if (!btn) return;
+                this.classDates = this.classDates.filter(d => d !== btn.dataset.removeDate);
+                this.refreshClassForm();
             });
         }
+        this.refreshClassForm();
+    }
 
-        // Update pricing UI visibility/requirements based on course type
-        this.updatePricingUIForCourseType();
+    classFormType() {
+        return document.querySelector('input[name="classType"]:checked')?.value || 'multi-week';
+    }
 
-        // Show modal
-        const modal = new bootstrap.Modal(document.getElementById('courseModal'));
-        modal.show();
+    addClassDate() {
+        const input = document.getElementById('newDate');
+        if (!input.value) { this.showError('Pick a date first'); return; }
+        if (!this.classDates.includes(input.value)) this.classDates.push(input.value);
+        this.classDates.sort();
+        input.value = '';
+        this.refreshClassForm();
+    }
+
+    repeatWeekly() {
+        const first = document.getElementById('newDate').value || this.classDates[0];
+        if (!first) { this.showError('Pick the first date, then press "Fill weekly"'); return; }
+        const weeks = Math.min(Math.max(parseInt(document.getElementById('repeatWeeks').value, 10) || 4, 2), 12);
+        const d0 = window.ClassInfo.toDate(first);
+        const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        this.classDates = Array.from({ length: weeks }, (_, i) => iso(new Date(d0.getFullYear(), d0.getMonth(), d0.getDate() + 7 * i)));
+        document.getElementById('newDate').value = '';
+        this.refreshClassForm();
+    }
+
+    // What the form will send to the server
+    buildClassPayload() {
+        const val = (id) => document.getElementById(id).value.trim();
+        const type = this.classFormType();
+        const dates = [...(this.classDates || [])].sort();
+        const mainFee = Number(val('mainFee')) || 0;
+        const perDate = type === 'multi-week' ? (Number(val('perDateFee')) || 0) : 0;
+        let pricing;
+        if (type === 'multi-week') pricing = perDate ? { full_package: mainFee, drop_in: perDate } : { full_package: mainFee };
+        else if (type === 'drop_in') pricing = { drop_in: mainFee, full_package: mainFee * Math.max(dates.length, 1) };
+        else pricing = { full_package: mainFee, drop_in: mainFee };
+        const first = dates[0];
+        const weekday = first ? window.ClassInfo.toDate(first).toLocaleDateString('en-US', { weekday: 'long' }) : null;
+        return {
+            name: val('courseName'),
+            description: val('courseDescription') || null,
+            course_type: type,
+            song_name: val('songStyle') || null,
+            instructor: val('instructor') || null,
+            required_student_type: document.querySelector('input[name="whoCanRegister"]:checked')?.value || 'any',
+            session_dates: dates,
+            start_date: first || null,
+            end_date: dates[dates.length - 1] || null,
+            duration_weeks: dates.length || 1,
+            slots: [{
+                slot_name: 'Main Session',
+                difficulty_level: 'All Levels',
+                capacity: parseInt(val('capacity'), 10) || 0,
+                day_of_week: weekday,
+                practice_date: type === 'multi-week' ? null : (first || null),
+                start_time: val('startTime') || null,
+                end_time: val('endTime') || null,
+                location: val('location') || null,
+                pricing
+            }]
+        };
+    }
+
+    // Problems that stop the class from being saved ([] = OK)
+    classFormProblems(payload) {
+        const n = payload.session_dates.length;
+        const slot = payload.slots[0];
+        const problems = [];
+        if (!payload.name) problems.push('Add a class name');
+        if (payload.course_type === 'multi-week' && n < 3) problems.push('A series needs at least 3 dates');
+        if (payload.course_type === 'drop_in' && (n < 1 || n > 2)) problems.push('A drop-in has 1 or 2 dates');
+        if (payload.course_type === 'crew_practice' && n !== 1) problems.push('Crew practice has exactly 1 date');
+        if (!slot.start_time || !slot.end_time) problems.push('Add a start and end time');
+        if (slot.capacity < 1) problems.push('Capacity must be at least 1');
+        const fee = Number(document.getElementById('mainFee').value);
+        if (!(fee > 0) && payload.course_type !== 'crew_practice') problems.push('Add the fee');
+        return problems;
+    }
+
+    refreshClassForm() {
+        const C = window.ClassInfo;
+        const type = this.classFormType();
+        document.getElementById('repeatWeeklyBox').classList.toggle('d-none', type !== 'multi-week');
+        document.getElementById('perDateFeeBox').classList.toggle('d-none', type !== 'multi-week');
+        document.getElementById('mainFeeLabel').textContent =
+            type === 'multi-week' ? 'Series fee (all dates) *' : type === 'drop_in' ? 'Fee per date *' : 'Fee';
+        document.getElementById('datesHint').textContent =
+            type === 'multi-week' ? 'Pick the first date, then "Fill weekly" to add the rest. Remove any date that is skipped.'
+            : type === 'drop_in' ? 'Add 1 or 2 dates. Students can pay for one or both.' : 'Add the practice date.';
+
+        const dates = this.classDates || [];
+        document.getElementById('dateChips').innerHTML = dates.length
+            ? dates.map(d => `<span class="badge rounded-pill text-bg-dark d-inline-flex align-items-center gap-1 px-3 py-2">${C.esc(C.formatOneDate(d))}
+                <button type="button" class="btn-close btn-close-white ms-1" style="font-size:.6rem" aria-label="Remove ${C.esc(d)}" data-remove-date="${C.esc(d)}"></button></span>`).join('')
+            : '<span class="text-muted small">No dates yet</span>';
+
+        // Live preview of the student card
+        const payload = this.buildClassPayload();
+        const slot = payload.slots[0];
+        const course = { ...payload, full_course_price: slot.pricing.full_package, per_class_price: slot.pricing.drop_in };
+        const f = C.fees(course);
+        const rows = C.rows(course);
+        const problems = this.classFormProblems(payload);
+        document.getElementById('classPreview').innerHTML = `
+            <div style="background:#151518;border:1px solid #2B2B32;border-radius:16px;padding:16px;color:#F5F5F4;font-family:Inter,system-ui,sans-serif">
+                <div style="display:flex;justify-content:space-between;gap:12px">
+                    <div>
+                        <div style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#FFD60A">${C.esc(C.kicker(course))}${payload.required_student_type === 'crew_member' ? ' · Crew only' : ''}</div>
+                        <div style="font-size:18px;font-weight:700;margin-top:3px">${C.esc(payload.name || 'Class name')}</div>
+                        ${payload.instructor ? `<div style="font-size:13px;color:#A8A8B3">with ${C.esc(payload.instructor)}</div>` : ''}
+                    </div>
+                    <div style="font-size:18px;font-weight:700;white-space:nowrap">${f.headline ? '$' + f.headline : ''}</div>
+                </div>
+                <div style="border-top:1px solid #1F1F25;margin-top:10px;padding-top:10px;display:flex;flex-direction:column;gap:5px;font-size:13px">
+                    ${rows.map(([k, v]) => `<div style="display:flex;gap:10px"><span style="width:66px;flex:none;color:#8E8E99">${C.esc(k)}</span><span style="color:#D4D4D8">${C.esc(v)}</span></div>`).join('') || '<span style="color:#8E8E99">Add dates, time and fees to see them here</span>'}
+                </div>
+            </div>
+            ${problems.length ? `<ul class="small text-muted mt-3 mb-0 ps-3">${problems.map(p => `<li>${C.esc(p)}</li>`).join('')}</ul>` : '<p class="small text-success mt-3 mb-0">Ready to save</p>'}`;
+    }
+
+    async saveCourse() {
+        const courseId = document.getElementById('courseId').value;
+        const payload = this.buildClassPayload();
+        const problems = this.classFormProblems(payload);
+        if (problems.length) { this.showError(problems.join('. ')); return; }
+        try {
+            const response = await this.apiFetch(courseId ? `/api/courses/${courseId}` : '/api/courses', {
+                method: courseId ? 'PUT' : 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if (!response.ok) {
+                const error = await response.json().catch(() => ({}));
+                this.showError(error.error || 'Failed to save class');
+                return;
+            }
+            bootstrap.Modal.getInstance(document.getElementById('courseModal')).hide();
+            await this.loadInitialData();
+            this.showSuccess(courseId ? 'Class updated' : 'Class created');
+            if (this.currentSection === 'courses') this.loadCourses();
+        } catch (error) {
+            console.error('Error saving class:', error);
+            this.showError('Failed to save class');
+        }
     }
 
     async deleteCourse(courseId) {
@@ -1666,148 +1447,10 @@ class AdminDashboard {
         overlay.style.display = 'none';
     }
 
-    // Auto-populate schedule information based on date/time selections
-    setupScheduleAutoPopulation() {
-        const startDateField = document.getElementById('startDate');
-        const startTimeField = document.getElementById('startTime');
-        const durationField = document.getElementById('courseDuration');
-        const courseTypeField = document.getElementById('courseType');
-        const scheduleInfoField = document.getElementById('scheduleInfo');
-        const multipleDatesSection = document.getElementById('multipleDatesSection');
-        const perClassPriceField = document.getElementById('perClassPrice');
-        const fullCoursePriceField = document.getElementById('fullCoursePrice');
 
-        const updateFullCoursePrice = () => {
-            const perClassPrice = parseFloat(perClassPriceField.value) || 0;
-            const duration = parseInt(durationField.value) || 1;
-            const calculatedPrice = perClassPrice * duration;
-            fullCoursePriceField.value = calculatedPrice.toFixed(2);
-        };
 
-        const updateScheduleInfo = () => {
-            const startDate = startDateField.value;
-            const startTime = startTimeField.value;
-            const duration = durationField.value;
-            const courseType = courseTypeField.value;
 
-            // Show/hide multiple dates section based on course type and duration
-            if (courseType === 'multi-week' && duration && parseInt(duration) > 1) {
-                multipleDatesSection.style.display = 'block';
-            } else {
-                multipleDatesSection.style.display = 'none';
-            }
 
-            // Generate schedule information
-            let scheduleText = '';
-            
-            if (startDate && startTime) {
-                const date = new Date(startDate);
-                const dayName = date.toLocaleDateString('en-US', { weekday: 'long' });
-                
-                // Convert 24-hour time to 12-hour format
-                const [hours, minutes] = startTime.split(':');
-                const hour12 = ((parseInt(hours) + 11) % 12) + 1;
-                const ampm = parseInt(hours) >= 12 ? 'PM' : 'AM';
-                const timeFormatted = `${hour12}:${minutes} ${ampm}`;
-                
-                // Check if there are additional dates
-                const additionalDates = this.getAdditionalDates();
-                
-                if (additionalDates.length > 0) {
-                    // Format with specific dates
-                    const allDates = [startDate, ...additionalDates].sort();
-                    const formattedDates = allDates.map(dateStr => {
-                        const d = new Date(dateStr);
-                        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-                    }).join(', ');
-                    scheduleText = `${formattedDates} at ${timeFormatted}`;
-                } else if (courseType === 'multi-week' && duration && parseInt(duration) > 1) {
-                    // Weekly recurring format
-                    scheduleText = `${dayName}s ${timeFormatted} (${duration} weeks)`;
-                } else {
-                    // Single class format
-                    const formattedDate = date.toLocaleDateString('en-US', { 
-                        weekday: 'long', 
-                        month: 'long', 
-                        day: 'numeric' 
-                    });
-                    scheduleText = `${formattedDate} at ${timeFormatted}`;
-                }
-                
-                scheduleInfoField.value = scheduleText;
-            } else {
-                scheduleInfoField.value = '';
-            }
-        };
-
-        // Remove existing listeners to avoid duplicates
-        startDateField.removeEventListener('change', updateScheduleInfo);
-        startTimeField.removeEventListener('change', updateScheduleInfo);
-        durationField.removeEventListener('change', updateScheduleInfo);
-        courseTypeField.removeEventListener('change', updateScheduleInfo);
-        perClassPriceField.removeEventListener('input', updateFullCoursePrice);
-        durationField.removeEventListener('input', updateFullCoursePrice);
-
-        // Add event listeners
-        startDateField.addEventListener('change', updateScheduleInfo);
-        startTimeField.addEventListener('change', updateScheduleInfo);
-        durationField.addEventListener('change', updateScheduleInfo);
-        courseTypeField.addEventListener('change', updateScheduleInfo);
-        
-        // Add price calculation listeners
-        perClassPriceField.addEventListener('input', updateFullCoursePrice);
-        durationField.addEventListener('input', updateFullCoursePrice);
-        
-        // Initial calculation
-        updateFullCoursePrice();
-    }
-
-    // Get additional dates from the form
-    getAdditionalDates() {
-        const additionalDates = [];
-        const dateInputs = document.querySelectorAll('#additionalDates input[type="date"]');
-        dateInputs.forEach(input => {
-            if (input.value) {
-                additionalDates.push(input.value);
-            }
-        });
-        return additionalDates;
-    }
-
-    // Add a new date field for multi-week series
-    addDateField() {
-        const additionalDatesContainer = document.getElementById('additionalDates');
-        const dateFieldCount = additionalDatesContainer.children.length;
-        
-        const dateFieldHtml = `
-            <div class="input-group mb-2" id="dateField${dateFieldCount}">
-                <input type="date" class="form-control" name="additional_date_${dateFieldCount}" onchange="admin.updateScheduleFromAdditionalDates()">
-                <button type="button" class="btn btn-outline-danger" onclick="admin.removeDateField(${dateFieldCount})">
-                    <i class="fas fa-trash"></i>
-                </button>
-            </div>
-        `;
-        
-        additionalDatesContainer.insertAdjacentHTML('beforeend', dateFieldHtml);
-    }
-
-    // Remove a date field
-    removeDateField(fieldIndex) {
-        const dateField = document.getElementById(`dateField${fieldIndex}`);
-        if (dateField) {
-            dateField.remove();
-            this.updateScheduleFromAdditionalDates();
-        }
-    }
-
-    // Update schedule info when additional dates change
-    updateScheduleFromAdditionalDates() {
-        // Trigger the main schedule update function
-        const startDateField = document.getElementById('startDate');
-        if (startDateField) {
-            startDateField.dispatchEvent(new Event('change'));
-        }
-    }
 
     // =========================
     // Waitlist Management

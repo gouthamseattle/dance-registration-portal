@@ -15,6 +15,13 @@ Scale is small (50–100 concurrent users): prefer simple over clever.
   - Dashboard stats
   - Minimal settings (Venmo, Zelle, email on/off, registration open/closed)
 
+**Class model:** one class is one group at one time.
+- **Stored on the class:** name, type, `song_name` (shown as "Song / Style"), `instructor`, `required_student_type` (`any` | `crew_member`) and `session_dates` (a JSON array of `YYYY-MM-DD`).
+- **Stored on its single slot:** start/end time, location and capacity.
+- **Slot pricing:** `full_package` is the fee for all dates; `drop_in` is the per-date fee.
+- **Registrations** can store `selected_dates`. When a student picks dates, the server computes the amount.
+- **Display:** dates, fees and labels for students are formatted in `public/js/class-info.js`.
+
 Competition, choreography packages, attendance and historical classification were removed in Oct 2026. Their old database tables still exist but are unused.
 
 The owner is a data engineer, not a front-end developer. Explain front-end and
@@ -36,6 +43,7 @@ web concepts in plain terms when they come up.
 | Registration form + payment (Venmo/Zelle) | `public/index-registration.html`, `public/js/registration.js` |
 | Registration pages' look: re-skins Bootstrap with the design-system tokens | `public/css/registration.css` |
 | Admin dashboard | `public/admin.html`, `public/js/admin.js`, `public/css/admin-styles.css` |
+| Shared class formatting for student pages (dates, times, fees) | `public/js/class-info.js` |
 | Smoke tests | `test/smoke.test.js`, run in CI by `.github/workflows/test.yml` |
 
 `memory-bank/` and `docs/` are historical notes from earlier development. Read them only when a task needs that history.

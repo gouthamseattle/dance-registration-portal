@@ -563,103 +563,16 @@ class DanceRegistrationApp {
         const infoContainer = document.getElementById('selectedCourseInfo');
         
         if (this.selectedCourse) {
-            // Build schedule information from slots
-            let scheduleHtml = '';
-            if (this.selectedCourse.slots && this.selectedCourse.slots.length > 0) {
-                const scheduleItems = this.selectedCourse.slots.map(slot => {
-                    const parts = [];
-                    
-                    // Add day of week if available
-                    if (this.selectedCourse.course_type === 'crew_practice') {
-                        if (slot.practice_date) {
-                            const dateStr = formatLocalDate(slot.practice_date);
-                            parts.push(dateStr);
-                        }
-                    } else if (slot.day_of_week) {
-                        parts.push(`${slot.day_of_week}s`);
-                    }
-                    
-                    // Add time range if available (fallback to course-level times)
-                    const start = slot.start_time || this.selectedCourse.start_time;
-                    const end = slot.end_time || this.selectedCourse.end_time;
-                    if (start && end) {
-                        parts.push(`${start} - ${end}`);
-                    } else if (start) {
-                        parts.push(start);
-                    }
-                    
-                    // Add location if available
-                    if (slot.location) {
-                        parts.push(`at ${slot.location}`);
-                    }
-                    
-                    // Join all parts
-                    let scheduleText = parts.join(' ');
-                    
-                    // Add difficulty level if multiple slots
-                    if (this.selectedCourse.slots.length > 1 && slot.difficulty_level) {
-                        scheduleText += ` (${slot.difficulty_level})`;
-                    }
-                    
-                    return scheduleText;
-                }).filter(text => text); // Remove empty strings
-                
-                // Add course dates if available
-                let dateInfo = '';
-                    if (this.selectedCourse.course_type !== 'crew_practice') {
-                        if (this.selectedCourse.start_date && this.selectedCourse.end_date) {
-                            const startDate = formatLocalDate(this.selectedCourse.start_date);
-                            const endDate = formatLocalDate(this.selectedCourse.end_date);
-                            dateInfo = `<div class="mt-1"><strong>Dates:</strong> ${startDate} - ${endDate}</div>`;
-                        } else if (this.selectedCourse.start_date) {
-                            const startDate = formatLocalDate(this.selectedCourse.start_date);
-                            dateInfo = `<div class="mt-1"><strong>Start Date:</strong> ${startDate}</div>`;
-                        }
-                    }
-                
-                if (scheduleItems.length > 0) {
-                    scheduleHtml = `<div class="mt-2"><strong>Schedule:</strong> ${scheduleItems.join('<br>')}</div>${dateInfo}`;
-                }
-            }
-            
-            // If no slot-based schedule was built, check if we should use schedule_info
-            // But prioritize slot data over schedule_info
-            if (!scheduleHtml) {
-                // Force display of available data for debugging
-                if (this.selectedCourse.slots && this.selectedCourse.slots.length > 0) {
-                    // We have slots but no schedule was built - show what we can
-                    const slot = this.selectedCourse.slots[0];
-                    const debugParts = [];
-                    
-                    if (slot.day_of_week) debugParts.push(`${slot.day_of_week}s`);
-                    const dbgStart = slot.start_time || this.selectedCourse.start_time;
-                    const dbgEnd = slot.end_time || this.selectedCourse.end_time;
-                    if (dbgStart && dbgEnd) {
-                        debugParts.push(`${dbgStart} - ${dbgEnd}`);
-                    } else if (dbgStart) {
-                        debugParts.push(dbgStart);
-                    }
-                    if (slot.location) debugParts.push(`at ${slot.location}`);
-                    
-                    if (debugParts.length > 0) {
-                        scheduleHtml = `<div class="mt-2"><strong>Schedule:</strong> ${debugParts.join(' ')}</div>`;
-                    }
-                }
-                
-                // Only use schedule_info as absolute fallback
-                if (!scheduleHtml && this.selectedCourse.schedule_info) {
-                    scheduleHtml = `<div class="mt-2"><strong>Schedule:</strong> ${this.selectedCourse.schedule_info}</div>`;
-                }
-            }
-            
+            const C = window.ClassInfo;
+            const course = this.selectedCourse;
+            const rows = C.rows(course).filter(([k]) => k !== 'Fees');
             infoContainer.innerHTML = `
-                <h5><i class="fas fa-graduation-cap text-primary"></i> ${this.selectedCourse.name}</h5>
-                <div class="row">
-                    <div class="col-sm-12">
-                        <strong>Level:</strong> ${this.selectedCourse.level || 'All Levels'}
-                    </div>
-                </div>
-                ${scheduleHtml}
+                <span class="d-block small fw-bold text-uppercase" style="letter-spacing:.08em;color:var(--accent)">${C.esc(C.kicker(course))}</span>
+                <h5 class="mt-1 mb-1">${C.esc(course.name)}</h5>
+                ${course.instructor ? `<div class="text-muted mb-2">with ${C.esc(course.instructor)}</div>` : ''}
+                <dl class="class-rows mb-0">
+                    ${rows.map(([k, v]) => `<div><dt>${C.esc(k)}</dt><dd>${C.esc(v)}</dd></div>`).join('')}
+                </dl>
             `;
         } else if (this.selectedDropIn) {
             const classDate = new Date(this.selectedDropIn.class_date).toLocaleDateString();
@@ -679,231 +592,92 @@ class DanceRegistrationApp {
         }
     }
 
+    // Price options come from what admin set on the class:
+    //  - a series with a per-date fee: "All N dates" or "Pick dates"
+    //  - a drop-in with 2 dates: pick one or both dates
+    //  - otherwise a single price
     setupPaymentOptions() {
         const paymentOptionsDiv = document.getElementById('paymentOptions');
         const totalAmountSpan = document.getElementById('totalAmount');
+        const C = window.ClassInfo;
 
         if (this.selectedCourse) {
-            // SPECIAL HANDLING: House Foundation Series with multi-slot selection
-            if (this.selectedCourse.name && this.selectedCourse.name.includes('House Foundation')) {
-                console.log('🏠 Setting up slot selection for House Foundation');
-                this.setupHouseFoundationSlotSelection();
-                return;
-            }
-            
-            // Regular course payment options
-            const hasFullCourse = this.selectedCourse.full_course_price && this.selectedCourse.full_course_price > 0;
-            const hasPerClass = this.selectedCourse.per_class_price && this.selectedCourse.per_class_price > 0;
+            const course = this.selectedCourse;
+            const fees = C.fees(course);
+            const dates = C.dates(course);
+            this.classFees = fees;
+            const canPickDates = fees.perDate > 0 && dates.length > 1 && course.course_type !== 'crew_practice';
 
-            if (hasFullCourse && hasPerClass) {
+            if (canPickDates) {
+                const allLabel = course.course_type === 'drop_in' ? `Both dates` : `All ${dates.length} dates`;
+                paymentOptionsDiv.innerHTML = `
+                    <label class="form-label">How do you want to join?</label>
+                    <div class="payment-options">
+                        <div class="form-check payment-option-card">
+                            <input class="form-check-input" type="radio" name="payment_option" id="optAllDates" value="full-course" checked>
+                            <label class="form-check-label w-100" for="optAllDates">
+                                <span class="d-flex justify-content-between align-items-center gap-2">
+                                    <strong>${C.esc(allLabel)}</strong><span class="price">$${fees.full}</span>
+                                </span>
+                            </label>
+                        </div>
+                        <div class="form-check payment-option-card">
+                            <input class="form-check-input" type="radio" name="payment_option" id="optPickDates" value="pick-dates">
+                            <label class="form-check-label w-100" for="optPickDates">
+                                <span class="d-flex justify-content-between align-items-center gap-2">
+                                    <strong>Pick dates</strong><span class="text-muted">$${fees.perDate} per date</span>
+                                </span>
+                            </label>
+                        </div>
+                    </div>
+                    <div id="datePicker" class="date-picker" hidden>
+                        ${dates.map((d, i) => `
+                            <label class="date-option">
+                                <input type="checkbox" class="form-check-input" name="selected_date" value="${d}" ${i === 0 ? 'checked' : ''}>
+                                ${C.esc(C.formatOneDate(d))}
+                            </label>`).join('')}
+                    </div>`;
                 paymentOptionsDiv.style.display = 'block';
-                document.getElementById('fullCoursePrice').textContent = `$${this.selectedCourse.full_course_price}`;
-                document.getElementById('perClassPrice').textContent = `$${this.selectedCourse.per_class_price}`;
-                
-                // Set default selection
-                document.getElementById('fullCourse').checked = true;
-                totalAmountSpan.textContent = `$${this.selectedCourse.full_course_price}`;
-            } else if (hasFullCourse) {
+            } else {
+                paymentOptionsDiv.innerHTML = '';
                 paymentOptionsDiv.style.display = 'none';
-                totalAmountSpan.textContent = `$${this.selectedCourse.full_course_price}`;
-            } else if (hasPerClass) {
-                paymentOptionsDiv.style.display = 'none';
-                totalAmountSpan.textContent = `$${this.selectedCourse.per_class_price}`;
             }
+            totalAmountSpan.textContent = `$${fees.full || fees.headline}`;
         } else if (this.selectedDropIn) {
             paymentOptionsDiv.style.display = 'none';
             totalAmountSpan.textContent = `$${this.selectedDropIn.price}`;
         }
 
-        // Add event listeners for payment option changes
-        const paymentRadios = document.querySelectorAll('input[name="payment_option"]');
-        paymentRadios.forEach(radio => {
-            radio.addEventListener('change', () => {
-                this.updateTotalAmount();
-            });
-        });
+        paymentOptionsDiv.addEventListener('change', () => this.updateTotalAmount());
+        this.updateTotalAmount();
     }
 
-    setupHouseFoundationSlotSelection() {
-        const paymentOptionsDiv = document.getElementById('paymentOptions');
-        const totalAmountSpan = document.getElementById('totalAmount');
-        
-        // Check if student is crew member - check multiple sources
-        const studentType = document.getElementById('studentType')?.value || 'general';
-        const studentExperience = document.getElementById('studentExperience')?.value || '';
-        const isCrewMember = studentType === 'crew_member' || 
-                            studentExperience.toLowerCase().includes('professional') ||
-                            studentExperience.toLowerCase().includes('advanced') ||
-                            studentExperience.toLowerCase().includes('crew');
-        
-        // Replace the payment options with comprehensive course options
-        paymentOptionsDiv.innerHTML = `
-            <label class="form-label">
-                <i class="fas fa-graduation-cap text-primary"></i>
-                Choose Your Package *
-            </label>
-            <div class="course-package-options">
-                <div class="form-check package-option-card">
-                    <input class="form-check-input" type="radio" name="package_selection" id="level1Only" value="level1" data-price="80">
-                    <label class="form-check-label" for="level1Only">
-                        <div class="package-content">
-                            <div class="package-header">
-                                <strong>Level 1 House</strong>
-                                <span class="badge bg-secondary ms-2">Beginner</span>
-                            </div>
-                            <div class="package-description">
-                                <small class="text-muted">4-week series • Tuesdays 6:15-7:30 PM</small>
-                            </div>
-                            <div class="package-price">
-                                <span class="h5 text-primary mb-0">$80</span>
-                                <small class="text-muted ms-2">($30 per class drop-in)</small>
-                            </div>
-                        </div>
-                    </label>
-                </div>
-                
-                <div class="form-check package-option-card">
-                    <input class="form-check-input" type="radio" name="package_selection" id="level2Only" value="level2" data-price="100">
-                    <label class="form-check-label" for="level2Only">
-                        <div class="package-content">
-                            <div class="package-header">
-                                <strong>Level 2 House</strong>
-                                <span class="badge bg-warning ms-2">Intermediate</span>
-                            </div>
-                            <div class="package-description">
-                                <small class="text-muted">4-week series • Tuesdays 7:30-9:00 PM</small>
-                            </div>
-                            <div class="package-price">
-                                <span class="h5 text-primary mb-0">$100</span>
-                                <small class="text-muted ms-2">($30 per class drop-in)</small>
-                            </div>
-                        </div>
-                    </label>
-                </div>
-                
-                <div class="form-check package-option-card combo-package">
-                    <input class="form-check-input" type="radio" name="package_selection" id="level1Plus2" value="combo" data-price="150">
-                    <label class="form-check-label" for="level1Plus2">
-                        <div class="package-content">
-                            <div class="package-header">
-                                <strong>Level 1 + 2 House Combo</strong>
-                                <span class="badge bg-success ms-2">BEST VALUE</span>
-                            </div>
-                            <div class="package-description">
-                                <small class="text-muted">Access to BOTH levels • All Tuesday classes • Week 4 combined session</small>
-                            </div>
-                            <div class="package-price">
-                                <span class="h5 text-success mb-0">$150</span>
-                                <small class="text-muted ms-2">(Save $30!)</small>
-                            </div>
-                        </div>
-                    </label>
-                </div>
-                
-                ${isCrewMember ? `
-                <div class="form-check package-option-card crew-package">
-                    <input class="form-check-input" type="radio" name="package_selection" id="crewHouseUnlimited" value="crew-house" data-price="200">
-                    <label class="form-check-label" for="crewHouseUnlimited">
-                        <div class="package-content">
-                            <div class="package-header">
-                                <strong>Crew + House Unlimited</strong>
-                                <span class="badge bg-danger ms-2">CREW ONLY</span>
-                            </div>
-                            <div class="package-description">
-                                <small class="text-muted">ALL House classes + Unlimited Crew Practice • Tuesdays & Fridays</small>
-                            </div>
-                            <div class="package-price">
-                                <span class="h5 text-danger mb-0">$200</span>
-                                <small class="text-muted ms-2">(Ultimate package)</small>
-                            </div>
-                        </div>
-                    </label>
-                </div>
-                ` : ''}
-            </div>
-        `;
-        
-        paymentOptionsDiv.style.display = 'block';
-        
-        // Set default selection - Level 1 House
-        document.getElementById('level1Only').checked = true;
-        totalAmountSpan.textContent = '$80';
-        
-        // Add event listeners for package selection changes
-        const packageRadios = document.querySelectorAll('input[name="package_selection"]');
-        
-        const updatePrice = () => {
-            const selectedPackage = document.querySelector('input[name="package_selection"]:checked');
-            
-            if (selectedPackage) {
-                const price = selectedPackage.dataset.price;
-                totalAmountSpan.textContent = `$${price}`;
-            }
-        };
-        
-        packageRadios.forEach(radio => {
-            radio.addEventListener('change', () => {
-                updatePrice();
-                updatePackageSelection();
-            });
-        });
-        
-        // Function to update visual selection state
-        const updatePackageSelection = () => {
-            const allCards = document.querySelectorAll('.package-option-card');
-            const selectedRadio = document.querySelector('input[name="package_selection"]:checked');
-            
-            // Remove selected class from all cards
-            allCards.forEach(card => {
-                card.classList.remove('selected');
-            });
-            
-            // Add selected class to the card containing the checked radio
-            if (selectedRadio) {
-                const selectedCard = selectedRadio.closest('.package-option-card');
-                if (selectedCard) {
-                    selectedCard.classList.add('selected');
-                }
-            }
-        };
-        
-        // Set initial selection state
-        updatePackageSelection();
-        
-        // Add CSS for package selection styling
-        if (!document.getElementById('package-selection-styles')) {
-            const style = document.createElement('style');
-            style.id = 'package-selection-styles';
-            style.textContent = `
-                /* House Foundation package picker, GouMo dark style (tokens from site.css) */
-                .course-package-options { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
-                .package-option-card { position: relative; margin: 0; padding: 14px 16px 14px 44px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); cursor: pointer; }
-                .package-option-card:hover { border-color: var(--text-2); }
-                .package-option-card:has(input[type="radio"]:checked), .package-option-card.selected { border: 2px solid var(--accent); }
-                .package-option-card .form-check-input { position: absolute; left: 16px; top: 18px; margin: 0; }
-                .package-option-card .form-check-label { display: block; width: 100%; cursor: pointer; }
-                .package-content { display: flex; flex-direction: column; gap: 4px; }
-                .package-header { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; color: var(--text); }
-                .package-header strong { font-size: 16px; color: var(--text); }
-                .package-description { font-size: 13px; color: var(--muted); }
-                .package-price { display: flex; align-items: baseline; gap: 8px; }
-                .package-price .h5 { margin: 0; font-size: 18px; font-weight: 700; color: var(--text); }
-                .package-price small { color: var(--muted); }
-            `;
-            document.head.appendChild(style);
+
+
+    // Current choice -> { amount, dates, type }; also refreshes the total shown
+    getAmountChoice() {
+        const fees = this.classFees || window.ClassInfo.fees(this.selectedCourse || {});
+        const option = document.querySelector('input[name="payment_option"]:checked');
+        if (option && option.value === 'pick-dates') {
+            const dates = [...document.querySelectorAll('input[name="selected_date"]:checked')].map(i => i.value);
+            return { amount: fees.perDate * dates.length, dates, type: 'per-date' };
         }
+        return { amount: fees.full || fees.headline, dates: null, type: 'full-course' };
     }
 
     updateTotalAmount() {
         const totalAmountSpan = document.getElementById('totalAmount');
-        const selectedOption = document.querySelector('input[name="payment_option"]:checked');
-
-        if (this.selectedCourse && selectedOption) {
-            if (selectedOption.value === 'full-course') {
-                totalAmountSpan.textContent = `$${this.selectedCourse.full_course_price}`;
-            } else if (selectedOption.value === 'per-class') {
-                totalAmountSpan.textContent = `$${this.selectedCourse.per_class_price}`;
-            }
+        if (!this.selectedCourse || !totalAmountSpan) return;
+        const option = document.querySelector('input[name="payment_option"]:checked');
+        const picker = document.getElementById('datePicker');
+        if (picker) picker.hidden = !(option && option.value === 'pick-dates');
+        const choice = this.getAmountChoice();
+        totalAmountSpan.textContent = `$${choice.amount}`;
+        const label = totalAmountSpan.previousElementSibling;
+        if (label) {
+            label.textContent = choice.dates
+                ? `Total · ${choice.dates.length} date${choice.dates.length === 1 ? '' : 's'} × $${this.classFees.perDate}`
+                : 'Total';
         }
     }
 
@@ -1172,77 +946,14 @@ class DanceRegistrationApp {
             this.registrationData.course_id = this.selectedCourse.id;
             this.registrationData.drop_in_class_id = null;
             
-            // SPECIAL HANDLING: House Foundation Series with package selection
-            if (this.selectedCourse.name && this.selectedCourse.name.includes('House Foundation')) {
-                console.log('🏠 Processing House Foundation package selection');
-                
-                const selectedPackage = document.querySelector('input[name="package_selection"]:checked');
-                
-                if (!selectedPackage) {
-                    this.showError('Please select a package option to continue.');
-                    return;
-                }
-                
-                // Store package selection data
-                const packageValue = selectedPackage.value;
-                this.registrationData.selected_package = packageValue;
-                this.registrationData.payment_amount = selectedPackage.dataset.price;
-                
-                // Set registration type and metadata based on package selection
-                switch (packageValue) {
-                    case 'level1':
-                        this.registrationData.registration_type = 'level1-house';
-                        this.registrationData.package_name = 'Level 1 House';
-                        this.registrationData.package_description = '4-week series • Tuesdays 6:15-7:30 PM';
-                        break;
-                    case 'level2':
-                        this.registrationData.registration_type = 'level2-house';
-                        this.registrationData.package_name = 'Level 2 House';
-                        this.registrationData.package_description = '4-week series • Tuesdays 7:30-9:00 PM';
-                        break;
-                    case 'combo':
-                        this.registrationData.registration_type = 'level1-2-combo';
-                        this.registrationData.package_name = 'Level 1 + 2 House Combo';
-                        this.registrationData.package_description = 'Access to BOTH levels • All Tuesday classes • Week 4 combined session';
-                        break;
-                    case 'crew-house':
-                        this.registrationData.registration_type = 'crew-house-unlimited';
-                        this.registrationData.package_name = 'Crew + House Unlimited';
-                        this.registrationData.package_description = 'ALL House classes + Unlimited Crew Practice • Tuesdays & Fridays';
-                        break;
-                    default:
-                        this.registrationData.registration_type = 'package-selection';
-                        this.registrationData.package_name = 'Custom Package';
-                        break;
-                }
-                
-                console.log('✅ House Foundation package processed:', {
-                    package: this.registrationData.selected_package,
-                    packageName: this.registrationData.package_name,
-                    type: this.registrationData.registration_type,
-                    amount: this.registrationData.payment_amount
-                });
-                
-            } else {
-                // Regular course payment options
-                const paymentOption = formData.get('payment_option');
-                if (paymentOption === 'full-course') {
-                    this.registrationData.registration_type = 'full-course';
-                    this.registrationData.payment_amount = this.selectedCourse.full_course_price;
-                } else if (paymentOption === 'per-class') {
-                    this.registrationData.registration_type = 'per-class';
-                    this.registrationData.payment_amount = this.selectedCourse.per_class_price;
-                } else {
-                    // Default to full course if only one option available
-                    if (this.selectedCourse.full_course_price > 0) {
-                        this.registrationData.registration_type = 'full-course';
-                        this.registrationData.payment_amount = this.selectedCourse.full_course_price;
-                    } else {
-                        this.registrationData.registration_type = 'per-class';
-                        this.registrationData.payment_amount = this.selectedCourse.per_class_price;
-                    }
-                }
+            const choice = this.getAmountChoice();
+            if (choice.dates && choice.dates.length === 0) {
+                this.showError('Please pick at least one date.');
+                return;
             }
+            this.registrationData.registration_type = choice.type;
+            this.registrationData.payment_amount = choice.amount;
+            this.registrationData.selected_dates = choice.dates;
         } else if (this.selectedDropIn) {
             this.registrationData.course_id = null;
             this.registrationData.drop_in_class_id = this.selectedDropIn.id;
@@ -1290,6 +1001,8 @@ class DanceRegistrationApp {
             // Regular registration successful
             this.registrationData.registrationId = result.registrationId;
             this.registrationData.studentId = result.studentId;
+            // The server works out the amount for picked dates; use its figure for payment
+            if (result.payment_amount) this.registrationData.payment_amount = result.payment_amount;
 
             // Debug logging to verify data
             console.log('✅ Registration successful:', {
