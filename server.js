@@ -54,6 +54,11 @@ app.get('/', (req, res) => {
 });
 
 // Serve admin dashboard
+// Privacy policy (also linked from the Google sign-in setup for sending email)
+app.get('/privacy', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'privacy.html'));
+});
+
 app.get('/admin', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
