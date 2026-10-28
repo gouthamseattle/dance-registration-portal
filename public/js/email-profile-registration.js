@@ -677,6 +677,11 @@ class EmailProfileRegistrationApp {
             return;
         }
 
+        if (!window.ClassInfo.isOpen(course)) {
+            this.showError(`Registration for ${course.name} is closed right now.`);
+            return;
+        }
+
         this.selectedCourse = course;
         const availableSpots = parseInt(course.available_spots) || 0;
         

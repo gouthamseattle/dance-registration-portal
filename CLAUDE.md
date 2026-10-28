@@ -20,6 +20,8 @@ Scale is small (50–100 concurrent users): prefer simple over clever.
 - **Stored on its single slot:** start/end time, location and capacity.
 - **Slot pricing:** `full_package` is the fee for all dates; `drop_in` is the per-date fee.
 - **Registrations** can store `selected_dates`. When a student picks dates, the server computes the amount.
+- **Per-class registration switch:** `courses.registration_open` (NULL/true = open), toggled from the dashboard via `PUT /api/courses/:id/registration-open`. The global `registration_open` setting still closes everything.
+- **When a registration is saved:** checkout calls `/api/register` (or `/api/register-combo`) with `dry_run: true` to check and price it, and saves it only when the student taps "I've sent the payment".
 - **Display:** dates, fees and labels for students are formatted in `public/js/class-info.js`.
 - **Combos:** `combos` (name, price, is_active) + `combo_classes` (combo_id, course_id) bundle 2+ classes at one price. `POST /api/register-combo` creates one pending registration per class, price split across them, sharing `registrations.combo_group`; confirm, cancel and uncancel apply to the whole group.
 

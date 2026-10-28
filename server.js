@@ -2767,6 +2767,19 @@ app.post('/api/admin/courses/:courseId/waitlist/notify-next', requireAuth, async
 }));
 
 // Students and Registrations
+// Per-class registration switch. NULL (older rows) counts as open.
+function isRegistrationOpen(value) {
+    return !(value === false || value === 0 || value === '0' || value === 'false');
+}
+
+// Admin: open or close registration for one class
+app.put('/api/courses/:id/registration-open', requireAuth, asyncHandler(async (req, res) => {
+    const open = !!(req.body || {}).open;
+    await dbConfig.run('UPDATE courses SET registration_open = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+        [dbConfig.isProduction ? open : (open ? 1 : 0), req.params.id]);
+    res.json({ success: true, registration_open: open });
+}));
+
 // 'venmo' / 'zelle' from the checkout page -> 'Venmo' / 'Zelle' (anything else: not recorded)
 function paymentMethodLabel(value) {
     const v = String(value || '').toLowerCase();
@@ -2861,7 +2874,7 @@ app.get('/api/combos', asyncHandler(async (req, res) => {
     const combos = [];
     for (const row of rows) {
         const combo = await loadCombo(row.id);
-        const allActive = combo.classes.length >= 2 && combo.classes.every(c => c.is_active === true || c.is_active === 1);
+        const allActive = combo.classes.length >= 2 && combo.classes.every(c => (c.is_active === true || c.is_active === 1) && isRegistrationOpen(c.registration_open));
         if (allActive) combos.push(combo);
     }
     res.json(combos);
@@ -2942,7 +2955,9 @@ app.post('/api/register-combo', asyncHandler(async (req, res) => {
     // Find or create the student
     const instagram = instagram_handle || instagram_id || null;
     let student = await dbConfig.get('SELECT * FROM students WHERE email = $1', [email]);
-    if (!student) {
+    if (!student && req.body.dry_run) {
+        student = { id: null, student_type: 'general' };
+    } else if (!student) {
         const result = await dbConfig.run(`
             INSERT INTO students (first_name, last_name, email, instagram_handle, dance_experience)
             VALUES ($1, $2, $3, $4, $5) ${dbConfig.isProduction ? 'RETURNING id' : ''}
@@ -2955,6 +2970,9 @@ app.post('/api/register-combo', asyncHandler(async (req, res) => {
         if (!(course.is_active === true || course.is_active === 1)) {
             return res.status(400).json({ error: `${course.name} is no longer open` });
         }
+        if (!isRegistrationOpen(course.registration_open)) {
+            return res.status(400).json({ error: `Registration for ${course.name} is closed`, registration_closed: true });
+        }
         if (course.required_student_type === 'crew_member' && student.student_type !== 'crew_member') {
             return res.status(403).json({ error: `${course.name} is for crew members only` });
         }
@@ -2966,6 +2984,10 @@ app.post('/api/register-combo', asyncHandler(async (req, res) => {
         if (course.available_spots <= 0) {
             return res.status(400).json({ error: `${course.name} is full`, course_full: true, course_name: course.name });
         }
+    }
+
+    if (req.body.dry_run) {
+        return res.json({ success: true, dry_run: true, payment_amount: combo.price, combo_name: combo.name });
     }
 
     // Replace any earlier unpaid registrations for these classes, so trying again doesn't duplicate
@@ -3077,13 +3099,16 @@ app.post('/api/register', asyncHandler(async (req, res) => {
     
     // Verify course exists and check availability using corrected capacity logic
     const courseCheck = await dbConfig.get(`
-        SELECT c.id, c.name, c.course_type
+        SELECT c.id, c.name, c.course_type, c.registration_open
         FROM courses c
         WHERE c.id = $1 AND c.is_active = ${dbConfig.isProduction ? 'true' : '1'}
     `, [course_id]);
 
     if (!courseCheck) {
         return res.status(400).json({ error: 'Course not found or inactive' });
+    }
+    if (!isRegistrationOpen(courseCheck.registration_open)) {
+        return res.status(400).json({ error: `Registration for ${courseCheck.name} is closed`, registration_closed: true });
     }
 
     // Use the corrected availability helper
@@ -3108,6 +3133,47 @@ app.post('/api/register', asyncHandler(async (req, res) => {
         });
     }
     
+    // Picking individual dates: they must be dates of this class, and the
+    // amount is worked out here (dates x per-date fee), not trusted from the browser.
+    let pickedDates = null;
+    if (selected_dates !== undefined && selected_dates !== null) {
+        pickedDates = normalizeSessionDates(selected_dates);
+        const courseRow = await dbConfig.get('SELECT session_dates FROM courses WHERE id = $1', [course_id]);
+        const classDates = normalizeSessionDates(courseRow?.session_dates);
+        if (pickedDates.length === 0) {
+            return res.status(400).json({ error: 'Please pick at least one date' });
+        }
+        if (classDates.length && pickedDates.some(d => !classDates.includes(d))) {
+            return res.status(400).json({ error: 'One or more picked dates are not part of this class' });
+        }
+        const priceRow = await dbConfig.get(`
+            SELECT cp.price FROM course_pricing cp
+            JOIN course_slots cs ON cp.course_slot_id = cs.id
+            WHERE cs.course_id = $1 AND cp.pricing_type = 'drop_in'
+            ORDER BY cs.id LIMIT 1
+        `, [course_id]);
+        const perDate = Number(priceRow?.price);
+        if (!perDate) {
+            return res.status(400).json({ error: 'This class does not offer individual dates' });
+        }
+        payment_amount = perDate * pickedDates.length;
+    }
+    const pickedDatesJson = pickedDates ? JSON.stringify(pickedDates) : null;
+
+    // Check only (dry run): the checkout page asks before showing payment details,
+    // and saves the registration when the student taps "I've sent the payment".
+    if (req.body.dry_run) {
+        const known = await dbConfig.get('SELECT id FROM students WHERE email = $1', [email]);
+        if (known) {
+            const paid = await dbConfig.get(
+                "SELECT id FROM registrations WHERE student_id = $1 AND course_id = $2 AND payment_status = 'completed' LIMIT 1",
+                [known.id, course_id]
+            );
+            if (paid) return res.status(400).json({ error: 'You are already registered and paid for this course' });
+        }
+        return res.json({ success: true, dry_run: true, payment_amount: Number(payment_amount) });
+    }
+
     // Create or update student
     let student = await dbConfig.get('SELECT * FROM students WHERE email = $1', [email]);
     
@@ -3162,32 +3228,6 @@ app.post('/api/register', asyncHandler(async (req, res) => {
         [student.id, course_id]
     );
 
-    // Picking individual dates: they must be dates of this class, and the
-    // amount is worked out here (dates x per-date fee), not trusted from the browser.
-    let pickedDates = null;
-    if (selected_dates !== undefined && selected_dates !== null) {
-        pickedDates = normalizeSessionDates(selected_dates);
-        const courseRow = await dbConfig.get('SELECT session_dates FROM courses WHERE id = $1', [course_id]);
-        const classDates = normalizeSessionDates(courseRow?.session_dates);
-        if (pickedDates.length === 0) {
-            return res.status(400).json({ error: 'Please pick at least one date' });
-        }
-        if (classDates.length && pickedDates.some(d => !classDates.includes(d))) {
-            return res.status(400).json({ error: 'One or more picked dates are not part of this class' });
-        }
-        const priceRow = await dbConfig.get(`
-            SELECT cp.price FROM course_pricing cp
-            JOIN course_slots cs ON cp.course_slot_id = cs.id
-            WHERE cs.course_id = $1 AND cp.pricing_type = 'drop_in'
-            ORDER BY cs.id LIMIT 1
-        `, [course_id]);
-        const perDate = Number(priceRow?.price);
-        if (!perDate) {
-            return res.status(400).json({ error: 'This class does not offer individual dates' });
-        }
-        payment_amount = perDate * pickedDates.length;
-    }
-    const pickedDatesJson = pickedDates ? JSON.stringify(pickedDates) : null;
 
     if (existingPending) {
         // Same student, same class, not paid yet: update their choice instead of duplicating
@@ -4056,135 +4096,59 @@ app.get('/api/admin/debug/course-capacity/:courseId', requireAuth, asyncHandler(
     }
 }));
 
-// Generate Venmo payment link
-app.post('/api/generate-venmo-link', asyncHandler(async (req, res) => {
-    const { registrationId, amount, courseName } = req.body;
-    
-    if (!registrationId || !amount) {
-        return res.status(400).json({ error: 'Registration ID and amount are required' });
+// Payment details shown at checkout. The registration is saved later, when
+// the student taps "I've sent the payment", so the note names the class and
+// student instead of a registration number.
+async function paymentNote({ registrationId, courseId, courseName, studentName }) {
+    let id = courseId;
+    if (!id && registrationId) {
+        const reg = await dbConfig.get('SELECT course_id FROM registrations WHERE id = $1', [registrationId]);
+        id = reg?.course_id;
     }
-    
-    // Get Venmo username from settings
-    const venmoSetting = await dbConfig.get('SELECT setting_value FROM system_settings WHERE setting_key = $1', ['venmo_username']);
-    const venmoUsername = venmoSetting ? venmoSetting.setting_value : 'monicaradd';
-    
-    // Create payment note with date or date range if available
-    let courseDisplayName = courseName;
-    let dateRangeText = '';
-    try {
-        const regCourse = await dbConfig.get(`
-            SELECT r.id as registration_id, c.name as course_name, c.course_type, c.start_date, c.end_date
-            FROM registrations r
-            JOIN courses c ON c.id = r.course_id
-            WHERE r.id = $1
-        `, [registrationId]);
-
-            if (regCourse) {
-                courseDisplayName = regCourse.course_name || courseDisplayName;
-                const fmt = (d) => formatLocalDateShort(d);
-
-                if (regCourse.course_type === 'crew_practice') {
-                // Prefer single practice_date from slot if available
-                const slot = await dbConfig.get(`
-                    SELECT practice_date FROM course_slots
-                    WHERE course_id = (SELECT course_id FROM registrations WHERE id = $1)
-                    ORDER BY created_at ASC
-                    LIMIT 1
-                `, [registrationId]);
-                if (slot && slot.practice_date) {
-                    dateRangeText = ` (${fmt(slot.practice_date)})`;
-                } else if (regCourse.start_date) {
-                    dateRangeText = ` (${fmt(regCourse.start_date)})`;
-                }
-            } else {
-                if (regCourse.start_date && regCourse.end_date) {
-                    dateRangeText = ` (${fmt(regCourse.start_date)} - ${fmt(regCourse.end_date)})`;
-                } else if (regCourse.start_date) {
-                    dateRangeText = ` (${fmt(regCourse.start_date)})`;
-                }
-            }
+    let name = courseName || '';
+    let when = '';
+    if (id) {
+        const course = await dbConfig.get('SELECT name, session_dates, start_date, end_date FROM courses WHERE id = $1', [id]);
+        if (course) {
+            name = course.name || name;
+            const dates = normalizeSessionDates(course.session_dates);
+            const first = dates[0] || course.start_date;
+            const last = dates[dates.length - 1] || course.end_date;
+            if (first) when = last && String(last).slice(0, 10) !== String(first).slice(0, 10)
+                ? ` (${formatLocalDateShort(first)} - ${formatLocalDateShort(last)})`
+                : ` (${formatLocalDateShort(first)})`;
         }
-    } catch (e) {
-        console.warn('⚠️ Could not load course dates for Venmo note:', e.message || e);
     }
-    const paymentNote = `Dance Registration #${registrationId}${courseDisplayName ? ` - ${courseDisplayName}` : ''}${dateRangeText}`;
-    
-    // Generate Venmo deep link
-    const venmoLink = `venmo://paycharge?txn=pay&recipients=${venmoUsername}&amount=${amount}&note=${encodeURIComponent(paymentNote)}`;
-    
-    // Generate web fallback link
-    const webLink = `https://venmo.com/${venmoUsername}?txn=pay&amount=${amount}&note=${encodeURIComponent(paymentNote)}`;
-    
+    return [`${name}${when}`.trim(), studentName].filter(Boolean).join(' - ') || 'GouMo dance class';
+}
+
+async function settingValue(key, fallback) {
+    const row = await dbConfig.get('SELECT setting_value FROM system_settings WHERE setting_key = $1', [key]);
+    return row && row.setting_value ? row.setting_value : fallback;
+}
+
+app.post('/api/generate-venmo-link', asyncHandler(async (req, res) => {
+    const { amount } = req.body || {};
+    if (!(Number(amount) > 0)) return res.status(400).json({ error: 'Amount is required' });
+    const venmoUsername = await settingValue('venmo_username', 'monicaradd');
+    const note = await paymentNote(req.body);
     res.json({
         success: true,
-        venmoLink,
-        webLink,
-        paymentNote,
+        venmoLink: `venmo://paycharge?txn=pay&recipients=${encodeURIComponent(venmoUsername)}&amount=${amount}&note=${encodeURIComponent(note)}`,
+        webLink: `https://venmo.com/${encodeURIComponent(venmoUsername)}?txn=pay&amount=${amount}&note=${encodeURIComponent(note)}`,
+        paymentNote: note,
         venmoUsername
     });
 }));
 
-// Generate Zelle payment details
 app.post('/api/generate-zelle-payment', asyncHandler(async (req, res) => {
-    const { registrationId, amount, courseName } = req.body;
-    
-    if (!registrationId || !amount) {
-        return res.status(400).json({ error: 'Registration ID and amount are required' });
-    }
-    
-    // Get Zelle contact info from settings (phone only, no email)
-    const zelleRecipientNameSetting = await dbConfig.get('SELECT setting_value FROM system_settings WHERE setting_key = $1', ['zelle_recipient_name']);
-    const zellePhoneSetting = await dbConfig.get('SELECT setting_value FROM system_settings WHERE setting_key = $1', ['zelle_phone']);
-    
-    const zelleRecipientName = zelleRecipientNameSetting ? zelleRecipientNameSetting.setting_value : 'Monica Radhakrishnan';
-    const zellePhone = zellePhoneSetting ? zellePhoneSetting.setting_value : '4252159818';
-    
-    // Create payment note with date or date range if available
-    let courseDisplayName = courseName;
-    let dateRangeText = '';
-    try {
-        const regCourse = await dbConfig.get(`
-            SELECT r.id as registration_id, c.name as course_name, c.course_type, c.start_date, c.end_date
-            FROM registrations r
-            JOIN courses c ON c.id = r.course_id
-            WHERE r.id = $1
-        `, [registrationId]);
-
-        if (regCourse) {
-            courseDisplayName = regCourse.course_name || courseDisplayName;
-            const fmt = (d) => formatLocalDateShort(d);
-
-            if (regCourse.course_type === 'crew_practice') {
-                // Prefer single practice_date from slot if available
-                const slot = await dbConfig.get(`
-                    SELECT practice_date FROM course_slots
-                    WHERE course_id = (SELECT course_id FROM registrations WHERE id = $1)
-                    ORDER BY created_at ASC
-                    LIMIT 1
-                `, [registrationId]);
-                if (slot && slot.practice_date) {
-                    dateRangeText = ` (${fmt(slot.practice_date)})`;
-                } else if (regCourse.start_date) {
-                    dateRangeText = ` (${fmt(regCourse.start_date)})`;
-                }
-            } else {
-                if (regCourse.start_date && regCourse.end_date) {
-                    dateRangeText = ` (${fmt(regCourse.start_date)} - ${fmt(regCourse.end_date)})`;
-                } else if (regCourse.start_date) {
-                    dateRangeText = ` (${fmt(regCourse.start_date)})`;
-                }
-            }
-        }
-    } catch (e) {
-        console.warn('⚠️ Could not load course dates for Zelle note:', e.message || e);
-    }
-    const paymentNote = `Dance Registration #${registrationId}${courseDisplayName ? ` - ${courseDisplayName}` : ''}${dateRangeText}`;
-    
+    const { amount } = req.body || {};
+    if (!(Number(amount) > 0)) return res.status(400).json({ error: 'Amount is required' });
     res.json({
         success: true,
-        zelleRecipientName,
-        zellePhone,
-        paymentNote,
+        zelleRecipientName: await settingValue('zelle_recipient_name', 'Monica Radhakrishnan'),
+        zellePhone: await settingValue('zelle_phone', '4252159818'),
+        paymentNote: await paymentNote(req.body),
         amount: parseFloat(amount).toFixed(2)
     });
 }));

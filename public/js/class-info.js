@@ -78,6 +78,8 @@
   }
   function location(course) { return slot(course).location || course.location || ''; }
   function style(course) { return course.song_name || ''; }
+  // Per-class registration switch (admin dashboard). Missing = open.
+  function isOpen(course) { const v = course.registration_open; return !(v === false || v === 0 || v === '0' || v === 'false'); }
   function isPerDate(course) { return course.course_type === 'drop_in' || course.course_type === 'crew_practice'; }
 
   // Fees: full = all dates; perDate = optional per-date fee
@@ -139,5 +141,5 @@
     return [`Combo · ${(classes || []).length} classes`, ...styles].join(' · ');
   }
 
-  window.ClassInfo = { comboRows, comboInstructors, comboKicker, esc, toDate, formatTime, formatDates, formatOneDate, dates, slot, typeLabel, timeRange, location, style, fees, feeText, rows, kicker, isPerDate };
+  window.ClassInfo = { isOpen, comboRows, comboInstructors, comboKicker, esc, toDate, formatTime, formatDates, formatOneDate, dates, slot, typeLabel, timeRange, location, style, fees, feeText, rows, kicker, isPerDate };
 })();

@@ -321,7 +321,7 @@ class AdminDashboard {
         el.innerHTML = `
             <div class="table-responsive">
                 <table class="table admin-table class-report mb-0">
-                    <thead><tr><th>Class</th><th>Filled</th><th class="text-end">Paid</th><th class="text-end">Pending</th><th class="text-end">Revenue</th></tr></thead>
+                    <thead><tr><th>Class</th><th>Registration</th><th>Filled</th><th class="text-end">Paid</th><th class="text-end">Pending</th><th class="text-end">Revenue</th></tr></thead>
                     <tbody>
                         ${sorted.map(c => {
                             const s = this.classStats(c.id);
@@ -330,6 +330,7 @@ class AdminDashboard {
                             const crew = c.required_student_type === 'crew_member' ? ' <span class="pill pill-muted">Crew only</span>' : '';
                             return `<tr>
                                 <td><a href="#" class="row-link" onclick="admin.showRegistrationsFor(${c.id});return false">${C.esc(c.name)}</a>${crew}<div class="cell-sub">${C.esc(C.kicker(c))}</div></td>
+                                <td><label class="reg-switch ${C.isOpen(c) ? 'on' : ''}"><input type="checkbox" class="form-check-input" ${C.isOpen(c) ? 'checked' : ''} onchange="admin.setClassRegistration(${c.id}, this.checked)"> <span>${C.isOpen(c) ? 'Open' : 'Closed'}</span></label></td>
                                 <td><div class="fill"><div class="fill-bar"><span style="width:${pct}%"></span></div><span class="fill-num">${s.paid}/${cap || '—'}</span></div></td>
                                 <td class="text-end">${s.paid}</td>
                                 <td class="text-end">${s.pending ? `<span class="accent fw-semibold">${s.pending}</span>` : '0'}</td>
@@ -379,6 +380,23 @@ class AdminDashboard {
                 </div>
                 <button class="btn btn-primary btn-sm" onclick="window.quickConfirmPayment(${g.id}, this)">Confirm</button>
             </div>`).join('') + (groups.length > 8 ? `<p class="empty-line">+ ${groups.length - 8} more</p>` : '');
+    }
+
+    // Open or close registration for one class (the main switch still closes everything)
+    async setClassRegistration(courseId, open) {
+        const response = await this.apiFetch(`/api/courses/${courseId}/registration-open`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ open })
+        });
+        if (!response.ok) { this.showError('Could not update registration for this class'); }
+        else {
+            const course = this.courses.find(c => Number(c.id) === Number(courseId));
+            if (course) course.registration_open = open;
+            this.showSuccess(`Registration ${open ? 'opened' : 'closed'} for ${course ? course.name : 'this class'}`);
+        }
+        this.updateDashboardStats();
+        if (this.currentSection === 'courses') this.filterCourses();
     }
 
     showRegistrationsFor(courseId, status = '') {
@@ -474,7 +492,7 @@ class AdminDashboard {
             <article class="panel class-tile ${c.is_active ? '' : 'is-off'}">
                 <div class="d-flex justify-content-between align-items-start gap-2">
                     <span class="kicker">${C.esc(C.kicker(c))}</span>
-                    <span class="pill ${c.is_active ? 'pill-ok' : 'pill-muted'}">${c.is_active ? 'Active' : 'Inactive'}</span>
+                    <span class="d-flex gap-1">${c.is_active && !C.isOpen(c) ? '<span class="pill pill-warn">Registration closed</span>' : ''}<span class="pill ${c.is_active ? 'pill-ok' : 'pill-muted'}">${c.is_active ? 'Active' : 'Inactive'}</span></span>
                 </div>
                 <h3>${C.esc(c.name)} ${crew}</h3>
                 ${c.instructor ? `<div class="cell-sub">with ${C.esc(c.instructor)}</div>` : ''}
