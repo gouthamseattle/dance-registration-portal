@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My classes · GouMo Dance Chronicles</title>
+  <meta name="theme-color" content="#0B0B0D">
+  <meta name="robots" content="noindex">
+  <link rel="icon" type="image/png" href="/images/favicon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="/css/site.css?v=2" rel="stylesheet">
+  <style>
+    .my { max-width: 720px; margin: 0 auto; padding: 28px 16px 64px; display: flex; flex-direction: column; gap: 20px; }
+    .my h1 { font-family: var(--font-display); font-weight: 400; text-transform: uppercase; font-size: 40px; line-height: 1; margin: 0; }
+    .my h2 { font-size: 18px; margin: 8px 0 0; }
+    .sub { color: var(--muted); margin: 6px 0 0; }
+    .field { display: flex; flex-direction: column; gap: 6px; }
+    .field label { font-weight: 600; font-size: 14px; }
+    .input { min-height: 48px; padding: 0 14px; border-radius: var(--radius); border: 1px solid var(--line); background: var(--surface-2); color: var(--text); font: inherit; width: 100%; }
+    .input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+    .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    @media (max-width: 520px) { .row2 { grid-template-columns: 1fr; } }
+    .class-item { padding: 16px; display: flex; flex-direction: column; gap: 6px; }
+    .class-item .top { display: flex; justify-content: space-between; gap: 8px 12px; align-items: flex-start; flex-wrap: wrap; }
+    .class-item h3 { font-size: 17px; margin: 0; }
+    .meta { color: var(--muted); font-size: 14px; }
+    .status { font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line); white-space: nowrap; }
+    .status.ok { color: #3DF2C3; border-color: rgba(61, 242, 195, .35); }
+    .status.wait { color: var(--accent); border-color: rgba(255, 214, 10, .4); }
+    .status.off { color: var(--faint); }
+    .stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+    .stats .card { padding: 14px; }
+    .stats b { display: block; font-size: 24px; }
+    .stats span { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+    .empty { color: var(--muted); }
+    .msg { min-height: 1.5em; font-size: 14px; }
+    .msg.err { color: #FF6B6B; } .msg.ok { color: #3DF2C3; }
+    .actions { display: flex; gap: 10px; flex-wrap: wrap; }
+  </style>
+</head>
+<body>
+  <header class="site-header scrolled">
+    <div class="container bar">
+      <a href="/" aria-label="GouMo Dance Chronicles home"><img class="mini-logo" src="/images/goumo-logo.png" alt=""></a>
+      <a class="btn btn-ghost account" href="/#classes">See classes</a>
+    </div>
+  </header>
+
+  <main class="my">
+    <!-- Sign in -->
+    <section id="signIn">
+      <h1>My classes</h1>
+      <p class="sub">Enter the email you registered with to see your classes and payments.</p>
+      <form id="signInForm" class="card" style="padding:18px;margin-top:16px;display:flex;flex-direction:column;gap:12px">
+        <div class="field">
+          <label for="email">Your email</label>
+          <input class="input" type="email" id="email" autocomplete="email" placeholder="you@example.com" required>
+        </div>
+        <button class="btn btn-primary" type="submit">Show my classes</button>
+        <div class="msg" id="signInMsg" role="status"></div>
+      </form>
+    </section>
+
+    <!-- Profile -->
+    <section id="profile" hidden>
+      <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap">
+        <div>
+          <h1 id="hello">Hi</h1>
+          <p class="sub" id="who"></p>
+        </div>
+        <button class="btn btn-ghost" type="button" id="signOut">Not you?</button>
+      </div>
+
+      <div class="stats" style="margin-top:16px">
+        <div class="card"><span>Taken</span><b id="statClasses">0</b></div>
+        <div class="card"><span>Upcoming</span><b id="statUpcoming">0</b></div>
+        <div class="card"><span>Waitlists</span><b id="statWaitlists">0</b></div>
+      </div>
+
+      <h2 style="margin-top:24px">Upcoming</h2>
+      <div id="upcoming" style="display:flex;flex-direction:column;gap:10px;margin-top:10px"></div>
+
+      <div id="waitlistBlock" hidden>
+        <h2 style="margin-top:24px">Waitlists</h2>
+        <div id="waitlists" style="display:flex;flex-direction:column;gap:10px;margin-top:10px"></div>
+      </div>
+
+      <h2 style="margin-top:24px">Past classes</h2>
+      <div id="past" style="display:flex;flex-direction:column;gap:10px;margin-top:10px"></div>
+
+      <h2 style="margin-top:24px">Your details</h2>
+      <form id="detailsForm" class="card" style="padding:18px;margin-top:10px;display:flex;flex-direction:column;gap:12px">
+        <div class="row2">
+          <div class="field"><label for="firstName">First name</label><input class="input" id="firstName" autocomplete="given-name" required></div>
+          <div class="field"><label for="lastName">Last name</label><input class="input" id="lastName" autocomplete="family-name"></div>
+        </div>
+        <div class="field"><label for="instagram">Instagram</label><input class="input" id="instagram" placeholder="your_username" autocapitalize="off"></div>
+        <div class="field">
+          <label for="experience">Dance experience</label>
+          <select class="input" id="experience">
+            <option value="">Not set</option>
+            <option value="beginner">Beginner · New to dance</option>
+            <option value="some_experience">Some experience · 1–2 years</option>
+            <option value="intermediate">Intermediate · 2–5 years</option>
+            <option value="advanced">Advanced · 5+ years</option>
+            <option value="professional">Professional / Instructor</option>
+          </select>
+        </div>
+        <div class="actions"><button class="btn btn-outline" type="submit">Save details</button></div>
+        <div class="msg" id="detailsMsg" role="status"></div>
+      </form>
+
+      <div class="actions" style="margin-top:24px">
+        <a class="btn btn-primary" href="/#classes">Register for another class</a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container bar">
+      <a href="https://instagram.com/goumo_dancechronicles" target="_blank" rel="noopener">@goumo_dancechronicles</a>
+      <span>GouMo Dance Chronicles · Seattle, WA · <a href="/privacy">Privacy</a></span>
+    </div>
+  </footer>
+
+  <script src="/js/class-info.js?v=4"></script>
+  <script src="/js/my.js?v=1"></script>
+</body>
+</html>

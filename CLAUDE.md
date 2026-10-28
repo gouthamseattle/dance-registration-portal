@@ -47,6 +47,8 @@ web concepts in plain terms when they come up.
 | Bootstrap re-skin with the design-system tokens (registration pages and admin) | `public/css/registration.css` |
 | Admin portal: Dashboard (stats + per-class report), Classes & combos, Registrations, Waitlists, Students, Settings | `public/admin.html`, `public/js/admin.js`, `public/css/admin.css` (loads after `site.css` and `registration.css`) |
 | Shared class formatting for student pages (dates, times, fees) | `public/js/class-info.js` |
+| Student "My classes" page at `/my` (email sign-in, upcoming/past classes, payment status, waitlists, edit details) | `public/my.html`, `public/js/my.js`, API `/api/my/profile` |
+| Admin student profile (history, totals, private `admin_notes`) | modal in `admin.js` (`openStudent`), API `/api/admin/students/:id` |
 | Smoke tests | `test/smoke.test.js`, run in CI by `.github/workflows/test.yml` |
 
 `memory-bank/` and `docs/` are historical notes from earlier development. Read them only when a task needs that history.

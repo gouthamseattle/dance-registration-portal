@@ -527,6 +527,50 @@ test('privacy page is served', async () => {
     assert.ok((await res.text()).includes('Privacy'));
 });
 
+test('student profiles: admin history and notes; student "My classes" page', async () => {
+    const cls = await api('POST', '/api/courses', {
+        name: `Profile Test ${unique}`, course_type: 'multi-week', session_dates: ['2030-08-04', '2030-08-11', '2030-08-18'],
+        slots: [{ slot_name: 'Main Session', difficulty_level: 'All Levels', capacity: 10, day_of_week: 'Tuesday',
+                  start_time: '18:00', end_time: '19:00', location: 'Profile Studio', pricing: { full_package: 70 } }]
+    }, { admin: true });
+    assert.equal(cls.status, 200, JSON.stringify(cls.body));
+    const email = `profile.${unique}@example.com`;
+    const reg = await api('POST', '/api/register', { first_name: 'Pro', last_name: 'File', email, course_id: cls.body.courseId, payment_amount: 70 });
+    assert.equal(reg.status, 200, JSON.stringify(reg.body));
+    await api('PUT', `/api/admin/registrations/${reg.body.registrationId}/confirm-payment`, {}, { admin: true });
+
+    const students = await api('GET', '/api/admin/students', null, { admin: true });
+    const me = students.body.find((s) => s.email === email);
+    assert.equal((await api('GET', `/api/admin/students/${me.id}`)).status, 401, 'admin only');
+    const prof = await api('GET', `/api/admin/students/${me.id}`, null, { admin: true });
+    assert.equal(prof.status, 200, JSON.stringify(prof.body));
+    assert.equal(prof.body.totals.classes_paid, 1);
+    assert.equal(prof.body.totals.amount_paid, 70);
+    assert.equal(prof.body.registrations[0].slots[0].location, 'Profile Studio');
+
+    assert.equal((await api('PUT', `/api/admin/students/${me.id}/notes`, { notes: 'x' })).status, 401);
+    const notes = await api('PUT', `/api/admin/students/${me.id}/notes`, { notes: 'Strong footwork' }, { admin: true });
+    assert.equal(notes.status, 200);
+    assert.equal((await api('GET', `/api/admin/students/${me.id}`, null, { admin: true })).body.student.admin_notes, 'Strong footwork');
+
+    // Student page: own classes, never the admin notes
+    const mine = await api('POST', '/api/my/profile', { email: email.toUpperCase() });
+    assert.equal(mine.status, 200, JSON.stringify(mine.body));
+    assert.equal(mine.body.registrations.length, 1);
+    assert.equal(mine.body.registrations[0].payment_status, 'completed');
+    assert.ok(!('admin_notes' in mine.body.student), 'notes stay private');
+    assert.equal((await api('POST', '/api/my/profile', { email: `nobody.${unique}@example.com` })).status, 404);
+
+    const upd = await api('PUT', '/api/my/profile', { email, first_name: 'Prof', last_name: 'Ile', instagram_handle: '@prof.dances', dance_experience: 'advanced' });
+    assert.equal(upd.status, 200, JSON.stringify(upd.body));
+    const after = await api('POST', '/api/my/profile', { email });
+    assert.equal(after.body.student.first_name, 'Prof');
+    assert.equal(after.body.student.instagram_handle, 'prof.dances');
+
+    const page = await fetch(`${BASE}/my`);
+    assert.equal(page.status, 200);
+});
+
 test('removed features are gone', async () => {
     for (const [method, url] of [
         ['POST', '/api/competition/register'],

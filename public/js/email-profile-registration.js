@@ -193,6 +193,7 @@ class EmailProfileRegistrationApp {
             if (result.exists) {
                 // Existing student - show welcome back or require profile completion
                 this.currentStudent = result.student;
+                try { localStorage.setItem('goumo_email', this.currentEmail || ''); } catch (e) { /* private mode */ }
                 this.eligibleCourses = Array.isArray(result.eligible_courses) ? result.eligible_courses : [];
 
                 // If server indicates profile completion is required (e.g., newly classified crew without full profile),

@@ -208,6 +208,7 @@ async function ensureClassFieldColumns(dbConfig) {
             await dbConfig.run('ALTER TABLE registrations ADD COLUMN IF NOT EXISTS selected_dates TEXT');
             await dbConfig.run('ALTER TABLE registrations ADD COLUMN IF NOT EXISTS registration_type VARCHAR(50)');
             await dbConfig.run('ALTER TABLE courses ADD COLUMN IF NOT EXISTS registration_open BOOLEAN DEFAULT TRUE');
+            await dbConfig.run('ALTER TABLE students ADD COLUMN IF NOT EXISTS admin_notes TEXT');
         } else {
             await dbConfig.run('ALTER TABLE courses ADD COLUMN session_dates TEXT').catch(() => {});
             await dbConfig.run('ALTER TABLE courses ADD COLUMN instructor TEXT').catch(() => {});
@@ -215,6 +216,7 @@ async function ensureClassFieldColumns(dbConfig) {
             await dbConfig.run('ALTER TABLE registrations ADD COLUMN selected_dates TEXT').catch(() => {});
             await dbConfig.run('ALTER TABLE registrations ADD COLUMN registration_type TEXT').catch(() => {});
             await dbConfig.run('ALTER TABLE courses ADD COLUMN registration_open INTEGER DEFAULT 1').catch(() => {});
+            await dbConfig.run('ALTER TABLE students ADD COLUMN admin_notes TEXT').catch(() => {});
         }
         console.log('✅ Ensured class field columns exist');
     } catch (e) {

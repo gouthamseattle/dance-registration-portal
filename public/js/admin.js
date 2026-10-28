@@ -375,7 +375,7 @@ class AdminDashboard {
         el.innerHTML = groups.slice(0, 8).map(g => `
             <div class="pending-row">
                 <div class="min-w-0">
-                    <div class="fw-semibold text-truncate">${C.esc(this.studentName(g.reg))}</div>
+                    <div class="text-truncate">${g.reg.student_id ? `<a href="#" class="row-link" onclick="admin.openStudent(${g.reg.student_id});return false">${C.esc(this.studentName(g.reg))}</a>` : `<span class="fw-semibold">${C.esc(this.studentName(g.reg))}</span>`}</div>
                     <div class="cell-sub text-truncate">${C.esc(g.title)} · ${this.money(g.amount)}${g.reg.payment_method ? ` · ${C.esc(g.reg.payment_method)}` : ''}</div>
                 </div>
                 <button class="btn btn-primary btn-sm" onclick="window.quickConfirmPayment(${g.id}, this)">Confirm</button>
@@ -549,7 +549,7 @@ class AdminDashboard {
             return `
             <div class="reg-row status-${C.esc(r.payment_status)}">
                 <div class="reg-who">
-                    <div class="fw-semibold">${C.esc(this.studentName(r))}</div>
+                    ${r.student_id ? `<a href="#" class="row-link" onclick="admin.openStudent(${r.student_id});return false">${C.esc(this.studentName(r))}</a>` : `<div class="fw-semibold">${C.esc(this.studentName(r))}</div>`}
                     <div class="cell-sub">${C.esc(contact || '(no email)')}</div>
                 </div>
                 <div class="reg-what">
@@ -1841,6 +1841,74 @@ class AdminDashboard {
     // Student Management (Phase 1)
     // =========================
 
+    // ---------- Student profile (modal) ----------
+    // "Classes taken" counts paid registrations (decided Oct 2026; no roll call).
+    async openStudent(id) {
+        const C = window.ClassInfo;
+        const body = document.getElementById('studentModalBody');
+        body.innerHTML = '<p class="empty-line">Loading…</p>';
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('studentModal')).show();
+        let data;
+        try {
+            const r = await this.apiFetch(`/api/admin/students/${id}`);
+            if (!r.ok) throw new Error();
+            data = await r.json();
+        } catch (e) {
+            body.innerHTML = '<p class="empty-line">Could not load this student.</p>';
+            return;
+        }
+        const st = data.student;
+        const isCrew = st.student_type === 'crew_member';
+        const name = [st.first_name, st.last_name].filter(Boolean).join(' ') || '(No name)';
+        document.getElementById('studentModalTitle').textContent = name;
+        const STATUS = { completed: ['Paid', 'pill-ok'], pending: ['Pending', 'pill-warn'], canceled: ['Canceled', 'pill-muted'], failed: ['Failed', 'pill-bad'] };
+        const ig = st.instagram_handle ? String(st.instagram_handle).replace(/^@/, '') : '';
+        body.innerHTML = `
+            <div class="d-flex flex-wrap justify-content-between gap-3 mb-3">
+                <div>
+                    <div>${C.esc(st.email || '')}</div>
+                    <div class="cell-sub">${ig ? `<a href="https://instagram.com/${encodeURIComponent(ig)}" target="_blank" rel="noopener">@${C.esc(ig)}</a> · ` : ''}${C.esc(this.formatExperience(st.dance_experience))}${st.created_at ? ` · since ${new Date(st.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}` : ''}</div>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <span class="pill ${isCrew ? 'pill-accent' : 'pill-muted'}">${isCrew ? 'Crew member' : 'GouMo student'}</span>
+                    <button class="btn btn-outline-secondary btn-sm" onclick="admin.classifyStudent(${st.id}, '${isCrew ? 'general' : 'crew_member'}').then(() => admin.openStudent(${st.id}))">${isCrew ? 'Make GouMo student' : 'Make crew member'}</button>
+                </div>
+            </div>
+            <div class="stat-grid mb-3" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+                <div class="stat"><span class="stat-label">Classes taken</span><span class="stat-number">${data.totals.classes_paid}</span></div>
+                <div class="stat"><span class="stat-label">Paid</span><span class="stat-number">${this.money(data.totals.amount_paid)}</span></div>
+                <div class="stat"><span class="stat-label">Pending</span><span class="stat-number">${data.totals.pending}</span></div>
+            </div>
+            <h6 class="mb-2">Classes</h6>
+            ${data.registrations.length ? `<div class="reg-list mb-3">${data.registrations.map(r => {
+                const [label, cls] = STATUS[r.payment_status] || [r.payment_status || '—', 'pill-muted'];
+                let ds = [];
+                try { const picked = JSON.parse(r.selected_dates || 'null'); ds = Array.isArray(picked) && picked.length ? picked : C.dates(r); } catch (e) { ds = C.dates(r); }
+                return `<div class="pending-row px-3">
+                    <div class="min-w-0">
+                        <div class="fw-semibold">${C.esc(r.course_name || 'Class')}</div>
+                        <div class="cell-sub">${C.esc([C.formatDates(ds), r.combo_name ? `Combo: ${r.combo_name}` : ''].filter(Boolean).join(' · '))}</div>
+                    </div>
+                    <div class="text-end text-nowrap">
+                        <div>${this.money(r.payment_amount)} <span class="pill ${cls}">${C.esc(label)}</span></div>
+                        <div class="cell-sub">${C.esc(r.payment_method || '')}${r.registration_date ? ` · ${new Date(r.registration_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}` : ''}</div>
+                    </div>
+                </div>`;
+            }).join('')}</div>` : '<p class="empty-line mb-3">No classes yet.</p>'}
+            ${data.waitlists.length ? `<h6 class="mb-2">Waitlists</h6><ul class="mb-3">${data.waitlists.map(w => `<li>${C.esc(w.course_name)} · #${w.position}</li>`).join('')}</ul>` : ''}
+            <h6 class="mb-2">Private notes <span class="cell-sub">(only you see these)</span></h6>
+            <textarea class="form-control mb-2" id="studentNotes" rows="3" placeholder="e.g. missed week 2, strong in footwork">${C.esc(st.admin_notes || '')}</textarea>
+            <button class="btn btn-primary btn-sm" onclick="admin.saveStudentNotes(${st.id})">Save notes</button>`;
+    }
+
+    async saveStudentNotes(id) {
+        const notes = document.getElementById('studentNotes').value;
+        const r = await this.apiFetch(`/api/admin/students/${id}/notes`, {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ notes })
+        });
+        if (r.ok) this.showSuccess('Notes saved'); else this.showError('Could not save notes');
+    }
+
     // ---------- Students ----------
     async loadStudentManagement() {
         const list = document.getElementById('studentsList');
@@ -1893,7 +1961,7 @@ class AdminDashboard {
                         <tbody>
                             ${shown.map(s => `
                             <tr>
-                                <td><div class="fw-semibold">${C.esc([s.first_name, s.last_name].filter(Boolean).join(' ') || '(No name)')}</div><div class="cell-sub">${C.esc(s.email || '')}</div></td>
+                                <td><a href="#" class="row-link" onclick="admin.openStudent(${s.id});return false">${C.esc([s.first_name, s.last_name].filter(Boolean).join(' ') || '(No name)')}</a><div class="cell-sub">${C.esc(s.email || '')}</div></td>
                                 <td>${s.instagram_handle ? `<a href="https://instagram.com/${encodeURIComponent(String(s.instagram_handle).replace(/^@/, ''))}" target="_blank" rel="noopener">@${C.esc(String(s.instagram_handle).replace(/^@/, ''))}</a>` : '<span class="cell-sub">—</span>'}</td>
                                 <td>${C.esc(this.formatExperience(s.dance_experience))}</td>
                                 <td class="text-end">${s.paid_classes}${s.pending_classes ? ` <span class="cell-sub">+${s.pending_classes} pending</span>` : ''}</td>
