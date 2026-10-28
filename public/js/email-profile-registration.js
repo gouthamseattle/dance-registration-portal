@@ -393,7 +393,13 @@ class EmailProfileRegistrationApp {
         if (this.preselectCourseId) {
             const id = this.preselectCourseId;
             this.preselectCourseId = null;
-            if (this.eligibleCourses.some(c => String(c.id) === String(id))) {
+            const chosen = this.eligibleCourses.find(c => String(c.id) === String(id));
+            // Already registered for this class: don't reopen checkout, show where to see it
+            if (chosen && (chosen.registration_status === 'registered_pending' || chosen.registration_status === 'registered_completed')) {
+                this.showAlreadyRegistered(chosen);
+                return;
+            }
+            if (chosen) {
                 this.selectCourse(id);
                 return;
             }
@@ -403,6 +409,16 @@ class EmailProfileRegistrationApp {
         this.scrollToTop();
     }
 
+
+    showAlreadyRegistered(course) {
+        const paid = course.registration_status === 'registered_completed';
+        const esc = window.ClassInfo.esc;
+        const box = document.getElementById('courseFilterInfo');
+        box.innerHTML = `<span class="d-block mt-2 p-3 rounded" style="border:1px solid var(--accent);color:var(--text)">
+            You're already registered for <strong>${esc(course.name)}</strong>${paid ? ' and your payment is confirmed.' : '. We\'re checking your payment.'}
+            <a class="d-inline-block ms-1" href="/my">See my classes</a></span>`;
+        this.scrollToTop();
+    }
 
     renderCategorizedCourses() {
         const multiWeekContainer = document.getElementById('multiWeekCourses');

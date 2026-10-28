@@ -419,12 +419,14 @@
                 }
             } else {
                 console.warn('⚠️ Missing required student or course data, redirecting to email profile');
-                window.location.href = '/email-profile.html';
+                window.location.href = '/#classes';
             }
 
             // Set up back button to return to email profile
+            // Back to the class list on the home page (the old sign-in page with no
+            // class chosen just bounced to the home page, which felt like a log-out)
             document.getElementById('backToEmailProfile').addEventListener('click', function() {
-                window.location.href = '/email-profile.html';
+                window.location.href = '/#classes';
             });
         });
     </script>
