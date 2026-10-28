@@ -571,6 +571,13 @@ test('student profiles: admin history and notes; student "My classes" page', asy
     assert.equal(page.status, 200);
 });
 
+test('student navigation: back to classes and old account links', async () => {
+    const checkout = await (await fetch(`${BASE}/index-registration.html`)).text();
+    assert.ok(checkout.includes("'/#classes'"), 'Back to classes goes to the home class list');
+    const signIn = await (await fetch(`${BASE}/email-profile.html`)).text();
+    assert.ok(signIn.includes("replace('/my')"), 'old My registrations link goes to /my');
+});
+
 test('removed features are gone', async () => {
     for (const [method, url] of [
         ['POST', '/api/competition/register'],
