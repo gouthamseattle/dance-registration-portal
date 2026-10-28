@@ -1639,12 +1639,11 @@ class DanceRegistrationApp {
             <div class="text-center">
                 <div class="alert alert-success">
                     <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
-                    <h5>Payment Sent!</h5>
-                    <p class="mb-2">Thank you for sending your ${this.selectedPaymentMethod === 'zelle' ? 'Zelle' : 'Venmo'} payment.</p>
-                    <p class="mb-2 small">Registration received, We will confirm your payment and send an email confirmation</p>
+                    <h5>Thanks, we've got your registration!</h5>
+                    <p class="mb-2">We'll verify your ${this.selectedPaymentMethod === 'zelle' ? 'Zelle' : 'Venmo'} payment and then send you a confirmation email.</p>
                     <p class="mb-0 small text-muted">
                         <i class="fas fa-envelope me-1"></i>
-                        Please check your spam/junk folder if you don't receive the email within a few minutes
+                        Your spot is confirmed once that email arrives. If you don't see it, check your spam or junk folder.
                     </p>
                 </div>
                 
@@ -1656,7 +1655,7 @@ class DanceRegistrationApp {
                         <div class="col-6"><strong>Amount:</strong></div>
                         <div class="col-6">$${this.registrationData.payment_amount}</div>
                         <div class="col-6"><strong>Status:</strong></div>
-                        <div class="col-6"><span class="badge bg-warning">Pending Confirmation</span></div>
+                        <div class="col-6"><span class="badge bg-warning">Payment being verified</span></div>
                     </div>
                 </div>
 
