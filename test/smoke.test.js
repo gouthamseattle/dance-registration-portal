@@ -578,6 +578,13 @@ test('student navigation: back to classes and old account links', async () => {
     assert.ok(signIn.includes("replace('/my')"), 'old My registrations link goes to /my');
 });
 
+test('pages are never served from an old cached copy', async () => {
+    for (const url of ['/', '/my', '/email-profile.html', '/index-registration.html', '/admin']) {
+        const res = await fetch(`${BASE}${url}`);
+        assert.match(res.headers.get('cache-control') || '', /no-cache/, `${url} should not be cached`);
+    }
+});
+
 test('removed features are gone', async () => {
     for (const [method, url] of [
         ['POST', '/api/competition/register'],

@@ -30,7 +30,21 @@ let db = null;
 app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
-app.use(express.static('public'));
+// Pages (HTML) must always be fresh, or phones and browsers keep showing an old
+// version with old links after a deploy. Scripts and styles are versioned (?v=)
+// in the HTML, so they can still be cached.
+const PAGE_ROUTES = new Set(['/', '/admin', '/my', '/privacy']);
+app.use((req, res, next) => {
+    if (req.method === 'GET' && (PAGE_ROUTES.has(req.path) || req.path.endsWith('.html'))) {
+        res.set('Cache-Control', 'no-cache, must-revalidate');
+    }
+    next();
+});
+app.use(express.static('public', {
+    setHeaders: (res, filePath) => {
+        if (filePath.endsWith('.html')) res.set('Cache-Control', 'no-cache, must-revalidate');
+    }
+}));
 
  // Session configuration
 app.set('trust proxy', 1);
