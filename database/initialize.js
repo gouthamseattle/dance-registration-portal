@@ -213,6 +213,8 @@ async function ensureClassFieldColumns(dbConfig) {
             await dbConfig.run('ALTER TABLE students ADD COLUMN IF NOT EXISTS archived_at TIMESTAMP');
             await dbConfig.run('ALTER TABLE students ADD COLUMN IF NOT EXISTS is_tester BOOLEAN DEFAULT FALSE');
             await dbConfig.run('ALTER TABLE registrations ADD COLUMN IF NOT EXISTS is_test BOOLEAN DEFAULT FALSE');
+            await dbConfig.run('ALTER TABLE registrations ADD COLUMN IF NOT EXISTS flagged_at TIMESTAMP');
+            await dbConfig.run('ALTER TABLE registrations ADD COLUMN IF NOT EXISTS flag_note TEXT');
         } else {
             await dbConfig.run('ALTER TABLE courses ADD COLUMN session_dates TEXT').catch(() => {});
             await dbConfig.run('ALTER TABLE courses ADD COLUMN instructor TEXT').catch(() => {});
@@ -224,6 +226,8 @@ async function ensureClassFieldColumns(dbConfig) {
             await dbConfig.run('ALTER TABLE students ADD COLUMN archived_at TIMESTAMP').catch(() => {});
             await dbConfig.run('ALTER TABLE students ADD COLUMN is_tester INTEGER DEFAULT 0').catch(() => {});
             await dbConfig.run('ALTER TABLE registrations ADD COLUMN is_test INTEGER DEFAULT 0').catch(() => {});
+            await dbConfig.run('ALTER TABLE registrations ADD COLUMN flagged_at TIMESTAMP').catch(() => {});
+            await dbConfig.run('ALTER TABLE registrations ADD COLUMN flag_note TEXT').catch(() => {});
         }
         console.log('✅ Ensured class field columns exist');
     } catch (e) {

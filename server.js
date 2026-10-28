@@ -38,7 +38,7 @@ app.use(bodyParser.urlencoded({ extended: true }));
 // Pages (HTML) must always be fresh, or phones and browsers keep showing an old
 // version with old links after a deploy. Scripts and styles are versioned (?v=)
 // in the HTML, so they can still be cached.
-const PAGE_ROUTES = new Set(['/', '/admin', '/my', '/privacy']);
+const PAGE_ROUTES = new Set(['/', '/admin', '/my', '/privacy', '/payments']);
 app.use((req, res, next) => {
     if (req.method === 'GET' && (PAGE_ROUTES.has(req.path) || req.path.endsWith('.html'))) {
         res.set('Cache-Control', 'no-cache, must-revalidate');
@@ -174,6 +174,7 @@ app.get('/api/settings', asyncHandler(async (req, res) => {
     const settings = await dbConfig.all('SELECT * FROM system_settings');
     const settingsObj = {};
     settings.forEach(setting => {
+        if (String(setting.setting_key).endsWith('_hash')) return; // never send passwords
         settingsObj[setting.setting_key] = setting.setting_value;
     });
     
@@ -2837,6 +2838,120 @@ function paymentMethodLabel(value) {
     return v === 'venmo' ? 'Venmo' : v === 'zelle' ? 'Zelle' : null;
 }
 
+// ===================== Payment checker (lite admin) =====================
+// A separate sign-in for the person who owns the Venmo account: they can see
+// pending Venmo payments, confirm them, or flag "not received". Nothing else.
+// The password is set by the admin in Settings and stored only as a hash.
+const CHECKER_KEY = 'payment_checker_password_hash';
+
+const requireChecker = (req, res, next) => {
+    if (req.session.checker || req.session.adminId) return next();
+    res.status(401).json({ error: 'Sign in required' });
+};
+
+app.put('/api/admin/payment-checker', requireAuth, asyncHandler(async (req, res) => {
+    const password = String((req.body || {}).password || '');
+    if (password.length < 6) return res.status(400).json({ error: 'Use at least 6 characters' });
+    const hash = await bcrypt.hash(password, 10);
+    const existing = await dbConfig.get('SELECT setting_key FROM system_settings WHERE setting_key = $1', [CHECKER_KEY]);
+    if (existing) await dbConfig.run('UPDATE system_settings SET setting_value = $1, updated_at = CURRENT_TIMESTAMP WHERE setting_key = $2', [hash, CHECKER_KEY]);
+    else await dbConfig.run('INSERT INTO system_settings (setting_key, setting_value) VALUES ($1, $2)', [CHECKER_KEY, hash]);
+    res.json({ success: true });
+}));
+
+app.delete('/api/admin/payment-checker', requireAuth, asyncHandler(async (req, res) => {
+    await dbConfig.run('DELETE FROM system_settings WHERE setting_key = $1', [CHECKER_KEY]);
+    res.json({ success: true });
+}));
+
+app.get('/api/admin/payment-checker', requireAuth, asyncHandler(async (req, res) => {
+    const row = await dbConfig.get('SELECT setting_key FROM system_settings WHERE setting_key = $1', [CHECKER_KEY]);
+    res.json({ enabled: !!row });
+}));
+
+app.post('/api/checker/login', asyncHandler(async (req, res) => {
+    const password = String((req.body || {}).password || '');
+    const row = await dbConfig.get('SELECT setting_value FROM system_settings WHERE setting_key = $1', [CHECKER_KEY]);
+    if (!row || !password || !(await bcrypt.compare(password, row.setting_value))) {
+        return res.status(401).json({ error: 'Wrong password' });
+    }
+    req.session.checker = true;
+    res.json({ success: true });
+}));
+
+app.post('/api/checker/logout', (req, res) => {
+    req.session.checker = false;
+    res.json({ success: true });
+});
+
+app.get('/api/checker/status', (req, res) => {
+    res.json({ signedIn: !!(req.session.checker || req.session.adminId) });
+});
+
+// Pending Venmo payments (a combo shows once with its total), plus the last few confirmed
+app.get('/api/checker/payments', requireChecker, asyncHandler(async (req, res) => {
+    const rows = await dbConfig.all(`
+        SELECT r.id, r.payment_amount, r.payment_status, r.registration_date, r.updated_at, r.combo_group,
+               r.flagged_at, r.flag_note, s.first_name, s.last_name, c.name AS course_name, cb.name AS combo_name
+        FROM registrations r
+        LEFT JOIN students s ON s.id = r.student_id
+        LEFT JOIN courses c ON c.id = r.course_id
+        LEFT JOIN combos cb ON cb.id = r.combo_id
+        WHERE LOWER(COALESCE(r.payment_method, '')) = 'venmo'
+          AND (r.payment_status = 'pending' OR (r.payment_status = 'completed' AND r.updated_at > $1))
+        ORDER BY r.registration_date DESC
+    `, [new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()]);
+    const groups = new Map();
+    for (const r of rows) {
+        const key = r.combo_group || `r${r.id}`;
+        if (!groups.has(key)) {
+            groups.set(key, {
+                id: r.id,
+                student: [r.first_name, r.last_name].filter(Boolean).join(' ') || 'Student',
+                classes: [],
+                combo: r.combo_name || null,
+                amount: 0,
+                status: r.payment_status,
+                registered: r.registration_date,
+                confirmed_at: r.payment_status === 'completed' ? r.updated_at : null,
+                flagged: !!r.flagged_at,
+                flag_note: r.flag_note || null
+            });
+        }
+        const g = groups.get(key);
+        g.classes.push(r.course_name || 'Class');
+        g.amount = Math.round((g.amount + (Number(r.payment_amount) || 0)) * 100) / 100;
+    }
+    const all = [...groups.values()];
+    res.json({
+        pending: all.filter(g => g.status === 'pending'),
+        recently_confirmed: all.filter(g => g.status === 'completed').slice(0, 10)
+    });
+}));
+
+async function pendingVenmoRegistration(id) {
+    const reg = await dbConfig.get('SELECT id, payment_status, payment_method FROM registrations WHERE id = $1', [id]);
+    return reg && reg.payment_status === 'pending' && String(reg.payment_method || '').toLowerCase() === 'venmo' ? reg : null;
+}
+
+app.put('/api/checker/payments/:id/confirm', requireChecker, asyncHandler(async (req, res) => {
+    if (!(await pendingVenmoRegistration(req.params.id))) return res.status(400).json({ error: 'This payment is not waiting for a Venmo check' });
+    res.json(await confirmRegistrationGroup(req.params.id, 'Venmo payment confirmed by payment checker'));
+}));
+
+app.put('/api/checker/payments/:id/flag', requireChecker, asyncHandler(async (req, res) => {
+    if (!(await pendingVenmoRegistration(req.params.id))) return res.status(400).json({ error: 'This payment is not waiting for a Venmo check' });
+    const note = String((req.body || {}).note || 'Not received').slice(0, 300);
+    for (const regId of await registrationGroupIds(req.params.id)) {
+        await dbConfig.run('UPDATE registrations SET flagged_at = CURRENT_TIMESTAMP, flag_note = $1 WHERE id = $2', [note, regId]);
+    }
+    res.json({ success: true });
+}));
+
+app.get('/payments', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'payments.html'));
+});
+
 // ===================== Student cleanup & test accounts =====================
 const tableCache = {};
 async function tableExists(name) {
@@ -3825,11 +3940,10 @@ app.put('/api/registrations/:id/payment', requireAuth, asyncHandler(async (req, 
  * - If email notifications are enabled, sends a confirmation email to the student
  * - Never fails the payment update due to email errors; returns flags in response
  */
-app.put('/api/admin/registrations/:id/confirm-payment', requireAuth, asyncHandler(async (req, res) => {
-    const { id } = req.params;
-    const { venmo_transaction_note } = req.body;
-
-    // 1) Mark paid (for a combo: every class in it)
+// Mark a registration paid (for a combo: every class in it), clear any
+// "not received" flag, and send the confirmation email if emails are on.
+// Used by the admin and by the payment checker page.
+async function confirmRegistrationGroup(id, note) {
     const groupIds = await registrationGroupIds(id);
     for (const regId of groupIds) {
         await dbConfig.run(`
@@ -3837,48 +3951,35 @@ app.put('/api/admin/registrations/:id/confirm-payment', requireAuth, asyncHandle
                 payment_status = 'completed',
                 payment_method = COALESCE(payment_method, 'Venmo'),
                 paypal_transaction_id = $1,
+                flagged_at = NULL,
+                flag_note = NULL,
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = $2
-        `, [venmo_transaction_note || `Venmo payment confirmed by admin`, regId]);
+        `, [note || 'Venmo payment confirmed by admin', regId]);
     }
-
-    console.log('✅ Admin confirmed Venmo payment for registration:', id);
-
-    // 2) Prepare to send confirmation email (if enabled)
-    let email_sent = false;
-    let email_error = null;
-    let email_skipped = false;
-
     try {
-        // Check if email notifications are enabled
         const setting = await dbConfig.get('SELECT setting_value FROM system_settings WHERE setting_key = $1', ['email_notifications_enabled']);
-        const emailEnabled = setting && setting.setting_value === 'true';
-
-        if (!emailEnabled) {
-            email_skipped = true;
-            return res.json({ success: true, message: 'Payment confirmed successfully', email_sent, email_skipped });
+        if (!(setting && setting.setting_value === 'true')) {
+            return { success: true, message: 'Payment confirmed successfully', email_sent: false, email_skipped: true };
         }
-
-        // Student, class and amount for the email (a combo lists all its classes)
         const details = await registrationEmailDetails(id);
         if (!details) {
-            return res.json({ success: true, message: 'Payment confirmed successfully (registration not found for email)', email_sent: false });
+            return { success: true, message: 'Payment confirmed successfully (registration not found for email)', email_sent: false };
         }
-
-        // Send confirmation email via Gmail SMTP
-        sendRegistrationConfirmationEmail(details.email, details).then(() => {
-            console.log('✉️  Sent confirmation email to:', reg.email);
-        }).catch(err => {
+        sendRegistrationConfirmationEmail(details.email, details).catch(err => {
             console.error('❌ Error sending confirmation email:', err.message, err.stack);
         });
-
-        return res.json({ success: true, message: 'Payment confirmed successfully', email_queued: true });
+        return { success: true, message: 'Payment confirmed successfully', email_queued: true };
     } catch (err) {
         console.error('❌ Error sending confirmation email:', err);
-        email_error = err.message || String(err);
         // Do not fail the payment update due to email issues
-        return res.json({ success: true, message: 'Payment confirmed successfully', email_sent, email_error });
+        return { success: true, message: 'Payment confirmed successfully', email_sent: false, email_error: err.message || String(err) };
     }
+}
+
+app.put('/api/admin/registrations/:id/confirm-payment', requireAuth, asyncHandler(async (req, res) => {
+    const { venmo_transaction_note } = req.body || {};
+    res.json(await confirmRegistrationGroup(req.params.id, venmo_transaction_note));
 }));
 
 /**
