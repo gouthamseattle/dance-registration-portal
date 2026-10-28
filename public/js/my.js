@@ -27,20 +27,9 @@
     failed: ['Payment problem', 'off']
   };
 
-  function classCard(r) {
-    const [label, cls] = STATUS[r.payment_status] || [r.payment_status || '', 'off'];
-    const ds = regDates(r);
-    const meta = [C.formatDates(ds), C.timeRange(r), C.location(r)].filter(Boolean).join(' · ');
-    const extra = [r.instructor ? `with ${r.instructor}` : '', r.combo_name ? `Part of ${r.combo_name}` : ''].filter(Boolean).join(' · ');
-    return `
-      <article class="card class-item">
-        <div class="top">
-          <h3>${esc(r.course_name || 'Class')}</h3>
-          <span class="status ${cls}">${esc(label)}</span>
-        </div>
-        ${meta ? `<div class="meta">${esc(meta)}</div>` : ''}
-        ${extra ? `<div class="meta">${esc(extra)}</div>` : ''}
-      </article>`;
+  // One line per class: name and status. Finished classes are shown as "Done".
+  function row(name, label, cls, done) {
+    return `<div class="class-row${done ? ' done' : ''}"><span class="name">${esc(name)}</span><span class="status ${cls}">${esc(label)}</span></div>`;
   }
 
   function render(data) {
@@ -49,22 +38,24 @@
     $('who').textContent = [st.email, st.student_type === 'crew_member' ? 'Crew member' : 'GouMo student'].join(' · ');
 
     const now = today();
-    const live = data.registrations.filter((r) => r.payment_status !== 'canceled');
-    const isUpcoming = (r) => { const ds = regDates(r); return !ds.length || ds[ds.length - 1] >= now; };
-    const upcoming = live.filter(isUpcoming).sort((a, b) => (regDates(a)[0] || '').localeCompare(regDates(b)[0] || ''));
-    const past = data.registrations.filter((r) => !upcoming.includes(r));
+    const isFinished = (r) => { const ds = regDates(r); return ds.length > 0 && ds[ds.length - 1] < now; };
+    const upcoming = data.registrations.filter((r) => r.payment_status !== 'canceled' && !isFinished(r));
 
     $('statClasses').textContent = data.totals.classes_paid;
     $('statUpcoming').textContent = upcoming.length;
     $('statWaitlists').textContent = data.waitlists.length;
 
-    $('upcoming').innerHTML = upcoming.length ? upcoming.map(classCard).join('')
-      : '<p class="empty">No upcoming classes. <a class="accent" href="/#classes">See what\'s on</a>.</p>';
-    $('past').innerHTML = past.length ? past.map(classCard).join('') : '<p class="empty">Nothing here yet.</p>';
-    $('waitlistBlock').hidden = !data.waitlists.length;
-    $('waitlists').innerHTML = data.waitlists.map((w) => `
-      <article class="card class-item"><div class="top"><h3>${esc(w.course_name)}</h3><span class="status wait">#${esc(w.position)} on the waitlist</span></div>
-      <div class="meta">We'll email you if a spot opens.</div></article>`).join('');
+    const sorted = [...data.registrations].sort((a, b) => (regDates(b)[0] || '').localeCompare(regDates(a)[0] || ''));
+    const rows = [
+      ...data.waitlists.map((w) => row(w.course_name, `Waitlist #${w.position}`, 'wait', false)),
+      ...sorted.map((r) => {
+        const finished = isFinished(r) && r.payment_status === 'completed';
+        const [label, cls] = finished ? ['Done', 'off'] : (STATUS[r.payment_status] || [r.payment_status || '', 'off']);
+        return row(r.course_name || 'Class', label, cls, finished || r.payment_status === 'canceled');
+      })
+    ];
+    $('classList').innerHTML = rows.length ? rows.join('')
+      : '<p class="empty">No classes yet. <a class="accent" href="/#classes">See what\'s on</a>.</p>';
 
     $('firstName').value = st.first_name || '';
     $('lastName').value = st.last_name || '';

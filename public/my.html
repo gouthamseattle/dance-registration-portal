@@ -35,6 +35,12 @@
     .stats b { display: block; font-size: 24px; }
     .stats span { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
     .empty { color: var(--muted); }
+    .class-list { padding: 0; }
+    .class-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--line-soft); }
+    .class-row:last-child { border-bottom: 0; }
+    .class-row .name { font-weight: 600; min-width: 0; }
+    .class-row.done .name { color: var(--muted); font-weight: 500; }
+    .class-list .empty { padding: 16px; margin: 0; }
     .msg { min-height: 1.5em; font-size: 14px; }
     .msg.err { color: #FF6B6B; } .msg.ok { color: #3DF2C3; }
     .actions { display: flex; gap: 10px; flex-wrap: wrap; }
@@ -79,16 +85,8 @@
         <div class="card"><span>Waitlists</span><b id="statWaitlists">0</b></div>
       </div>
 
-      <h2 style="margin-top:24px">Upcoming</h2>
-      <div id="upcoming" style="display:flex;flex-direction:column;gap:10px;margin-top:10px"></div>
-
-      <div id="waitlistBlock" hidden>
-        <h2 style="margin-top:24px">Waitlists</h2>
-        <div id="waitlists" style="display:flex;flex-direction:column;gap:10px;margin-top:10px"></div>
-      </div>
-
-      <h2 style="margin-top:24px">Past classes</h2>
-      <div id="past" style="display:flex;flex-direction:column;gap:10px;margin-top:10px"></div>
+      <h2 style="margin-top:24px">Your classes</h2>
+      <div id="classList" class="card class-list" style="margin-top:10px"></div>
 
       <h2 style="margin-top:24px">Your details</h2>
       <form id="detailsForm" class="card" style="padding:18px;margin-top:10px;display:flex;flex-direction:column;gap:12px">
@@ -126,6 +124,6 @@
   </footer>
 
   <script src="/js/class-info.js?v=4"></script>
-  <script src="/js/my.js?v=1"></script>
+  <script src="/js/my.js?v=2"></script>
 </body>
 </html>
