@@ -54,7 +54,9 @@ web concepts in plain terms when they come up.
 | Waitlist offers: cancelling a *paid* registration (admin only; students can't cancel) emails the next waitlisted student a `/waitlist-register/:token` link and holds the spot for `waitlist_hold_hours` (Settings, default 24). Held spots (`heldSpots`) don't count as free; expired offers move to the next person (10-minute check). The token rides along as `?waitlist=` / `waitlist_token` | `server.js` (`offerOpenSpots`, `expireWaitlistOffers`), `email-profile-registration.js`, `registration.js` |
 | Smoke tests | `test/smoke.test.js`, run in CI by `.github/workflows/test.yml` |
 
-`memory-bank/` and `docs/` are historical notes from earlier development. Read them only when a task needs that history.
+**Read `docs/PROJECT_NOTES.md` at the start of every session.** It has the live links (site, admin, design mockups), the decisions and why they were made, brand rules, setup outside the code (Google Cloud, Railway) and the to-do list. Update it in the same PR as any change that adds a decision, link or to-do.
+
+The rest of `docs/` and `memory-bank/` are historical notes from earlier development. Read them only when a task needs that history.
 
 ## Working rules
 
