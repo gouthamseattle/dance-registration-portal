@@ -3202,8 +3202,22 @@ app.put('/api/my/profile', asyncHandler(async (req, res) => {
 }));
 
 // Crew link shared in the crew WhatsApp group: register page listing only crew-only classes
+// Served directly (not a redirect) so WhatsApp shows a crew preview card; the page then
+// switches its address to ?crew=1, which the register page reads.
+const CREW_PREVIEW = `
+    <script>history.replaceState(null, '', '/email-profile.html?crew=1');</script>
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="GouMo Dance Chronicles">
+    <meta property="og:title" content="Dreamers Dance Crew · Crew practice sign-up">
+    <meta property="og:description" content="For crew members: pick your practices and pay per session.">
+    <meta property="og:image" content="https://dance-registration-portal-production.up.railway.app/images/og-preview.jpg">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta name="twitter:card" content="summary_large_image">`;
 app.get('/crew', (req, res) => {
-    res.redirect('/email-profile.html?crew=1');
+    const html = fs.readFileSync(path.join(__dirname, 'public', 'email-profile.html'), 'utf8')
+        .replace('<title>Register · GouMo Dance Chronicles</title>', '<title>Crew sign-up · GouMo Dance Chronicles</title>' + CREW_PREVIEW);
+    res.set('Cache-Control', 'no-cache').type('html').send(html);
 });
 
 app.get('/my', (req, res) => {

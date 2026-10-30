@@ -271,9 +271,11 @@ test('crew practice with several dates: student picks practices and pays per pra
 test('crew-only classes stay off the home page; /crew link opens the crew register page', async () => {
     const home = await (await fetch(`${BASE}/js/home.js`)).text();
     assert.ok(!home.includes('include_crew=true'), 'home page asks only for classes open to all');
-    const crew = await fetch(`${BASE}/crew`, { redirect: 'manual' });
-    assert.ok([301, 302].includes(crew.status), `redirects (got ${crew.status})`);
-    assert.match(crew.headers.get('location') || '', /email-profile\.html\?crew=1/);
+    const crew = await fetch(`${BASE}/crew`);
+    assert.equal(crew.status, 200);
+    const crewHtml = await crew.text();
+    assert.match(crewHtml, /og:title" content="Dreamers Dance Crew/, 'crew link has its own WhatsApp preview');
+    assert.match(crewHtml, /email-profile\.html\?crew=1/, 'page switches to crew mode');
     const reg = await (await fetch(`${BASE}/js/email-profile-registration.js`)).text();
     assert.ok(reg.includes('crewMode'), 'register page knows the crew link');
 });
