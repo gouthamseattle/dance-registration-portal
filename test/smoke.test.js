@@ -239,6 +239,35 @@ test('admin creates a drop-in with two classes and a crew practice', async () =>
     assert.equal(crewTwoSlots.status, 400, 'crew practice limited to one class');
 });
 
+test('crew practice with several dates: student picks practices and pays per practice', async () => {
+    const dates = ['2030-04-04', '2030-04-11', '2030-04-18'];
+    const created = await api('POST', '/api/courses', {
+        name: `Smoke Crew Multi ${unique}`, course_type: 'crew_practice', required_student_type: 'any',
+        session_dates: dates,
+        slots: [{ slot_name: 'Practice', difficulty_level: 'All Levels', capacity: 100, practice_date: dates[0],
+                  start_time: '19:00', end_time: '21:00', location: 'Test Studio', pricing: { drop_in: 30, full_package: 90 } }]
+    }, { admin: true });
+    assert.equal(created.status, 200, JSON.stringify(created.body));
+    const id = created.body.courseId;
+
+    const course = (await api('GET', '/api/courses?active_only=true&include_crew=true')).body.find((c) => Number(c.id) === Number(id));
+    assert.deepEqual(JSON.parse(course.session_dates), dates, 'all 3 practice dates stored');
+
+    const two = await api('POST', '/api/register', {
+        first_name: 'Crew', last_name: 'Two', email: `crew2.${unique}@example.com`, course_id: id,
+        payment_amount: 1, registration_type: 'per-date', selected_dates: [dates[0], dates[2]]
+    });
+    assert.equal(two.status, 200, JSON.stringify(two.body));
+    assert.equal(two.body.payment_amount, 60, '2 practices x $30');
+
+    const one = await api('POST', '/api/register', {
+        first_name: 'Crew', last_name: 'One', email: `crew1.${unique}@example.com`, course_id: id,
+        payment_amount: 1, registration_type: 'per-date', selected_dates: [dates[1]]
+    });
+    assert.equal(one.status, 200, JSON.stringify(one.body));
+    assert.equal(one.body.payment_amount, 30, '1 practice x $30');
+});
+
 test('class fields: dates, instructor, style, crew-only and per-date fees', async () => {
     const dates = ['2030-03-05', '2030-03-12', '2030-03-19', '2030-03-26'];
     const created = await api('POST', '/api/courses', {

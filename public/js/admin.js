@@ -758,7 +758,7 @@ class AdminDashboard {
         if (type === 'drop_in') {
             set('mainFee', pricing.drop_in ?? course.per_class_price);
         } else if (type === 'crew_practice') {
-            set('mainFee', pricing.full_package ?? pricing.drop_in ?? course.full_course_price);
+            set('mainFee', pricing.drop_in ?? pricing.full_package ?? course.full_course_price);
         } else {
             set('mainFee', pricing.full_package ?? course.full_course_price);
             set('perDateFee', pricing.drop_in ?? '');
@@ -819,8 +819,7 @@ class AdminDashboard {
         const perDate = type === 'multi-week' ? (Number(val('perDateFee')) || 0) : 0;
         let pricing;
         if (type === 'multi-week') pricing = perDate ? { full_package: mainFee, drop_in: perDate } : { full_package: mainFee };
-        else if (type === 'drop_in') pricing = { drop_in: mainFee, full_package: mainFee * Math.max(dates.length, 1) };
-        else pricing = { full_package: mainFee, drop_in: mainFee };
+        else pricing = { drop_in: mainFee, full_package: mainFee * Math.max(dates.length, 1) };
         const first = dates[0];
         const weekday = first ? window.ClassInfo.toDate(first).toLocaleDateString('en-US', { weekday: 'long' }) : null;
         return {
@@ -856,7 +855,7 @@ class AdminDashboard {
         if (!payload.name) problems.push('Add a class name');
         if (payload.course_type === 'multi-week' && n < 3) problems.push('A series needs at least 3 dates');
         if (payload.course_type === 'drop_in' && (n < 1 || n > 2)) problems.push('A drop-in has 1 or 2 dates');
-        if (payload.course_type === 'crew_practice' && n !== 1) problems.push('Crew practice has exactly 1 date');
+        if (payload.course_type === 'crew_practice' && n < 1) problems.push('Add at least 1 practice date');
         if (!slot.start_time || !slot.end_time) problems.push('Add a start and end time');
         if (slot.capacity < 1) problems.push('Capacity must be at least 1');
         const fee = Number(document.getElementById('mainFee').value);
@@ -870,10 +869,10 @@ class AdminDashboard {
         document.getElementById('repeatWeeklyBox').classList.toggle('d-none', type !== 'multi-week');
         document.getElementById('perDateFeeBox').classList.toggle('d-none', type !== 'multi-week');
         document.getElementById('mainFeeLabel').textContent =
-            type === 'multi-week' ? 'Series fee (all dates) *' : type === 'drop_in' ? 'Fee per date *' : 'Fee';
+            type === 'multi-week' ? 'Series fee (all dates) *' : type === 'drop_in' ? 'Fee per date *' : 'Fee per practice';
         document.getElementById('datesHint').textContent =
             type === 'multi-week' ? 'Pick the first date, then "Fill weekly" to add the rest. Remove any date that is skipped.'
-            : type === 'drop_in' ? 'Add 1 or 2 dates. Students can pay for one or both.' : 'Add the practice date.';
+            : type === 'drop_in' ? 'Add 1 or 2 dates. Students can pay for one or both.' : 'Add one or more practice dates. Students pick which ones they come to and pay per practice.';
 
         const dates = this.classDates || [];
         document.getElementById('dateChips').innerHTML = dates.length

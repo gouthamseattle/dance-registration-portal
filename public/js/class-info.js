@@ -93,8 +93,8 @@
       return { full: full || each * Math.max(n, 1), perDate: each, headline: each, unit: n > 1 ? 'per date' : '' };
     }
     if (course.course_type === 'crew_practice') {
-      const each = perDate || full;
-      return { full: each, perDate: 0, headline: each, unit: '' };
+      const each = perDate || (n ? full / n : full);
+      return { full: each * Math.max(n, 1), perDate: n > 1 ? each : 0, headline: each, unit: n > 1 ? 'per practice' : '' };
     }
     return { full, perDate, headline: full || perDate, unit: '' };
   }
@@ -105,6 +105,7 @@
       return f.perDate ? `$${f.full} for all ${n} dates · $${f.perDate} per date` : `$${f.full} for all ${n} dates`;
     }
     if (course.course_type === 'drop_in' && n > 1) return `$${f.perDate} per date`;
+    if (course.course_type === 'crew_practice' && n > 1) return `$${f.perDate} per practice`;
     return f.headline ? `$${f.headline}` : '';
   }
 

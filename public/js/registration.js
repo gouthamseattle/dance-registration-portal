@@ -595,6 +595,7 @@ class DanceRegistrationApp {
     // Price options come from what admin set on the class:
     //  - a series with a per-date fee: "All N dates" or "Pick dates"
     //  - a drop-in with 2 dates: pick one or both dates
+    //  - a crew practice with several dates: all of them or pick dates
     //  - otherwise a single price
     setupPaymentOptions() {
         const paymentOptionsDiv = document.getElementById('paymentOptions');
@@ -606,10 +607,10 @@ class DanceRegistrationApp {
             const fees = C.fees(course);
             const dates = C.dates(course);
             this.classFees = fees;
-            const canPickDates = fees.perDate > 0 && dates.length > 1 && course.course_type !== 'crew_practice';
+            const canPickDates = fees.perDate > 0 && dates.length > 1;
 
             if (canPickDates) {
-                const allLabel = course.course_type === 'drop_in' ? `Both dates` : `All ${dates.length} dates`;
+                const allLabel = course.course_type === 'drop_in' ? `Both dates` : course.course_type === 'crew_practice' ? `All ${dates.length} practices` : `All ${dates.length} dates`;
                 paymentOptionsDiv.innerHTML = `
                     <label class="form-label">How do you want to join?</label>
                     <div class="payment-options">
@@ -625,7 +626,7 @@ class DanceRegistrationApp {
                             <input class="form-check-input" type="radio" name="payment_option" id="optPickDates" value="pick-dates">
                             <label class="form-check-label w-100" for="optPickDates">
                                 <span class="d-flex justify-content-between align-items-center gap-2">
-                                    <strong>Pick dates</strong><span class="text-muted">$${fees.perDate} per date</span>
+                                    <strong>Pick dates</strong><span class="text-muted">$${fees.perDate} per ${course.course_type === 'crew_practice' ? 'practice' : 'date'}</span>
                                 </span>
                             </label>
                         </div>
