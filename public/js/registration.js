@@ -378,7 +378,8 @@ class DanceRegistrationApp {
         this.isSelecting = true;
         console.info('Selecting course...', { courseId, currentStep: this.currentStep });
         try {
-            const response = await fetch(`/api/courses?active_only=true`);
+            const em = new URLSearchParams(window.location.search).get('email');
+            const response = await fetch(`/api/courses?active_only=true${em ? '&student_email=' + encodeURIComponent(em) : ''}`);
             const status = response.status;
             let courses = [];
             try {

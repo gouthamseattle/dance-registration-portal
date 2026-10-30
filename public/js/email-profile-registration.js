@@ -531,10 +531,9 @@ class EmailProfileRegistrationApp {
             const scheduleItems = course.slots.map(slot => {
                 const parts = [];
                 if (course.course_type === 'crew_practice') {
-                    if (slot.practice_date) {
-                        const dateStr = formatLocalDate(slot.practice_date);
-                        parts.push(dateStr);
-                    }
+                    // All practice dates, not just the first one
+                    const ds = window.ClassInfo.dates(course);
+                    if (ds.length) parts.push(window.ClassInfo.formatDates(ds) + ' ·');
                 } else if (slot.day_of_week) {
                     parts.push(`${slot.day_of_week}s`);
                 }
@@ -595,7 +594,9 @@ class EmailProfileRegistrationApp {
                 <div class="card-header">
                     ${typeBadge}
                     <h5 class="card-title">${course.name}</h5>
-                    <p class="card-subtitle">${course.level || 'All Levels'} • ${course.duration_weeks || 0} weeks</p>
+                    <p class="card-subtitle">${course.course_type === 'crew_practice'
+                        ? `${window.ClassInfo.dates(course).length} practice${window.ClassInfo.dates(course).length === 1 ? '' : 's'} • ${window.ClassInfo.feeText(course)}`
+                        : `${course.level || 'All Levels'} • ${course.duration_weeks || 0} weeks`}</p>
                     ${isRegistered ? `
                         <div class="registration-status-badge registered">
                             <i class="fas fa-check-circle"></i> Registered
