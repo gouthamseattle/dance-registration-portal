@@ -57,7 +57,9 @@ class DanceRegistrationApp {
     async loadCourses() {
         try {
             const [coursesResponse, dropInsResponse] = await Promise.all([
-                fetch('/api/courses?active_only=true'),
+                // Send the student's email so crew members (and test accounts) also get crew-only classes
+                fetch('/api/courses?active_only=true' + (new URLSearchParams(window.location.search).get('email')
+                    ? '&student_email=' + encodeURIComponent(new URLSearchParams(window.location.search).get('email')) : '')),
                 fetch('/api/drop-in-classes?active_only=true&date_from=' + new Date().toISOString().split('T')[0])
             ]);
 
@@ -1891,7 +1893,8 @@ class DanceRegistrationApp {
     }
 
     showNoCoursesMessage() {
-        document.getElementById('noCoursesMessage').style.display = 'block';
+        const el = document.getElementById('noCoursesMessage');
+        if (el) el.style.display = 'block';
     }
 
     showError(message) {

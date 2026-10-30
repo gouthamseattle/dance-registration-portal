@@ -278,6 +278,8 @@ test('crew-only classes stay off the home page; /crew link opens the crew regist
     assert.match(crewHtml, /email-profile\.html\?crew=1/, 'page switches to crew mode');
     const reg = await (await fetch(`${BASE}/js/email-profile-registration.js`)).text();
     assert.ok(reg.includes('crewMode'), 'register page knows the crew link');
+    const pay = await (await fetch(`${BASE}/js/registration.js`)).text();
+    assert.ok(pay.includes('student_email='), 'payment page asks for the student\'s own class list, so crew classes are found');
 });
 
 test('class fields: dates, instructor, style, crew-only and per-date fees', async () => {
