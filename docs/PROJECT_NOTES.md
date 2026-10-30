@@ -55,6 +55,8 @@ PR as any change that adds a decision, a link or a to-do.
 - **"Classes taken" = paid registrations.** No roll call / attendance taking. Old
   attendance records from before Oct 2026 show on profiles as "Attended (old records)".
 - **Crew members' crew practices are counted separately** from regular classes.
+- **Crew practice can have several dates** at a fee per practice; students pick 1, 2 or all dates and the server works out the amount. No spot limit is needed for crew practice (set a large capacity).
+- **Crew-only classes are hidden from the public home page.** Crew members register through the `/crew` link, shared only in the crew WhatsApp group; it opens the register page listing only crew-only classes.
 - **The student "My classes" page stays minimal:** totals plus a list of class names
   and statuses. The admin profile has the full detail.
 - **Levels are separate classes**; classes taken together are sold as **combos**.

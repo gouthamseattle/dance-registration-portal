@@ -23,6 +23,12 @@ class EmailProfileRegistrationApp {
         this.preselectComboId = new URLSearchParams(window.location.search).get('combo');
         // From a waitlist "spot available" email: a spot is held for this student
         this.waitlistToken = new URLSearchParams(window.location.search).get('waitlist');
+        // Crew link (/crew, shared in the crew WhatsApp group): list only crew-only classes
+        this.crewMode = new URLSearchParams(window.location.search).get('crew') === '1';
+        if (this.crewMode) {
+            const t = document.getElementById('emailStepTitle');
+            if (t) t.textContent = 'Crew sign in';
+        }
         
         this.init();
     }
@@ -392,10 +398,17 @@ class EmailProfileRegistrationApp {
 
         // Update filter info
         const studentType = this.currentStudent?.student_type || 'general';
+        if (this.crewMode) {
+            this.eligibleCourses = this.eligibleCourses.filter(c => c.required_student_type === 'crew_member');
+        }
         const courseCount = this.eligibleCourses.length;
         let filterText = '';
         
-        if (studentType === 'crew_member') {
+        if (this.crewMode) {
+            filterText = studentType === 'crew_member'
+                ? `Showing ${courseCount} crew classes`
+                : 'This page is for crew members. Ask GouMo if you think you should have access.';
+        } else if (studentType === 'crew_member') {
             filterText = `Showing ${courseCount} classes available to crew members`;
         } else {
             filterText = `Showing ${courseCount} classes open to all students`;

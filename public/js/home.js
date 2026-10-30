@@ -115,10 +115,12 @@
         return;
       }
       [courses, combos] = await Promise.all([
-        fetch('/api/courses?active_only=true&include_crew=true').then((r) => r.json()),
+        // Crew-only classes are not shown here; the crew uses the /crew link
+        fetch('/api/courses?active_only=true').then((r) => r.json()),
         fetch('/api/combos').then((r) => (r.ok ? r.json() : [])).catch(() => [])
       ]);
       if (!Array.isArray(combos)) combos = [];
+      combos = combos.filter((c) => !(c.classes || []).some((k) => k.required_student_type === 'crew_member'));
       if (!Array.isArray(courses) || courses.length === 0) {
         showClosed();
         return;

@@ -268,6 +268,16 @@ test('crew practice with several dates: student picks practices and pays per pra
     assert.equal(one.body.payment_amount, 30, '1 practice x $30');
 });
 
+test('crew-only classes stay off the home page; /crew link opens the crew register page', async () => {
+    const home = await (await fetch(`${BASE}/js/home.js`)).text();
+    assert.ok(!home.includes('include_crew=true'), 'home page asks only for classes open to all');
+    const crew = await fetch(`${BASE}/crew`, { redirect: 'manual' });
+    assert.ok([301, 302].includes(crew.status), `redirects (got ${crew.status})`);
+    assert.match(crew.headers.get('location') || '', /email-profile\.html\?crew=1/);
+    const reg = await (await fetch(`${BASE}/js/email-profile-registration.js`)).text();
+    assert.ok(reg.includes('crewMode'), 'register page knows the crew link');
+});
+
 test('class fields: dates, instructor, style, crew-only and per-date fees', async () => {
     const dates = ['2030-03-05', '2030-03-12', '2030-03-19', '2030-03-26'];
     const created = await api('POST', '/api/courses', {

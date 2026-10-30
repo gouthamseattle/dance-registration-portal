@@ -6,7 +6,7 @@ and an admin confirms payment, which sends a confirmation email.
 Scale is small (50–100 concurrent users): prefer simple over clever.
 
 **Scope (deliberately small):**
-- Class types: Drop-in (1 or 2 classes), Series (more than 2 classes, choreography or technique), Crew Practice (1 class).
+- Class types: Drop-in (1 or 2 classes), Series (more than 2 classes, choreography or technique), Crew Practice (1 or more dates, fee per practice; students pick dates).
 - Admin portal features:
   - Create classes
   - Review, confirm or cancel registrations, with reports
@@ -47,6 +47,7 @@ web concepts in plain terms when they come up.
 | Bootstrap re-skin with the design-system tokens (registration pages and admin) | `public/css/registration.css` |
 | Admin portal: Dashboard (stats + per-class report), Classes & combos, Registrations, Waitlists, Students, Settings | `public/admin.html`, `public/js/admin.js`, `public/css/admin.css` (loads after `site.css` and `registration.css`) |
 | Shared class formatting for student pages (dates, times, fees) | `public/js/class-info.js` |
+| Crew link `/crew` (redirects to `email-profile.html?crew=1`; lists only crew-only classes). The home page leaves crew-only classes and combos out | `server.js`, `email-profile-registration.js`, `home.js` |
 | Student "My classes" page at `/my` (email sign-in, upcoming/past classes, payment status, waitlists, edit details) | `public/my.html`, `public/js/my.js`, API `/api/my/profile` |
 | Admin student profile (history, totals, private `admin_notes`) | modal in `admin.js` (`openStudent`), API `/api/admin/students/:id` |
 | Student cleanup: hide/restore (`students.archived_at`, nothing deleted), bulk type change, Data check (duplicates by email, unlinked registrations, old tables) | `admin.js`, APIs `/api/admin/students/bulk`, `/api/admin/data-check` |

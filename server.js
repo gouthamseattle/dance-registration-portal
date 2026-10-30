@@ -3201,6 +3201,11 @@ app.put('/api/my/profile', asyncHandler(async (req, res) => {
     res.json({ success: true });
 }));
 
+// Crew link shared in the crew WhatsApp group: register page listing only crew-only classes
+app.get('/crew', (req, res) => {
+    res.redirect('/email-profile.html?crew=1');
+});
+
 app.get('/my', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'my.html'));
 });
