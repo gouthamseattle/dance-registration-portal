@@ -3209,7 +3209,6 @@ const CREW_PREVIEW = `
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="GouMo Dance Chronicles">
     <meta property="og:title" content="Dreamers Dance Crew · Crew practice sign-up">
-    <meta property="og:description" content="For crew members: pick your practices and pay per session.">
     <meta property="og:image" content="https://dance-registration-portal-production.up.railway.app/images/og-preview.jpg">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
