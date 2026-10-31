@@ -78,6 +78,22 @@ PR as any change that adds a decision, a link or a to-do.
 - **Admin → Settings → Test email** shows which email method is active and the exact
   error if sending fails.
 
+## Lite admin for helpers (`/admin-lite`)
+
+- Replaces the parked payment checker. The owner approves emails in Admin → Settings →
+  Other admins; approving (or "Resend invite") emails them the link, first sign-in and
+  iPhone home-screen steps, even when student confirmation emails are off.
+- Each helper sets their own password on first sign-in. Accepted risk: someone who knows an
+  approved email could set it first, so helpers sign in soon after approval. Reset = remove
+  and approve again (a fresh invite goes out).
+- Helpers see classes with registration open, or closed in the last 7 days
+  (`courses.registration_closed_at`), crew practices included, test registrations hidden.
+  They can accept, cancel ("Are you sure?" only, no reason) and download a class CSV.
+  Accept/cancel behave exactly like the full admin; only the owner can undo a cancel.
+  `registrations.handled_by` records who acted.
+- The invite email uses the black/yellow GouMo look; student emails are still the older
+  pink design (possible later update).
+
 ## How we work
 
 - The owner is a data engineer, not a front-end developer: explain web things simply,
