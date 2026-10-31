@@ -82,6 +82,34 @@
     .person strong { display: block; font-size: 16px; }
     .person .role { display: block; font-size: 12px; font-weight: 600; color: var(--accent); }
     .person p { margin: 3px 0 0; font-size: 12px; color: var(--muted); line-height: 1.4; }
+    button.person { padding: 0; text-align: left; color: var(--text); font: inherit; cursor: pointer; }
+    button.person:hover { border-color: var(--text-2); }
+    .tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+    .tag { font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 999px; background: #2A2510; color: var(--accent); }
+    .person .more { display: block; font-size: 12px; color: var(--text-2); margin-top: 8px; }
+    /* Instructor bio sheet */
+    .bio-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.72); display: flex; align-items: flex-end; justify-content: center; z-index: 50; }
+    .bio-backdrop[hidden] { display: none; }
+    .bio-sheet { background: var(--surface); border-top: 1px solid var(--line); border-radius: 20px 20px 0 0; width: 100%; max-width: 560px; max-height: 88vh; overflow-y: auto; box-sizing: border-box; padding: 14px 20px calc(26px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 14px; }
+    #bioBody { display: flex; flex-direction: column; gap: 16px; }
+    .bio-grip { width: 40px; height: 4px; border-radius: 4px; background: var(--line); align-self: center; }
+    .bio-head { display: flex; gap: 14px; align-items: center; }
+    .bio-head img { width: 88px; height: 88px; border-radius: 14px; object-fit: cover; }
+    .bio-head h2 { margin: 0; font-family: var(--font-display); font-weight: 400; font-size: 28px; text-transform: uppercase; }
+    .bio-head .role { display: block; font-size: 13px; font-weight: 600; color: var(--accent); margin-top: 2px; }
+    .bio-head .years { display: block; font-size: 13px; color: var(--muted); margin-top: 2px; }
+    .bio-close { margin-left: auto; align-self: flex-start; width: 40px; height: 40px; flex: 0 0 40px; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: var(--text-2); cursor: pointer; display: flex; align-items: center; justify-content: center; }
+    .bio-text { margin: 0; font-size: 14px; line-height: 1.6; color: var(--text-2); }
+    .bio-label { font-size: 12px; font-weight: 700; color: var(--faint); text-transform: uppercase; letter-spacing: .6px; margin: 0 0 8px; }
+    .bio-highlights { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 13px; line-height: 1.45; }
+    .bio-highlights li { display: flex; gap: 8px; }
+    .bio-highlights li::before { content: "•"; color: var(--accent); }
+    .bio-class { display: flex; align-items: center; gap: 10px; background: var(--surface-2); border-radius: 12px; padding: 10px 12px; margin-bottom: 8px; }
+    .bio-class > div { flex: 1 1 auto; min-width: 0; }
+    .bio-class strong { display: block; font-size: 14px; }
+    .bio-class span { display: block; font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .bio-class .btn { flex: 0 0 auto; }
+    .bio-none { font-size: 13px; color: var(--muted); margin: 0; }
 
     /* ----- Wider screens: same content, arranged across the width ----- */
     @media (min-width: 760px) {
@@ -180,10 +208,10 @@
         <div id="instructors">
           <h2 class="display h-section">Instructors</h2>
           <div class="team">
-            <div class="card person"><img src="/images/goutham.jpg" alt="Goutham" loading="lazy"><div><strong>Goutham</strong><span class="role">Head instructor · Choreographer</span><p>18+ years · Locking, House, Hip-hop · Best Choreographer, Chennai Super Dancers</p></div></div>
-            <div class="card person"><img src="/images/monica.jpg" alt="Monica" loading="lazy"><div><strong>Monica</strong><span class="role">Co-founder · Instructor</span><p>10+ years · Lead dancer in championship-winning teams</p></div></div>
-            <div class="card person"><img src="/images/rudie.jpg" alt="Rudie" loading="lazy"><div><strong>Rudie</strong><span class="role">Instructor</span><p>7+ years of professional dance experience</p></div></div>
-            <div class="card person"><img src="/images/supriya.jpg" alt="Supriya" loading="lazy"><div><strong>Supriya</strong><span class="role">Instructor</span><p>3+ years of dance experience</p></div></div>
+            <button type="button" class="card person" data-person="goutham" aria-haspopup="dialog"><img src="/images/goutham.jpg" alt="" loading="lazy"><div><strong>Goutham</strong><span class="role">Founder · Head choreographer</span><p>18+ years</p><span class="tags"><span class="tag">Locking</span><span class="tag">Hip-hop</span><span class="tag">House</span><span class="tag">Choreography</span></span><span class="more">View bio ›</span></div></button>
+            <button type="button" class="card person" data-person="monica" aria-haspopup="dialog"><img src="/images/monica.jpg" alt="" loading="lazy"><div><strong>Monica</strong><span class="role">Founder · Locking specialist</span><p>10+ years</p><span class="tags"><span class="tag">Locking</span><span class="tag">Choreography</span></span><span class="more">View bio ›</span></div></button>
+            <button type="button" class="card person" data-person="rudie" aria-haspopup="dialog"><img src="/images/rudie.jpg" alt="" loading="lazy"><div><strong>Rudie</strong><span class="role">Instructor</span><p>7+ years</p><span class="tags"><span class="tag">Choreography</span></span><span class="more">View bio ›</span></div></button>
+            <button type="button" class="card person" data-person="supriya" aria-haspopup="dialog"><img src="/images/supriya.jpg" alt="" loading="lazy"><div><strong>Supriya</strong><span class="role">Instructor</span><p>3+ years</p><span class="tags"><span class="tag">Choreography</span></span><span class="more">View bio ›</span></div></button>
           </div>
         </div>
       </div>
@@ -200,7 +228,13 @@
     </div>
   </footer>
 
+  <div class="bio-backdrop" id="bioSheet" hidden>
+    <div class="bio-sheet" role="dialog" aria-modal="true" aria-labelledby="bioName">
+      <div class="bio-grip"></div>
+      <div id="bioBody"></div>
+    </div>
+  </div>
   <script src="/js/class-info.js?v=6"></script>
-  <script src="/js/home.js?v=7"></script>
+  <script src="/js/home.js?v=8"></script>
 </body>
 </html>

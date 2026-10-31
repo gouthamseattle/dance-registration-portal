@@ -90,6 +90,17 @@ PR as any change that adds a decision, a link or a to-do.
   screen that tells the student they've done their part. "Your spot is confirmed once we
   receive your payment" sits under the button. The old PayPal "You're in!" screen is gone.
 
+## Instructor bios (home page)
+
+- Cards show role, years and style tags (styles each person *teaches*): Goutham Locking,
+  Hip-hop, House, Choreography; Monica Locking, Choreography; Rudie and Supriya Choreography.
+- Tapping a card opens a bio sheet with highlights and "Classes with <name>" (open classes whose
+  `instructor` field contains that name). Bio text lives in `INSTRUCTORS` in `public/js/home.js`.
+- Sources: Goutham's and Monica's bio posters (Documents/Posters/goumo-posters/assets/instructors),
+  Rudie's and Supriya's text from the owner. Monica is "Founder · Locking specialist"; no names
+  of the lockers she trained with. No "teaching vibe" lines.
+- Mockup (approved): https://claude.ai/artifact/S3QjJsmgqdAtbmThGS39b4
+
 ## Lite admin for helpers (`/admin-lite`)
 
 - Replaces the parked payment checker. The owner approves emails in Admin → Settings →

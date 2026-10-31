@@ -888,6 +888,14 @@ test('payments: Zelle is off by default and can be switched on; Venmo ID comes f
     assert.ok(!page.includes("You're in!"), 'old confirmation screen removed');
 });
 
+test('home page: instructor cards have style tags and open a bio', async () => {
+    const html = await (await fetch(`${BASE}/`)).text();
+    for (const who of ['goutham', 'monica', 'rudie', 'supriya']) assert.ok(html.includes(`data-person="${who}"`), `${who} card`);
+    assert.ok(html.includes('Locking specialist') && html.includes('id="bioSheet"'), 'tags, roles and bio sheet');
+    const js = await (await fetch(`${BASE}/js/home.js`)).text();
+    assert.ok(js.includes('first student turned instructor') && js.includes('classesWith'), 'bios and classes per instructor');
+});
+
 test('removed features are gone', async () => {
     for (const [method, url] of [
         ['POST', '/api/competition/register'],
