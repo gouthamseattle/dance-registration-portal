@@ -270,9 +270,11 @@ async function ensureComboTables(dbConfig) {
 }
 
 /**
- * Team access (Oct 2026): helpers the admin approves by email. They set their
- * own password on first sign-in at /team (password_hash stays NULL until then).
+ * Lite admin (Oct 2026): helpers the admin approves by email. They set their
+ * own password on first sign-in at /admin-lite (password_hash stays NULL until then).
  * registrations.handled_by records who accepted/cancelled ('admin' or an email).
+ * courses.registration_closed_at: when the class stopped taking registrations
+ * (helpers see open classes plus those closed in the last 7 days).
  */
 async function ensureTeamTable(dbConfig) {
     try {
@@ -286,8 +288,10 @@ async function ensureTeamTable(dbConfig) {
         )`);
         if (dbConfig.isProduction) {
             await dbConfig.run('ALTER TABLE registrations ADD COLUMN IF NOT EXISTS handled_by VARCHAR(255)');
+            await dbConfig.run('ALTER TABLE courses ADD COLUMN IF NOT EXISTS registration_closed_at TIMESTAMP');
         } else {
             await dbConfig.run('ALTER TABLE registrations ADD COLUMN handled_by TEXT').catch(() => {});
+            await dbConfig.run('ALTER TABLE courses ADD COLUMN registration_closed_at TIMESTAMP').catch(() => {});
         }
         console.log('✅ Ensured team_members table exists');
     } catch (e) {

@@ -1502,7 +1502,7 @@ class AdminDashboard {
     }
 
 
-    // Team access: helpers who can use the lite admin at /team
+    // Other admins: helpers who can use the lite admin at /admin-lite
     async loadTeam() {
         const C = window.ClassInfo;
         const box = document.getElementById('teamList');
@@ -1527,7 +1527,7 @@ class AdminDashboard {
             const data = await res.json();
             if (!res.ok) return this.showError(data.error || 'Could not approve');
             input.value = '';
-            this.showSuccess('Approved. They can now sign in at /team');
+            this.showSuccess('Approved. They can now sign in at /admin-lite');
             this.loadTeam();
         } catch (e) { this.showError('Could not approve'); }
     }

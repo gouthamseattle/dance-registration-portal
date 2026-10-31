@@ -313,8 +313,8 @@
             </div>
 
             <div class="panel settings-panel mt-3">
-                <h2>Team access</h2>
-                <p class="page-sub small mb-3">People you approve here can sign in at <a href="/team" target="_blank">/team</a> to see a class's registrations, accept or cancel them, and download a CSV. They choose their own password the first time they sign in, so tell them soon after you approve them. To reset someone's password, remove and approve them again.</p>
+                <h2>Other admins</h2>
+                <p class="page-sub small mb-3">People you approve here can sign in to the lite admin at <a href="/admin-lite" target="_blank">/admin-lite</a>. They see classes with registration open, or closed in the last 7 days (crew practices included), and can accept or cancel registrations and download a CSV. They choose their own password the first time they sign in, so tell them soon after you approve them. To reset someone's password, remove and approve them again.</p>
                 <form class="d-flex gap-2 flex-wrap mb-3" onsubmit="admin.addTeamMember(event)">
                     <input type="email" class="form-control" id="teamEmail" placeholder="helper@example.com" required style="flex:1 1 240px">
                     <button type="submit" class="btn btn-primary">Approve</button>
