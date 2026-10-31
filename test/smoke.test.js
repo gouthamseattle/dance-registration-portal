@@ -797,7 +797,9 @@ test('lite admin: approved helpers sign in, see recent classes, accept/cancel, d
     // Only approved emails get in
     assert.equal((await as('POST', '/api/lite/check-email', { email: helper })).status, 403);
     assert.equal((await api('POST', '/api/admin/team-members', { email: helper })).status, 401, 'approving needs the admin');
-    assert.equal((await api('POST', '/api/admin/team-members', { email: helper }, { admin: true })).status, 200);
+    const approve = await api('POST', '/api/admin/team-members', { email: helper }, { admin: true });
+    assert.equal(approve.status, 200);
+    assert.equal(typeof approve.body.invite_sent, 'boolean', 'says whether the invite email went out');
     assert.equal((await api('POST', '/api/admin/team-members', { email: helper.toLowerCase() }, { admin: true })).status, 409);
     const check = await as('POST', '/api/lite/check-email', { email: helper.toLowerCase() });
     assert.equal(check.status, 200); assert.equal(check.body.needs_password, true);
@@ -859,6 +861,9 @@ test('lite admin: approved helpers sign in, see recent classes, accept/cancel, d
     // Removing the helper ends access right away
     const member = (await api('GET', '/api/admin/team-members', null, { admin: true })).body.find(m => m.email === helper.toLowerCase());
     assert.ok(member.has_password);
+    assert.equal((await api('POST', `/api/admin/team-members/${member.id}/invite`)).status, 401, 'resend needs the admin');
+    const resend = await api('POST', `/api/admin/team-members/${member.id}/invite`, null, { admin: true });
+    assert.equal(resend.status, 200); assert.equal(typeof resend.body.invite_sent, 'boolean');
     await api('DELETE', `/api/admin/team-members/${member.id}`, null, { admin: true });
     assert.equal((await as('GET', '/api/lite/classes')).status, 401);
 });

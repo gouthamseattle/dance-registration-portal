@@ -241,7 +241,26 @@ app.post('/api/admin/team-members', requireAuth, asyncHandler(async (req, res) =
     const existing = await dbConfig.get('SELECT id FROM team_members WHERE email = $1', [email]);
     if (existing) return res.status(409).json({ error: 'That email is already approved' });
     await dbConfig.run('INSERT INTO team_members (email) VALUES ($1)', [email]);
-    res.json({ success: true });
+    res.json({ success: true, ...(await sendLiteInvite(email, req)) });
+}));
+
+// Email the invite (link, first sign-in, iPhone home screen). Sent even when
+// student confirmation emails are switched off. Returns what happened.
+async function sendLiteInvite(email, req) {
+    try {
+        const { sendAdminInviteEmail } = require('./utils/mailer');
+        await sendAdminInviteEmail(email, { url: `${siteUrl(req)}/admin-lite` });
+        return { invite_sent: true };
+    } catch (err) {
+        console.error('❌ Admin invite email failed:', err.message || err);
+        return { invite_sent: false, invite_error: err.message || String(err) };
+    }
+}
+
+app.post('/api/admin/team-members/:id/invite', requireAuth, asyncHandler(async (req, res) => {
+    const member = await dbConfig.get('SELECT email FROM team_members WHERE id = $1', [req.params.id]);
+    if (!member) return res.status(404).json({ error: 'Not found' });
+    res.json({ success: true, ...(await sendLiteInvite(member.email, req)) });
 }));
 
 // Removing someone ends their access; re-approving lets them choose a new password

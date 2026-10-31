@@ -345,8 +345,43 @@ function getTransporter() {
   };
 }
 
+// Invite for a helper approved in Admin → Settings → Other admins (lite admin at /admin-lite)
+async function sendAdminInviteEmail(to, { url } = {}) {
+  ensureConfigured();
+  const from = getFromAddress();
+  const subject = "You're now a GouMo admin: set up in 2 minutes";
+  const link = escapeHtml(url || '');
+  const step = (title, body) => `<tr><td style="padding:0 0 14px;"><table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f7f7f5;border-radius:10px;"><tr><td style="padding:18px 20px;font-size:15px;line-height:1.55;color:#444;"><div style="font-weight:bold;color:#1a1a1a;margin-bottom:8px;">${title}</div>${body}</td></tr></table></td></tr>`;
+  const html = `<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${escapeHtml(subject)}</title></head>
+<body style="margin:0;padding:0;font-family:Arial,sans-serif;background:#f2f2f0;">
+<table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f2f2f0;padding:20px 0;"><tr><td align="center">
+<table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background:#fff;border-radius:10px;overflow:hidden;">
+<tr><td style="background:#0b0b0d;padding:28px 32px;text-align:center;">
+  <div style="font-family:Impact,'Arial Black',sans-serif;color:#ffd60a;font-size:28px;text-transform:uppercase;letter-spacing:.5px;">GouMo Admin</div>
+  <div style="color:#a8a8b3;font-size:13px;margin-top:6px;">GouMo Dance Chronicles</div>
+</td></tr>
+<tr><td style="padding:28px 32px 10px;font-size:15px;line-height:1.55;color:#1a1a1a;">
+  <p style="margin:0 0 16px;">Hi,</p>
+  <p style="margin:0 0 22px;">Goutham has added you as a GouMo admin. You can now see class registrations, accept or cancel them, and download class lists.</p>
+  <p style="margin:0 0 24px;text-align:center;"><a href="${link}" style="display:inline-block;background:#ffd60a;color:#0b0b0d;font-weight:bold;text-decoration:none;padding:14px 28px;border-radius:10px;">Open GouMo Admin</a></p>
+</td></tr>
+<tr><td style="padding:0 32px;"><table width="100%" cellpadding="0" cellspacing="0" border="0">
+  ${step('1. Sign in the first time', `Open the link above in <strong>Safari</strong>, enter <strong>${escapeHtml(to)}</strong> and choose a password (at least 8 characters). You'll use that password from then on.`)}
+  ${step('2. Add it to your iPhone home screen', 'In Safari, tap the <strong>Share</strong> button (square with an arrow), scroll down, tap <strong>Add to Home Screen</strong>, then <strong>Add</strong>. A "GouMo Admin Lite" icon appears and opens like an app.')}
+  ${step('3. Using it', "Tap the class name at the top to pick a class. <strong>Accept</strong> once you've seen the student's Venmo or Zelle payment; they get a confirmation email. <strong>Cancel</strong> only if needed: it emails the student and offers a paid spot to the next person on the waitlist. <strong>Download CSV</strong> gives you the class list.")}
+</table></td></tr>
+<tr><td style="padding:6px 32px 24px;font-size:14px;color:#666;">Forgot your password? Reply to this email and Goutham will send you a fresh invite.</td></tr>
+<tr><td style="border-top:1px solid #e2e2de;padding:16px 32px;text-align:center;font-size:12px;color:#888;">You got this email because Goutham added you as an admin for GouMo Dance Chronicles.</td></tr>
+</table></td></tr></table></body></html>`;
+  const text = `GouMo Admin\n\nHi,\n\nGoutham has added you as a GouMo admin. You can now see class registrations, accept or cancel them, and download class lists.\n\nOpen GouMo Admin: ${url}\n\n1. Sign in the first time\nOpen the link in Safari, enter ${to} and choose a password (at least 8 characters). You'll use that password from then on.\n\n2. Add it to your iPhone home screen\nIn Safari, tap Share, then Add to Home Screen, then Add. A "GouMo Admin Lite" icon appears and opens like an app.\n\n3. Using it\nTap the class name at the top to pick a class. Accept once you've seen the student's Venmo or Zelle payment; they get a confirmation email. Cancel only if needed: it emails the student and offers a paid spot to the next person on the waitlist. Download CSV gives you the class list.\n\nForgot your password? Reply to this email and Goutham will send you a fresh invite.`;
+  await deliver({ from, to, subject, html, text, replyTo: getReplyTo() });
+  console.log('✅ Admin invite email sent to:', to);
+}
+
 module.exports = {
   getTransporter,
+  sendAdminInviteEmail,
   sendRegistrationConfirmationEmail,
   sendRegistrationCancellationEmail,
   sendWaitlistNotificationEmail,

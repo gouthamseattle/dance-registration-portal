@@ -1514,6 +1514,7 @@ class AdminDashboard {
                 <div class="d-flex align-items-center gap-2 py-2 border-bottom">
                     <div class="flex-grow-1 text-truncate"><span class="fw-semibold">${C.esc(m.email)}</span>
                         <div class="cell-sub">${m.has_password ? (m.last_login ? 'Last signed in ' + new Date(m.last_login).toLocaleDateString() : 'Password set') : 'Approved · hasn\'t chosen a password yet'}</div></div>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="admin.resendInvite(${m.id}, this)">Resend invite</button>
                     <button type="button" class="btn btn-sm btn-outline-danger" onclick="admin.removeTeamMember(${m.id}, '${C.esc(m.email)}')">Remove</button>
                 </div>`).join('');
         } catch (e) { box.textContent = 'Could not load team.'; }
@@ -1526,10 +1527,27 @@ class AdminDashboard {
             const res = await this.apiFetch('/api/admin/team-members', { method: 'POST', body: { email: input.value } });
             const data = await res.json();
             if (!res.ok) return this.showError(data.error || 'Could not approve');
+            const email = input.value.trim();
             input.value = '';
-            this.showSuccess('Approved. They can now sign in at /admin-lite');
+            this.inviteResult(email, data);
             this.loadTeam();
         } catch (e) { this.showError('Could not approve'); }
+    }
+
+    inviteResult(email, data) {
+        if (data.invite_sent) this.showSuccess(`Invite sent to ${email}`);
+        else this.showError(`Approved, but the invite email failed: ${data.invite_error || 'unknown error'}. Check Settings → Test email.`);
+    }
+
+    async resendInvite(id, btn) {
+        btn.disabled = true;
+        try {
+            const res = await this.apiFetch(`/api/admin/team-members/${id}/invite`, { method: 'POST' });
+            const data = await res.json();
+            const email = btn.closest('.d-flex').querySelector('.fw-semibold').textContent;
+            this.inviteResult(email, data);
+        } catch (e) { this.showError('Could not send the invite'); }
+        finally { btn.disabled = false; }
     }
 
     async removeTeamMember(id, email) {
