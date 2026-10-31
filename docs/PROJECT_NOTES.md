@@ -11,6 +11,8 @@ PR as any change that adds a decision, a link or a to-do.
 |---|---|
 | Live site (students) | https://dance-registration-portal-production.up.railway.app |
 | Admin portal | https://dance-registration-portal-production.up.railway.app/admin (also installed on the owner's iPhone as the "GouMo Admin" home-screen app) |
+| Lite admin for helpers (approved emails only) | https://dance-registration-portal-production.up.railway.app/admin-lite (installs as "GouMo Admin Lite") |
+| Lite admin design mockup (approved) | https://claude.ai/artifact/TYfQ9yje3k3wcwXz3XTz5K |
 | Student "My classes" page | https://dance-registration-portal-production.up.railway.app/my |
 | Privacy page (needed by Google) | https://dance-registration-portal-production.up.railway.app/privacy |
 | Code | https://github.com/gouthamseattle/dance-registration-portal (currently public) |
@@ -80,6 +82,7 @@ PR as any change that adds a decision, a link or a to-do.
 
 - The owner is a data engineer, not a front-end developer: explain web things simply,
   and keep token cost low.
+- **New features: design first, then a mockup, and build only after the owner approves.**
 - Every change: a branch, a PR, GitHub Actions runs the smoke tests, **the owner merges
   on GitHub**, Railway deploys `main`.
 - `npm install` doesn't work in Claude's cloud sandbox, so screens are checked with a
@@ -95,9 +98,5 @@ PR as any change that adds a decision, a link or a to-do.
 - [ ] Remove unused npm packages, debug endpoints and PayPal leftovers.
 - [ ] Open each older class in the new class form and save it once (fills dates, instructor, fees).
 - [ ] Run Admin → Students → Data check on live data and fix what it finds.
-- [ ] **Parked: payment checker** (lite page at `/payments` for the Venmo account owner):
-      own password set in Settings; sees only pending Venmo payments; Confirm or
-      "Not received" (no cancel); the admin wants an activity record of what the checker
-      did and a "Mark unpaid" override. Draft server code is on branch `feature/payment-checker`.
 - [ ] Ideas, not yet requested: emailed sign-in code for students, class reminder emails,
       a "you joined the waitlist" email.

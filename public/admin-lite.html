@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <!-- Add to Home Screen: opens full screen like an app, with its own icon -->
+    <link rel="manifest" href="/admin-lite-manifest.webmanifest">
+    <link rel="apple-touch-icon" href="/images/admin-icon-180.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="GouMo Admin Lite">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Admin · GouMo Dance Chronicles</title>
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="theme-color" content="#0B0B0D">
+    <link rel="icon" type="image/png" href="/images/favicon.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="/css/site.css?v=2" rel="stylesheet">
+    <link href="/css/admin-lite.css?v=1" rel="stylesheet">
+</head>
+<body class="lite">
+    <!-- Sign in -->
+    <main id="signin" class="lite-signin" hidden>
+        <div class="lite-brand">
+            <img src="/images/goumo-logo.png" alt="" class="lite-logo">
+            <h1 class="lite-title">GouMo Admin</h1>
+            <p class="lite-muted" id="signinSub">Sign in to see and manage class registrations</p>
+        </div>
+        <form id="signinForm" class="lite-card" novalidate>
+            <div id="stepEmail">
+                <label for="email" class="lite-label">Your email</label>
+                <input id="email" type="email" autocomplete="username" class="lite-input" required>
+            </div>
+            <div id="stepPassword" hidden>
+                <p class="lite-muted small"><span id="emailShown"></span> · <a href="#" id="notYou">Not you?</a></p>
+                <label for="password" class="lite-label" id="passwordLabel">Password</label>
+                <input id="password" type="password" class="lite-input" autocomplete="current-password">
+                <div id="confirmWrap" hidden>
+                    <label for="password2" class="lite-label">Type it again</label>
+                    <input id="password2" type="password" class="lite-input" autocomplete="new-password">
+                    <p class="lite-faint small">At least 8 characters.</p>
+                </div>
+            </div>
+            <div id="signinError" class="lite-error" role="alert" hidden></div>
+            <button type="submit" class="lite-btn lite-btn-primary" id="signinBtn">Continue</button>
+            <p class="lite-faint small" id="signinHint">Returning? The next step asks for your password. First time? You'll choose one.</p>
+        </form>
+    </main>
+
+    <!-- Registrations -->
+    <div id="app" hidden>
+        <header class="lite-header">
+            <div class="lite-header-title">GouMo Admin</div>
+            <div class="lite-muted small text-truncate" id="whoami"></div>
+            <button type="button" class="lite-btn lite-btn-ghost lite-btn-sm" id="signOut">Sign out</button>
+        </header>
+        <main class="lite-main">
+            <span class="lite-label lite-upper">Class</span>
+            <button type="button" class="lite-picker" id="pickerBtn" aria-haspopup="dialog">
+                <span id="pickerText">Pick a class</span>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+            </button>
+            <div id="classView" hidden>
+                <div class="lite-chips" id="chips" role="group" aria-label="Filter by status"></div>
+                <a class="lite-btn lite-btn-outline" id="csvBtn" href="#">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>
+                    Download CSV
+                </a>
+                <div id="list" class="lite-list"></div>
+            </div>
+            <p class="lite-muted" id="emptyState" hidden></p>
+        </main>
+    </div>
+
+    <!-- Bottom sheets -->
+    <div class="lite-sheet-backdrop" id="pickerSheet" hidden>
+        <div class="lite-sheet" role="dialog" aria-modal="true" aria-labelledby="pickerTitle">
+            <div class="lite-grip"></div>
+            <h2 id="pickerTitle">Pick a class</h2>
+            <div id="pickerList"></div>
+            <p class="lite-faint small">Classes closed more than 7 days ago no longer appear here. Goutham still sees everything in the full admin.</p>
+        </div>
+    </div>
+    <div class="lite-sheet-backdrop" id="cancelSheet" hidden>
+        <div class="lite-sheet" role="dialog" aria-modal="true" aria-labelledby="cancelTitle">
+            <div class="lite-grip"></div>
+            <h2 id="cancelTitle">Cancel this registration?</h2>
+            <div class="lite-box" id="cancelWho"></div>
+            <p class="lite-text" id="cancelText"></p>
+            <button type="button" class="lite-btn lite-btn-danger" id="cancelYes">Yes, cancel it</button>
+            <button type="button" class="lite-btn lite-btn-ghost" id="cancelNo">Keep it</button>
+        </div>
+    </div>
+
+    <div class="lite-toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+    <script src="/js/admin-lite.js?v=1"></script>
+</body>
+</html>

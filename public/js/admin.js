@@ -382,7 +382,7 @@ class AdminDashboard {
             <div class="pending-row">
                 <div class="min-w-0">
                     <div class="text-truncate">${g.reg.student_id ? `<a href="#" class="row-link" onclick="admin.openStudent(${g.reg.student_id});return false">${C.esc(this.studentName(g.reg))}</a>` : `<span class="fw-semibold">${C.esc(this.studentName(g.reg))}</span>`}</div>
-                    <div class="cell-sub text-truncate">${this.isTestReg(g.reg) ? 'Test · ' : ''}${C.esc(g.title)} · ${this.money(g.amount)}${g.reg.payment_method ? ` · ${C.esc(g.reg.payment_method)}` : ''}</div>
+                    <div class="cell-sub text-truncate">${this.isTestReg(g.reg) ? 'Test · ' : ''}${C.esc(g.title)} · ${this.money(g.amount)}${g.reg.payment_method ? ` · ${C.esc(g.reg.payment_method)}` : ''}${g.reg.handled_by && g.reg.handled_by !== 'admin' ? ` · by ${C.esc(g.reg.handled_by)}` : ''}</div>
                 </div>
                 <button class="btn btn-primary btn-sm" onclick="window.quickConfirmPayment(${g.id}, this)">Confirm</button>
             </div>`).join('') + (groups.length > 8 ? `<p class="empty-line">+ ${groups.length - 8} more</p>` : '');
@@ -614,6 +614,7 @@ class AdminDashboard {
 
     loadSettings() {
         this.loadEmailStatus();
+        this.loadTeam();
         // Populate settings form
         document.getElementById('venmoUsername').value = this.settings.venmo_username || '';
         document.getElementById('zelleRecipientName').value = this.settings.zelle_recipient_name || '';
@@ -1500,6 +1501,42 @@ class AdminDashboard {
         }
     }
 
+
+    // Other admins: helpers who can use the lite admin at /admin-lite
+    async loadTeam() {
+        const C = window.ClassInfo;
+        const box = document.getElementById('teamList');
+        try {
+            const res = await this.apiFetch('/api/admin/team-members');
+            const rows = await res.json();
+            if (!rows.length) { box.innerHTML = '<div class="text-muted">No one approved yet.</div>'; return; }
+            box.innerHTML = rows.map(m => `
+                <div class="d-flex align-items-center gap-2 py-2 border-bottom">
+                    <div class="flex-grow-1 text-truncate"><span class="fw-semibold">${C.esc(m.email)}</span>
+                        <div class="cell-sub">${m.has_password ? (m.last_login ? 'Last signed in ' + new Date(m.last_login).toLocaleDateString() : 'Password set') : 'Approved · hasn\'t chosen a password yet'}</div></div>
+                    <button type="button" class="btn btn-sm btn-outline-danger" onclick="admin.removeTeamMember(${m.id}, '${C.esc(m.email)}')">Remove</button>
+                </div>`).join('');
+        } catch (e) { box.textContent = 'Could not load team.'; }
+    }
+
+    async addTeamMember(ev) {
+        ev.preventDefault();
+        const input = document.getElementById('teamEmail');
+        try {
+            const res = await this.apiFetch('/api/admin/team-members', { method: 'POST', body: { email: input.value } });
+            const data = await res.json();
+            if (!res.ok) return this.showError(data.error || 'Could not approve');
+            input.value = '';
+            this.showSuccess('Approved. They can now sign in at /admin-lite');
+            this.loadTeam();
+        } catch (e) { this.showError('Could not approve'); }
+    }
+
+    async removeTeamMember(id, email) {
+        if (!confirm(`Remove ${email}? They will lose access right away.`)) return;
+        await this.apiFetch(`/api/admin/team-members/${id}`, { method: 'DELETE' });
+        this.loadTeam();
+    }
 
     // Utility functions
     showError(message) {

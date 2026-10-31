@@ -74,7 +74,7 @@ after(() => {
 // --- tests ---------------------------------------------------------------
 
 test('pages load', async () => {
-    for (const page of ['/', '/admin', '/email-profile.html', '/index-registration.html']) {
+    for (const page of ['/', '/admin', '/admin-lite', '/email-profile.html', '/index-registration.html']) {
         const res = await fetch(BASE + page);
         assert.equal(res.status, 200, `${page} should load`);
     }
@@ -780,6 +780,87 @@ test('waitlist: admin cancels a paid spot, next student is offered it and can cl
     const ben = entries.find((e) => e.email === b);
     assert.equal(ben.status, 'registered', 'admin sees Ben registered from the waitlist');
     assert.equal(entries.find((e) => e.email === c).status, 'active', 'Cat still waiting');
+});
+
+test('lite admin: approved helpers sign in, see recent classes, accept/cancel, download CSV', async () => {
+    const helper = `Helper.${unique}@Example.com`;
+    let cookie = '';
+    const as = async (method, url, body) => {
+        const res = await fetch(BASE + url, { method, headers: { 'Content-Type': 'application/json', ...(cookie ? { Cookie: cookie } : {}) }, body: body ? JSON.stringify(body) : undefined });
+        const text = await res.text(); let json; try { json = JSON.parse(text); } catch { json = text; }
+        const set = res.headers.get('set-cookie'); if (set) cookie = set.split(';')[0];
+        return { status: res.status, body: json, text };
+    };
+
+    assert.equal((await fetch(`${BASE}/admin-lite`)).status, 200, 'page loads');
+
+    // Only approved emails get in
+    assert.equal((await as('POST', '/api/lite/check-email', { email: helper })).status, 403);
+    assert.equal((await api('POST', '/api/admin/team-members', { email: helper })).status, 401, 'approving needs the admin');
+    assert.equal((await api('POST', '/api/admin/team-members', { email: helper }, { admin: true })).status, 200);
+    assert.equal((await api('POST', '/api/admin/team-members', { email: helper.toLowerCase() }, { admin: true })).status, 409);
+    const check = await as('POST', '/api/lite/check-email', { email: helper.toLowerCase() });
+    assert.equal(check.status, 200); assert.equal(check.body.needs_password, true);
+
+    // First time: choose a password (once)
+    assert.equal((await as('POST', '/api/lite/set-password', { email: helper, password: 'short' })).status, 400);
+    assert.equal((await as('POST', '/api/lite/set-password', { email: helper, password: 'helper-pass-1' })).status, 200);
+    assert.equal((await as('POST', '/api/lite/set-password', { email: helper, password: 'someone-else' })).status, 409, 'cannot be set twice');
+    await as('POST', '/api/lite/logout'); cookie = '';
+    assert.equal((await as('GET', '/api/lite/status')).status, 401);
+    assert.equal((await as('POST', '/api/lite/login', { email: helper, password: 'wrong-password' })).status, 401);
+    assert.equal((await as('POST', '/api/lite/login', { email: helper, password: 'helper-pass-1' })).status, 200);
+
+    // Classes: open, crew practice, closed just now, closed 10 days ago
+    const mk = async (name, extra = {}) => (await api('POST', '/api/courses', {
+        name: `${name} ${unique}`, course_type: 'multi-week', session_dates: ['2030-11-03', '2030-11-10', '2030-11-17'],
+        slots: [{ slot_name: 'Main', difficulty_level: 'All Levels', capacity: 10, start_time: '18:00', end_time: '19:00', location: 'Lite Studio', pricing: { full_package: 60 } }],
+        ...extra
+    }, { admin: true })).body.courseId;
+    const openId = await mk('Lite Open');
+    const crewId = await mk('Lite Crew', { course_type: 'crew_practice', required_student_type: 'crew_member', session_dates: ['2030-11-04'],
+        slots: [{ slot_name: 'Practice', difficulty_level: 'All Levels', capacity: 50, start_time: '18:00', end_time: '20:00', location: 'Lite Studio', pricing: { drop_in: 30 } }] });
+    const recentId = await mk('Lite Recent');
+    const oldId = await mk('Lite Old');
+    for (const id of [recentId, oldId]) await api('PUT', `/api/courses/${id}/registration-open`, { open: false }, { admin: true });
+    const { Pool } = require('pg');
+    const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: process.env.DATABASE_SSL === 'false' ? false : { rejectUnauthorized: false } });
+    await pool.query("UPDATE courses SET registration_closed_at = NOW() - INTERVAL '10 days' WHERE id = $1", [oldId]);
+    await pool.end();
+
+    const classes = (await as('GET', '/api/lite/classes')).body;
+    const ids = classes.map(c => Number(c.id));
+    assert.ok(ids.includes(openId) && ids.includes(crewId) && ids.includes(recentId), 'open, crew practice and recently closed classes listed');
+    assert.ok(!ids.includes(oldId), 'class closed 10 days ago hidden');
+    assert.equal(classes.find(c => Number(c.id) === recentId).is_closed, true);
+    assert.equal((await as('GET', `/api/admin/registrations?course_id=${oldId}`)).status, 403, 'old class blocked');
+    assert.equal((await as('GET', '/api/admin/registrations')).status, 403, 'a class must be chosen');
+
+    // Accept and cancel work like the full admin, and record who did it
+    const s1 = `lite.a.${unique}@example.com`, s2 = `lite.b.${unique}@example.com`;
+    const r1 = (await api('POST', '/api/register', { first_name: 'Lia', email: s1, course_id: openId, payment_amount: 60 })).body.registrationId;
+    const r2 = (await api('POST', '/api/register', { first_name: 'Max', email: s2, course_id: openId, payment_amount: 60 })).body.registrationId;
+    assert.equal((await as('PUT', `/api/admin/registrations/${r1}/confirm-payment`, {})).status, 200);
+    assert.equal((await as('PUT', `/api/admin/registrations/${r2}/cancel`, {})).status, 200);
+    const regs = (await as('GET', `/api/admin/registrations?course_id=${openId}`)).body;
+    const a = regs.find(r => Number(r.id) === r1), b = regs.find(r => Number(r.id) === r2);
+    assert.equal(a.payment_status, 'completed'); assert.equal(a.handled_by, helper.toLowerCase());
+    assert.equal(b.payment_status, 'canceled');
+
+    const csv = await as('GET', `/api/admin/registrations/export?course_id=${openId}`);
+    assert.equal(csv.status, 200);
+    assert.ok(csv.text.startsWith('Registration ID,Name,Email') && csv.text.includes(s1), 'CSV has the class registrations');
+
+    // Nothing else in the admin is open to helpers
+    for (const [m, u] of [['GET', '/api/admin/students'], ['PUT', '/api/settings'], ['GET', '/api/admin/team-members'], ['PUT', `/api/admin/registrations/${r2}/uncancel`]]) {
+        assert.equal((await as(m, u, m === 'PUT' ? {} : undefined)).status, 401, `${m} ${u} stays admin-only`);
+    }
+
+    // Removing the helper ends access right away
+    const member = (await api('GET', '/api/admin/team-members', null, { admin: true })).body.find(m => m.email === helper.toLowerCase());
+    assert.ok(member.has_password);
+    await api('DELETE', `/api/admin/team-members/${member.id}`, null, { admin: true });
+    assert.equal((await as('GET', '/api/lite/classes')).status, 401);
 });
 
 test('removed features are gone', async () => {

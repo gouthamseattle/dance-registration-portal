@@ -74,6 +74,7 @@ async function ensureSchema(dbConfig) {
         await ensureClassFieldColumns(dbConfig);
         await ensureComboTables(dbConfig);
         await ensureSessionTable(dbConfig);
+        await ensureTeamTable(dbConfig);
 
         // Ensure student profile and access control columns exist
         await ensureStudentProfileColumns(dbConfig);
@@ -265,6 +266,36 @@ async function ensureComboTables(dbConfig) {
         console.log('✅ Ensured combo tables exist');
     } catch (e) {
         console.log('ℹ️ combo tables check skipped:', e.message || e);
+    }
+}
+
+/**
+ * Lite admin (Oct 2026): helpers the admin approves by email. They set their
+ * own password on first sign-in at /admin-lite (password_hash stays NULL until then).
+ * registrations.handled_by records who accepted/cancelled ('admin' or an email).
+ * courses.registration_closed_at: when the class stopped taking registrations
+ * (helpers see open classes plus those closed in the last 7 days).
+ */
+async function ensureTeamTable(dbConfig) {
+    try {
+        const pk = dbConfig.isProduction ? 'SERIAL PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT';
+        await dbConfig.run(`CREATE TABLE IF NOT EXISTS team_members (
+            id ${pk},
+            email VARCHAR(255) NOT NULL UNIQUE,
+            password_hash VARCHAR(255),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            last_login TIMESTAMP
+        )`);
+        if (dbConfig.isProduction) {
+            await dbConfig.run('ALTER TABLE registrations ADD COLUMN IF NOT EXISTS handled_by VARCHAR(255)');
+            await dbConfig.run('ALTER TABLE courses ADD COLUMN IF NOT EXISTS registration_closed_at TIMESTAMP');
+        } else {
+            await dbConfig.run('ALTER TABLE registrations ADD COLUMN handled_by TEXT').catch(() => {});
+            await dbConfig.run('ALTER TABLE courses ADD COLUMN registration_closed_at TIMESTAMP').catch(() => {});
+        }
+        console.log('✅ Ensured team_members table exists');
+    } catch (e) {
+        console.log('ℹ️ team table check skipped:', e.message || e);
     }
 }
 

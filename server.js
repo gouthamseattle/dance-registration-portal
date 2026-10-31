@@ -38,7 +38,7 @@ app.use(bodyParser.urlencoded({ extended: true }));
 // Pages (HTML) must always be fresh, or phones and browsers keep showing an old
 // version with old links after a deploy. Scripts and styles are versioned (?v=)
 // in the HTML, so they can still be cached.
-const PAGE_ROUTES = new Set(['/', '/admin', '/my', '/privacy']);
+const PAGE_ROUTES = new Set(['/', '/admin', '/my', '/privacy', '/admin-lite']);
 app.use((req, res, next) => {
     if (req.method === 'GET' && (PAGE_ROUTES.has(req.path) || req.path.endsWith('.html'))) {
         res.set('Cache-Control', 'no-cache, must-revalidate');
@@ -108,6 +108,147 @@ app.get('/privacy', (req, res) => {
 app.get('/admin', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
+
+// ---------- Lite admin at /admin-lite ----------
+// Helpers approved by the admin (Settings → Other admins) can list a class's
+// registrations, accept/cancel them and download a CSV. Only for classes with
+// registration open, or closed in the last 7 days. Nothing else.
+app.get('/admin-lite', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'admin-lite.html'));
+});
+
+// A class is "closed" when it is inactive or its registration switch is off.
+const CLASS_CLOSED = dbConfig.isProduction
+    ? '(COALESCE(c.is_active, true) = false OR COALESCE(c.registration_open, true) = false)'
+    : '(COALESCE(c.is_active, 1) = 0 OR COALESCE(c.registration_open, 1) = 0)';
+// Record when a class closed (and clear it when reopened). id omitted = all classes.
+async function syncClosedAt(id) {
+    const one = id ? ' AND c.id = $1' : '';
+    const params = id ? [id] : [];
+    await dbConfig.run(`UPDATE courses AS c SET registration_closed_at = CURRENT_TIMESTAMP WHERE ${CLASS_CLOSED} AND c.registration_closed_at IS NULL${one}`, params);
+    await dbConfig.run(`UPDATE courses AS c SET registration_closed_at = NULL WHERE NOT ${CLASS_CLOSED} AND c.registration_closed_at IS NOT NULL${one}`, params);
+}
+// SQL for "a helper may see this class" (alias c); cutoff = 7 days ago
+function liteVisibleSql() {
+    const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().replace('T', ' ').slice(0, 19);
+    const hiddenOff = dbConfig.isProduction ? '(c.is_hidden IS NULL OR c.is_hidden = false)' : '(c.is_hidden IS NULL OR c.is_hidden = 0)';
+    return { sql: `${hiddenOff} AND (NOT ${CLASS_CLOSED} OR c.registration_closed_at >= '${cutoff}')` };
+}
+async function liteCanSeeCourse(courseId) {
+    if (!courseId) return false;
+    const row = await dbConfig.get(`SELECT c.id FROM courses c WHERE c.id = $1 AND ${liteVisibleSql().sql}`, [courseId]);
+    return !!row;
+}
+// For helpers: the class must be visible to them (admin: always allowed)
+const liteCourseGuard = asyncHandler(async (req, res, next) => {
+    if (!req.teamEmail) return next();
+    let courseId = req.query.course_id;
+    if (req.params.id) {
+        const reg = await dbConfig.get('SELECT course_id, is_test FROM registrations WHERE id = $1', [req.params.id]);
+        if (!reg || reg.is_test === true || reg.is_test === 1) return res.status(404).json({ error: 'Registration not found' });
+        courseId = reg.course_id;
+    }
+    if (!(await liteCanSeeCourse(courseId))) return res.status(403).json({ error: 'This class is not available here' });
+    next();
+});
+
+const normEmail = (e) => String(e || '').trim().toLowerCase();
+
+// Allows the admin, or a signed-in helper who is still approved (removing
+// someone in Settings stops their access on their next click).
+const requireAdminOrTeam = asyncHandler(async (req, res, next) => {
+    if (req.session.adminId) return next();
+    if (req.session.teamMemberId) {
+        const member = await dbConfig.get('SELECT id, email FROM team_members WHERE id = $1', [req.session.teamMemberId]);
+        if (member) { req.teamEmail = member.email; return next(); }
+        delete req.session.teamMemberId;
+    }
+    res.status(401).json({ error: 'Authentication required' });
+});
+const handledBy = (req) => req.teamEmail || 'admin';
+
+function startTeamSession(req, member) {
+    return new Promise((resolve, reject) => req.session.regenerate(err => {
+        if (err) return reject(err);
+        req.session.teamMemberId = member.id;
+        req.session.save(e => e ? reject(e) : resolve());
+    }));
+}
+
+// Step 1 of sign-in: is this email approved, and has it set a password yet?
+app.post('/api/lite/check-email', asyncHandler(async (req, res) => {
+    const member = await dbConfig.get('SELECT id, password_hash FROM team_members WHERE email = $1', [normEmail(req.body?.email)]);
+    if (!member) return res.status(403).json({ error: 'This email has not been approved. Ask Goutham to add you.' });
+    res.json({ approved: true, needs_password: !member.password_hash });
+}));
+
+// First sign-in only: choose a password (refused once one is set)
+app.post('/api/lite/set-password', asyncHandler(async (req, res) => {
+    const email = normEmail(req.body?.email);
+    const password = String(req.body?.password || '');
+    if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
+    const member = await dbConfig.get('SELECT id, email, password_hash FROM team_members WHERE email = $1', [email]);
+    if (!member) return res.status(403).json({ error: 'This email has not been approved' });
+    if (member.password_hash) return res.status(409).json({ error: 'A password is already set. Sign in with it, or ask Goutham to reset your access.' });
+    const hash = await bcrypt.hash(password, 10);
+    await dbConfig.run('UPDATE team_members SET password_hash = $1, last_login = CURRENT_TIMESTAMP WHERE id = $2', [hash, member.id]);
+    await startTeamSession(req, member);
+    res.json({ success: true, email: member.email });
+}));
+
+app.post('/api/lite/login', asyncHandler(async (req, res) => {
+    const member = await dbConfig.get('SELECT id, email, password_hash FROM team_members WHERE email = $1', [normEmail(req.body?.email)]);
+    const ok = member && member.password_hash && await bcrypt.compare(String(req.body?.password || ''), member.password_hash);
+    if (!ok) return res.status(401).json({ error: 'Wrong email or password' });
+    await dbConfig.run('UPDATE team_members SET last_login = CURRENT_TIMESTAMP WHERE id = $1', [member.id]);
+    await startTeamSession(req, member);
+    res.json({ success: true, email: member.email });
+}));
+
+app.get('/api/lite/status', requireAdminOrTeam, (req, res) => {
+    res.json({ authenticated: true, email: req.teamEmail || 'Admin' });
+});
+
+app.post('/api/lite/logout', (req, res) => {
+    delete req.session.teamMemberId;
+    req.session.save(() => res.json({ success: true }));
+});
+
+// Classes for the picker: open ones, then ones closed in the last 7 days (test registrations not counted)
+app.get('/api/lite/classes', requireAdminOrTeam, asyncHandler(async (req, res) => {
+    const rows = await dbConfig.all(`
+        SELECT c.id, c.name, c.course_type, c.session_dates, c.required_student_type, c.registration_closed_at,
+               CASE WHEN ${CLASS_CLOSED} THEN 1 ELSE 0 END AS is_closed,
+               COUNT(CASE WHEN r.payment_status = 'pending' THEN 1 END) AS pending_count,
+               COUNT(CASE WHEN r.payment_status = 'completed' THEN 1 END) AS paid_count
+        FROM courses c
+        LEFT JOIN registrations r ON r.course_id = c.id AND ${NOT_TEST}
+        WHERE ${liteVisibleSql().sql}
+        GROUP BY c.id, c.name, c.course_type, c.session_dates, c.required_student_type, c.registration_closed_at, c.is_active, c.registration_open
+        ORDER BY c.id DESC`);
+    res.json(rows.map(r => ({ ...r, is_closed: Number(r.is_closed) === 1, pending_count: Number(r.pending_count || 0), paid_count: Number(r.paid_count || 0) })));
+}));
+
+// Admin: manage who can use the lite admin
+app.get('/api/admin/team-members', requireAuth, asyncHandler(async (req, res) => {
+    const rows = await dbConfig.all('SELECT id, email, password_hash IS NOT NULL AS has_password, created_at, last_login FROM team_members ORDER BY email');
+    res.json(rows.map(r => ({ ...r, has_password: !!r.has_password })));
+}));
+
+app.post('/api/admin/team-members', requireAuth, asyncHandler(async (req, res) => {
+    const email = normEmail(req.body?.email);
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Enter a valid email' });
+    const existing = await dbConfig.get('SELECT id FROM team_members WHERE email = $1', [email]);
+    if (existing) return res.status(409).json({ error: 'That email is already approved' });
+    await dbConfig.run('INSERT INTO team_members (email) VALUES ($1)', [email]);
+    res.json({ success: true });
+}));
+
+// Removing someone ends their access; re-approving lets them choose a new password
+app.delete('/api/admin/team-members/:id', requireAuth, asyncHandler(async (req, res) => {
+    await dbConfig.run('DELETE FROM team_members WHERE id = $1', [req.params.id]);
+    res.json({ success: true });
+}));
 
 
 // API Routes
@@ -1213,6 +1354,7 @@ app.put('/api/courses/:id', requireAuth, asyncHandler(async (req, res) => {
         }
     }
 
+    await syncClosedAt(id);
     res.json({ success: true });
 }));
 
@@ -2829,6 +2971,7 @@ app.put('/api/courses/:id/registration-open', requireAuth, asyncHandler(async (r
     const open = !!(req.body || {}).open;
     await dbConfig.run('UPDATE courses SET registration_open = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
         [dbConfig.isProduction ? open : (open ? 1 : 0), req.params.id]);
+    await syncClosedAt(req.params.id);
     res.json({ success: true, registration_open: open });
 }));
 
@@ -3750,6 +3893,7 @@ app.get('/api/registrations', requireAuth, asyncHandler(async (req, res) => {
         params.push(payment_status);
     }
     
+    if (req.teamEmail) conditions.push(NOT_TEST);
     if (conditions.length > 0) {
         query += ' WHERE ' + conditions.join(' AND ');
     }
@@ -3764,7 +3908,7 @@ app.get('/api/registrations', requireAuth, asyncHandler(async (req, res) => {
  * Admin CSV export for registrations
  * GET /api/admin/registrations/export?course_id=&payment_status=
  */
-app.get('/api/admin/registrations/export', requireAuth, asyncHandler(async (req, res) => {
+app.get('/api/admin/registrations/export', requireAdminOrTeam, liteCourseGuard, asyncHandler(async (req, res) => {
     try {
         const { course_id, payment_status } = req.query;
 
@@ -3785,6 +3929,7 @@ app.get('/api/admin/registrations/export', requireAuth, asyncHandler(async (req,
             conditions.push('r.payment_status = $' + (params.length + 1));
             params.push(payment_status);
         }
+        if (req.teamEmail) conditions.push(NOT_TEST);
         if (conditions.length > 0) {
             query += ' WHERE ' + conditions.join(' AND ');
         }
@@ -3829,7 +3974,8 @@ app.get('/api/admin/registrations/export', requireAuth, asyncHandler(async (req,
         }
 
         const csv = lines.join('\n');
-        const filename = `registrations-${new Date().toISOString().slice(0,10)}.csv`;
+        const classSlug = course_id && rows[0]?.course_name ? String(rows[0].course_name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '-' : '';
+        const filename = `registrations-${classSlug}${new Date().toISOString().slice(0,10)}.csv`;
 
         res.setHeader('Content-Type', 'text/csv; charset=utf-8');
         res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
@@ -3841,7 +3987,7 @@ app.get('/api/admin/registrations/export', requireAuth, asyncHandler(async (req,
 }));
 
 // Alias endpoint for admin to fetch registrations (same behavior as /api/registrations)
-app.get('/api/admin/registrations', requireAuth, asyncHandler(async (req, res) => {
+app.get('/api/admin/registrations', requireAdminOrTeam, liteCourseGuard, asyncHandler(async (req, res) => {
     const { course_id, payment_status } = req.query;
     
     let query = `
@@ -3984,7 +4130,7 @@ app.put('/api/registrations/:id/payment', requireAuth, asyncHandler(async (req, 
  * - If email notifications are enabled, sends a confirmation email to the student
  * - Never fails the payment update due to email errors; returns flags in response
  */
-app.put('/api/admin/registrations/:id/confirm-payment', requireAuth, asyncHandler(async (req, res) => {
+app.put('/api/admin/registrations/:id/confirm-payment', requireAdminOrTeam, liteCourseGuard, asyncHandler(async (req, res) => {
     const { id } = req.params;
     const { venmo_transaction_note } = req.body;
 
@@ -3996,9 +4142,10 @@ app.put('/api/admin/registrations/:id/confirm-payment', requireAuth, asyncHandle
                 payment_status = 'completed',
                 payment_method = COALESCE(payment_method, 'Venmo'),
                 paypal_transaction_id = $1,
+                handled_by = $3,
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = $2
-        `, [venmo_transaction_note || `Venmo payment confirmed by admin`, regId]);
+        `, [venmo_transaction_note || `Payment confirmed by ${handledBy(req)}`, regId, handledBy(req)]);
     }
 
     console.log('✅ Admin confirmed Venmo payment for registration:', id);
@@ -4026,7 +4173,7 @@ app.put('/api/admin/registrations/:id/confirm-payment', requireAuth, asyncHandle
 
         // Send confirmation email via Gmail SMTP
         sendRegistrationConfirmationEmail(details.email, details).then(() => {
-            console.log('✉️  Sent confirmation email to:', reg.email);
+            console.log('✉️  Sent confirmation email to:', details.email);
         }).catch(err => {
             console.error('❌ Error sending confirmation email:', err.message, err.stack);
         });
@@ -4067,7 +4214,7 @@ app.post('/api/admin/registrations/:id/resend-confirmation', requireAuth, asyncH
         }
 
         sendRegistrationConfirmationEmail(details.email, details).then(() => {
-            console.log('✉️  Resent confirmation email to:', reg.email);
+            console.log('✉️  Resent confirmation email to:', details.email);
         }).catch(err => {
             console.error('❌ Error resending confirmation email:', err);
         });
@@ -4085,7 +4232,7 @@ app.post('/api/admin/registrations/:id/resend-confirmation', requireAuth, asyncH
  * PUT /api/admin/registrations/:id/cancel
  * Body: { reason?: string }
  */
-app.put('/api/admin/registrations/:id/cancel', requireAuth, asyncHandler(async (req, res) => {
+app.put('/api/admin/registrations/:id/cancel', requireAdminOrTeam, liteCourseGuard, asyncHandler(async (req, res) => {
     const { id } = req.params;
     const { reason } = req.body || {};
     try {
@@ -4105,9 +4252,10 @@ app.put('/api/admin/registrations/:id/cancel', requireAuth, asyncHandler(async (
                     canceled_at = CURRENT_TIMESTAMP,
                     canceled_by = $1,
                     cancellation_reason = $2,
+                    handled_by = $4,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = $3
-            `, [req.session.adminId || null, reason || null, regId]);
+            `, [req.session.adminId || null, reason || null, regId, handledBy(req)]);
         }
 
         // Email notifications (optional)
@@ -4645,6 +4793,9 @@ app.use((req, res) => {
 async function startServer() {
     db = await initializeDatabase(dbConfig);
     
+    // Stamp a "closed on" date on classes that are closed but have none yet (lite admin's 7-day rule)
+    try { await syncClosedAt(); } catch (e) { console.warn('⚠️ closed-date sync failed:', e.message); }
+
     // Warmup: run a simple query to ensure Pool connections are hot
     if (dbConfig.isProduction) {
         try {
