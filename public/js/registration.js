@@ -47,7 +47,7 @@ class DanceRegistrationApp {
                 return;
             }
             
-            console.log('✅ Venmo payment system ready with username:', this.settings.venmo_username);
+            this.applyPaymentOptions();
         } catch (error) {
             console.error('Error loading settings:', error);
             throw error;
@@ -759,6 +759,20 @@ class DanceRegistrationApp {
         }
     }
 
+    // Zelle can be switched off in Admin → Settings; then checkout is Venmo only
+    zelleOn() { return this.settings && this.settings.zelle_enabled === 'true'; }
+
+    applyPaymentOptions() {
+        const chooser = document.querySelector('.payment-method-selection');
+        const section = chooser ? chooser.closest('.col-12') : null;
+        if (this.zelleOn()) {
+            if (section) section.style.display = '';
+        } else {
+            if (section) section.style.display = 'none';
+            this.selectPaymentMethodInForm('venmo');
+        }
+    }
+
     setupPaymentMethodSelection() {
         // Set up payment method selection handlers for registration form
         const paymentCards = document.querySelectorAll('.payment-method-selection');
@@ -886,9 +900,10 @@ class DanceRegistrationApp {
         const form = document.getElementById('studentRegistrationForm');
         const formData = new FormData(form);
 
-        // Validate payment method selection
+        // Validate payment method selection (Venmo only when Zelle is switched off)
+        if (!this.selectedPaymentMethod && !this.zelleOn()) this.selectedPaymentMethod = 'venmo';
         if (!this.selectedPaymentMethod) {
-            this.showError('Please select a payment method (Venmo or Zelle) to continue.');
+            this.showError('Please choose a payment method to continue.');
             // Scroll to payment method section
             const paymentMethodSection = document.querySelector('.payment-method-selection').closest('.col-12');
             if (paymentMethodSection) {
@@ -1221,28 +1236,40 @@ class DanceRegistrationApp {
         if (paymentSection) paymentSection.style.display = 'block';
         if (confirmationSection) confirmationSection.style.display = 'none';
 
+        const header = document.querySelector('#paymentSection .card-header');
+        if (header) header.style.display = '';
         this.populatePaymentSummary();
         this.initializePaymentOptions();
         this.scrollToTop();
     }
 
+    // Class, dates and the amount, shown above the payment details
+    paymentClassName() {
+        return this.selectedCourse ? this.selectedCourse.name :
+               this.selectedDropIn ? `${this.selectedDropIn.course_name} - Drop-in` :
+               (this.registrationData.combo_name || '');
+    }
+    paymentDatesText() {
+        const C = window.ClassInfo;
+        let list = Array.isArray(this.registrationData.selected_dates) && this.registrationData.selected_dates.length
+            ? this.registrationData.selected_dates
+            : (this.selectedCourse && C ? C.dates(this.selectedCourse) : []);
+        try { return C && list && list.length ? C.formatDates(list) : ''; } catch (e) { return ''; }
+    }
+
     populatePaymentSummary() {
         const summaryContainer = document.getElementById('paymentSummary');
-        
-        const courseName = this.selectedCourse ? this.selectedCourse.name : 
-                          this.selectedDropIn ? `${this.selectedDropIn.course_name} - Drop-in` : '';
-        
+        const esc = window.ClassInfo ? window.ClassInfo.esc : (v) => v;
+        const name = [this.registrationData.first_name, this.registrationData.last_name].filter(Boolean).join(' ');
+        const sub = [this.paymentDatesText(), name].filter(Boolean).join(' · ');
+        summaryContainer.className = 'pay-summary';
+        summaryContainer.style.display = '';
         summaryContainer.innerHTML = `
-            <h6><i class="fas fa-receipt text-primary"></i> Payment Summary</h6>
-            <div class="row">
-                <div class="col-8">
-                    <strong>${courseName}</strong><br>
-                    <small class="text-muted">${this.registrationData.email}</small>
-                </div>
-                <div class="col-4 text-end">
-                    <strong class="h5 text-primary">$${this.registrationData.payment_amount}</strong>
-                </div>
+            <div class="pay-summary-text">
+                <div class="pay-summary-name">${esc(this.paymentClassName())}</div>
+                ${sub ? `<div class="pay-summary-sub">${esc(sub)}</div>` : ''}
             </div>
+            <div class="pay-summary-amount">$${esc(String(this.registrationData.payment_amount))}</div>
         `;
     }
 
@@ -1250,6 +1277,7 @@ class DanceRegistrationApp {
         const container = document.getElementById('paypal-button-container');
         container.innerHTML = '';
 
+        if (!this.selectedPaymentMethod && !this.zelleOn()) this.selectedPaymentMethod = 'venmo';
         // Since payment method was already selected, go directly to the payment flow
         if (this.selectedPaymentMethod) {
             console.info('Skipping payment method selection, going directly to:', this.selectedPaymentMethod);
@@ -1370,92 +1398,39 @@ class DanceRegistrationApp {
             // Detect if user is on mobile
             const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
+            const esc = window.ClassInfo ? window.ClassInfo.esc : (v) => v;
+            const amount = esc(String(this.registrationData.payment_amount));
+            const user = esc(venmoData.venmoUsername);
+            const note = esc(venmoData.paymentNote);
             container.innerHTML = `
-                <div class="venmo-payment-container">
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h6><i class="fas fa-mobile-alt text-primary me-2"></i>Pay with Venmo</h6>
-                        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="app.initializePaymentOptions()">
-                            <i class="fas fa-arrow-left me-1"></i>Back
-                        </button>
+                <div class="pay-card">
+                    <div class="pay-card-head">
+                        <h2 class="pay-title">Pay with Venmo</h2>
+                        ${this.zelleOn() ? `<button type="button" class="btn btn-outline-secondary btn-sm" onclick="app.selectedPaymentMethod=null;app.initializePaymentOptions()">Change</button>` : ''}
                     </div>
-                    
-                    <div class="alert alert-info mb-4">
-                        <div class="d-flex align-items-center">
-                            <i class="fas fa-mobile-alt fa-2x text-primary me-3"></i>
-                            <div>
-                                <h6 class="mb-1">Send payment to</h6>
-                                <div class="copy-row"><span class="copy-value">@${venmoData.venmoUsername}</span><button type="button" class="btn-copy">Copy</button></div>
-                            </div>
-                        </div>
+                    <div class="pay-field">
+                        <span class="pay-label">Send payment to</span>
+                        <div class="copy-row"><span class="copy-value">@${user}</span><button type="button" class="btn-copy">Copy</button></div>
                     </div>
-
-                    <div class="payment-details mb-4">
-                        <div class="row g-3">
-                            <div class="col-12">
-                                <strong>Amount:</strong><br>
-                                <span class="h4 text-success">$${this.registrationData.payment_amount}</span>
-                            </div>
-                            <div class="col-12">
-                                <strong>Payment note:</strong>
-                                <div class="copy-row"><span class="copy-value">${venmoData.paymentNote}</span><button type="button" class="btn-copy">Copy</button></div>
-                            </div>
-                        </div>
+                    <div class="pay-field">
+                        <span class="pay-label">Payment note</span>
+                        <div class="copy-row"><span class="copy-value">${note}</span><button type="button" class="btn-copy">Copy</button></div>
                     </div>
-
                     ${isMobile ? `
-                        <!-- Mobile: Direct Venmo app link -->
-                        <div class="d-grid gap-2 mb-3">
-                            <a href="${venmoData.venmoLink}" class="btn btn-primary btn-lg venmo-btn">
-                                <i class="fas fa-mobile-alt me-2"></i>
-                                Open Venmo App & Pay
-                            </a>
-                        </div>
-                        <div class="text-center">
-                            <small class="text-muted">
-                                <i class="fas fa-info-circle me-1"></i>
-                                This will open your Venmo app with payment details pre-filled
-                            </small>
-                        </div>
+                        <a href="${venmoData.venmoLink}" class="btn btn-lg venmo-open-btn">Open Venmo app &amp; pay $${amount}</a>
                     ` : `
-                        <!-- Desktop: QR Code and manual instructions -->
-                        <div class="text-center mb-4">
-                            <div class="qr-code-container mb-3">
-                                <div id="venmoQRCode" class="d-inline-block p-3 bg-white border rounded">
-                                    <div class="spinner-border text-primary" role="status">
-                                        <span class="visually-hidden">Generating QR code...</span>
-                                    </div>
-                                </div>
+                        <div class="pay-qr">
+                            <div id="venmoQRCode" class="d-inline-block p-3 bg-white rounded">
+                                <div class="spinner-border text-primary" role="status"><span class="visually-hidden">Generating QR code...</span></div>
                             </div>
-                            <p class="mb-2"><strong>Scan with your phone to pay via Venmo</strong></p>
-                            <small class="text-muted">Or manually send $${this.registrationData.payment_amount} to @${venmoData.venmoUsername}</small>
-                        </div>
-                        
-                        <div class="manual-payment-info">
-                            <div class="alert alert-light">
-                                <h6><i class="fas fa-hand-point-right me-2"></i>Manual Payment Instructions:</h6>
-                                <ol class="mb-0 small">
-                                    <li>Open Venmo app on your phone</li>
-                                    <li>Search for <strong>@${venmoData.venmoUsername}</strong></li>
-                                    <li>Send <strong>$${this.registrationData.payment_amount}</strong></li>
-                                    <li>Include note: <strong>${venmoData.paymentNote}</strong></li>
-                                </ol>
-                            </div>
+                            <div class="pay-hint">Scan with your phone's camera to open Venmo</div>
                         </div>
                     `}
-
-                    <div class="payment-confirmation mt-4">
-                        <div class="alert alert-warning">
-                            <h6><i class="fas fa-clock me-2"></i>After Payment</h6>
-                            <p class="mb-0 small">We'll verify your payment shortly and send you a confirmation email.</p>
-                        </div>
-                        
-                        <div class="d-grid">
-                            <button class="btn btn-success" onclick="app.showPaymentSentConfirmation(this)">
-                                <i class="fas fa-check me-2"></i>
-                                I've Sent the Payment
-                            </button>
-                        </div>
-                    </div>
+                    <div class="pay-hint">Or in the Venmo app: search <strong>@${user}</strong>, send <strong>$${amount}</strong> and paste the note.</div>
+                </div>
+                <div class="pay-actions">
+                    <button type="button" class="btn btn-primary btn-lg w-100" onclick="app.askPaymentSent(this)">I've sent the payment</button>
+                    <div class="pay-footnote">Your spot is confirmed once we receive your payment.</div>
                 </div>
             `;
 
@@ -1471,7 +1446,7 @@ class DanceRegistrationApp {
                     <h6><i class="fas fa-exclamation-triangle me-2"></i>Venmo Payment Error</h6>
                     <p class="mb-2">${error.message}</p>
                     <div class="mt-3">
-                        <button class="btn btn-outline-primary" onclick="app.initializePaymentOptions()">Try Another Payment Method</button>
+                        <button class="btn btn-outline-primary" onclick="app.initializeVenmoPayment()">Try again</button>
                     </div>
                 </div>
             `;
@@ -1579,7 +1554,7 @@ class DanceRegistrationApp {
                         </div>
                         
                         <div class="d-grid">
-                            <button class="btn btn-success" onclick="app.showPaymentSentConfirmation(this)">
+                            <button class="btn btn-success" onclick="app.askPaymentSent(this)">
                                 <i class="fas fa-check me-2"></i>
                                 I've Sent the Payment
                             </button>
@@ -1617,6 +1592,37 @@ class DanceRegistrationApp {
     }
 
     // "I've sent the payment": this is when the registration is saved.
+    // "I've sent the payment": ask once before saving the registration
+    askPaymentSent(button) {
+        const esc = window.ClassInfo ? window.ClassInfo.esc : (v) => v;
+        const amount = esc(String(this.registrationData.payment_amount));
+        const zelle = this.selectedPaymentMethod === 'zelle';
+        const to = zelle ? esc(this.settings.zelle_recipient_name || 'GouMo') : '@' + esc(this.settings.venmo_username || '');
+        const old = document.getElementById('paySentSheet'); if (old) old.remove();
+        const sheet = document.createElement('div');
+        sheet.id = 'paySentSheet';
+        sheet.className = 'pay-sheet-backdrop';
+        sheet.innerHTML = `
+            <div class="pay-sheet" role="dialog" aria-modal="true" aria-labelledby="paySentTitle">
+                <div class="pay-sheet-grip"></div>
+                <h2 id="paySentTitle">Did you send the payment?</h2>
+                <div class="pay-sheet-box">Sent <strong>$${amount}</strong> to <strong>${to}</strong> on ${zelle ? 'Zelle' : 'Venmo'}</div>
+                <p>We'll match your payment and then email your confirmation. If we can't find a payment, your registration won't be accepted.</p>
+                <button type="button" class="btn btn-primary btn-lg w-100" id="paySentYes">Yes, I've paid</button>
+                <button type="button" class="btn btn-outline-secondary btn-lg w-100" id="paySentNo">Not yet, take me back</button>
+            </div>`;
+        document.body.appendChild(sheet);
+        const close = () => sheet.remove();
+        sheet.addEventListener('click', (e) => { if (e.target === sheet) close(); });
+        sheet.querySelector('#paySentNo').addEventListener('click', close);
+        sheet.querySelector('#paySentYes').addEventListener('click', async (e) => {
+            e.target.disabled = true; e.target.textContent = 'Saving your registration…';
+            close();
+            await this.showPaymentSentConfirmation(button);
+        });
+        sheet.querySelector('#paySentYes').focus();
+    }
+
     async showPaymentSentConfirmation(button) {
         if (this._savingRegistration) return;
         this._savingRegistration = true;
@@ -1639,46 +1645,33 @@ class DanceRegistrationApp {
         // Remember the email on this phone so "My classes" opens straight away
         try { localStorage.setItem('goumo_email', this.registrationData.email || ''); } catch (e) { /* private mode */ }
 
-        // Update the payment section to show confirmation
+        // Done: the student has done their part
+        const esc = window.ClassInfo ? window.ClassInfo.esc : (v) => v;
+        const summary = document.getElementById('paymentSummary');
+        if (summary) summary.style.display = 'none';
+        const header = document.querySelector('#paymentSection .card-header');
+        if (header) header.style.display = 'none';
+        const dates = this.paymentDatesText();
+        const method = this.selectedPaymentMethod === 'zelle' ? 'Zelle' : 'Venmo';
         const container = document.getElementById('paypal-button-container');
         container.innerHTML = `
-            <div class="text-center">
-                <div class="alert alert-success">
-                    <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
-                    <h5>Thanks, we've got your registration!</h5>
-                    <p class="mb-2">We'll verify your ${this.selectedPaymentMethod === 'zelle' ? 'Zelle' : 'Venmo'} payment and then send you a confirmation email.</p>
-                    <p class="mb-0 small text-muted">
-                        <i class="fas fa-envelope me-1"></i>
-                        Your spot is confirmed once that email arrives. If you don't see it, check your spam or junk folder.
-                    </p>
+            <div class="pay-done">
+                <div class="pay-done-icon" aria-hidden="true"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
+                <h2 class="pay-done-title">You're all done!</h2>
+                <p class="pay-done-text">Thanks for registering for <strong>${esc(this.paymentClassName())}</strong>. We'll match your ${method} payment and email your confirmation to <strong>${esc(this.registrationData.email || '')}</strong>.</p>
+                <div class="pay-done-rows">
+                    <div><span>Class</span><strong>${esc(this.paymentClassName())}</strong></div>
+                    ${dates ? `<div><span>Dates</span><strong>${esc(dates)}</strong></div>` : ''}
+                    <div><span>Paid</span><strong>$${esc(String(this.registrationData.payment_amount))} by ${method}</strong></div>
                 </div>
-                
-                <div class="registration-summary">
-                    <h6>Registration Summary</h6>
-                    <div class="row text-start">
-                        <div class="col-6"><strong>Registration ID:</strong></div>
-                        <div class="col-6">#${this.registrationData.registrationId}</div>
-                        <div class="col-6"><strong>Amount:</strong></div>
-                        <div class="col-6">$${this.registrationData.payment_amount}</div>
-                        <div class="col-6"><strong>Status:</strong></div>
-                        <div class="col-6"><span class="badge bg-warning">Payment being verified</span></div>
-                    </div>
+                <div class="d-grid gap-2">
+                    <a class="btn btn-primary btn-lg" href="/">Back to GouMo home</a>
+                    <button type="button" class="btn btn-outline-secondary btn-lg" onclick="app.resetRegistration()">Register for another class</button>
                 </div>
-
-                <div class="d-grid gap-2 mt-4">
-                    <a class="btn btn-primary" href="/my">
-                        See my classes
-                    </a>
-                    <button class="btn btn-outline-secondary" onclick="app.resetRegistration()">
-                        Register for another class
-                    </button>
-                    <button class="btn btn-outline-secondary" onclick="app.shareRegistration()">
-                        <i class="fas fa-share me-2"></i>
-                        Share with Friends
-                    </button>
-                </div>
+                <div class="pay-footnote">You can check your classes anytime under <a href="/my">My classes</a>.</div>
             </div>
         `;
+        this.scrollToTop();
     }
 
     async handlePaymentSuccess(order) {
