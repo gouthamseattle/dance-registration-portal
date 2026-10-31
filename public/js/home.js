@@ -138,6 +138,91 @@
     loading.hidden = true;
   }
 
+  // ---------- Instructor bios (tap a card on the home page) ----------
+  // Text from the instructors' own bios (Oct 2026). Tags = styles they teach.
+  const INSTRUCTORS = {
+    goutham: {
+      name: 'Goutham', role: 'Founder · Head choreographer', years: '18+ years of dance experience',
+      tags: ['Locking', 'Hip-hop', 'House', 'Choreography'],
+      bio: 'Founder of GouMo Dance Chronicles and choreographer for Dreamers Dance Crew and Tapping Toez. Goutham has been dancing for over 18 years and choreographing since 2014, and judges inter-college and corporate dance competitions.',
+      highlights: [
+        'Best Choreographer, Chennai Super Dancers',
+        'Winner, Chennai Super Dancers and Chennai Dance Championship',
+        'Winner, Boom, Ripples, IDA Destiny, LimeLite and Street Thandav (Bangalore)',
+        'Judge, multiple inter-college and corporate dance competitions'
+      ]
+    },
+    monica: {
+      name: 'Monica', role: 'Founder · Locking specialist', years: '10+ years of dance experience',
+      tags: ['Locking', 'Choreography'],
+      bio: 'Monica specializes in Locking and has trained with some of the best lockers from around the world. She is the founder and an instructor at GouMo Dance Chronicles and the founder of Dreamers Dance Crew, with over 10 years of dance experience as a lead dancer in championship-winning teams.',
+      highlights: [
+        'Trained in Locking with leading lockers from around the world',
+        'Lead dancer in championship-winning teams across college, corporate and professional competitions',
+        'Winner, NIIT Festember, Chennai Super Dancers, Chennai Dance Championship, Boom, IDA Destiny, LimeLite and Street Thandav',
+        'Represented Insiders Dance Crew, Tapping Toez and Dreamers Dance Crew'
+      ]
+    },
+    rudie: {
+      name: 'Rudie', role: 'Instructor', years: '7+ years of dance experience',
+      tags: ['Choreography'],
+      bio: 'Rudie started his dance journey in India and continued pursuing his passion after moving to Seattle. With over 7 years of experience, he has performed in various competitions and showcases and started his teaching journey this year.',
+      highlights: []
+    },
+    supriya: {
+      name: 'Supriya', role: 'Instructor', years: '3+ years of dance experience',
+      tags: ['Choreography'],
+      bio: 'Supriya started her professional dance journey 3 years ago and has performed in various showcases across Seattle. She is trained in Locking, House and Hip-hop, and is the first student turned instructor at GouMo Dance Chronicles.',
+      highlights: []
+    }
+  };
+
+  // Open classes whose instructor field names this person
+  function classesWith(name) {
+    const re = new RegExp('\\b' + name + '\\b', 'i');
+    return courses.filter((c) => c.instructor && re.test(c.instructor) && (C.isTesterDevice() || C.isOpen(c)));
+  }
+
+  function openBio(key) {
+    const p = INSTRUCTORS[key];
+    if (!p) return;
+    const esc = C.esc;
+    const list = classesWith(p.name);
+    document.getElementById('bioBody').innerHTML = `
+      <div class="bio-head">
+        <img src="/images/${key}.jpg" alt="">
+        <div><h2 id="bioName">${esc(p.name)}</h2><span class="role">${esc(p.role)}</span><span class="years">${esc(p.years)}</span></div>
+        <button type="button" class="bio-close" aria-label="Close"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      </div>
+      <div class="tags">${p.tags.map((t) => `<span class="tag">${esc(t)}</span>`).join('')}</div>
+      <p class="bio-text">${esc(p.bio)}</p>
+      ${p.highlights.length ? `<div><p class="bio-label">Highlights</p><ul class="bio-highlights">${p.highlights.map((h) => `<li>${esc(h)}</li>`).join('')}</ul></div>` : ''}
+      <div>
+        <p class="bio-label">Classes with ${esc(p.name)}</p>
+        ${list.length ? list.map((c) => {
+          const f = C.fees(c);
+          const when = C.formatDates(C.dates(c));
+          const sub = [when, f.headline ? `$${Number(f.headline).toFixed(0)}${f.unit || ''}` : ''].filter(Boolean).join(' · ');
+          return `<div class="bio-class"><div><strong>${esc(c.name)}</strong><span>${esc(sub)}</span></div><a class="btn btn-primary" href="/email-profile.html?course=${encodeURIComponent(c.id)}">Register</a></div>`;
+        }).join('') : '<p class="bio-none">No classes open right now. Follow <a href="https://instagram.com/goumo_dancechronicles">@goumo_dancechronicles</a> for the next one.</p>'}
+      </div>`;
+    const sheet = document.getElementById('bioSheet');
+    sheet.hidden = false;
+    document.body.style.overflow = 'hidden';
+    sheet.querySelector('.bio-close').focus();
+  }
+
+  function closeBio() {
+    document.getElementById('bioSheet').hidden = true;
+    document.body.style.overflow = '';
+  }
+
+  document.querySelectorAll('[data-person]').forEach((b) => b.addEventListener('click', () => openBio(b.dataset.person)));
+  document.getElementById('bioSheet').addEventListener('click', (e) => {
+    if (e.target.id === 'bioSheet' || e.target.closest('.bio-close')) closeBio();
+  });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeBio(); });
+
   document.getElementById('classes').addEventListener('click', (e) => {
     const filter = e.target.closest('.filter');
     if (filter) {
