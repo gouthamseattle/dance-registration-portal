@@ -868,6 +868,26 @@ test('lite admin: approved helpers sign in, see recent classes, accept/cancel, d
     assert.equal((await as('GET', '/api/lite/classes')).status, 401);
 });
 
+test('payments: Zelle is off by default and can be switched on; Venmo ID comes from settings', async () => {
+    let settings = (await api('GET', '/api/settings')).body;
+    assert.equal(settings.zelle_enabled, 'false', 'checkout is Venmo only by default');
+    assert.equal((await api('PUT', '/api/settings', { zelle_enabled: 'true' })).status, 401, 'needs the admin');
+    await api('PUT', '/api/settings', { zelle_enabled: 'true', venmo_username: 'goumo-test-venmo' }, { admin: true });
+    settings = (await api('GET', '/api/settings')).body;
+    assert.equal(settings.zelle_enabled, 'true');
+    const link = await api('POST', '/api/generate-venmo-link', { amount: 60, course_name: 'Test' });
+    assert.equal(link.status, 200);
+    assert.equal(link.body.venmoUsername, 'goumo-test-venmo', 'checkout uses the Venmo ID from Settings');
+    await api('PUT', '/api/settings', { zelle_enabled: 'false' }, { admin: true });
+    assert.equal((await api('GET', '/api/settings')).body.zelle_enabled, 'false');
+
+    // Checkout page has the new confirm-before-saving flow and no old "You're in!" screen
+    const js = await (await fetch(`${BASE}/js/registration.js`)).text();
+    assert.ok(js.includes('askPaymentSent') && js.includes("You're all done!"), 'new checkout screens');
+    const page = await (await fetch(`${BASE}/index-registration.html`)).text();
+    assert.ok(!page.includes("You're in!"), 'old confirmation screen removed');
+});
+
 test('removed features are gone', async () => {
     for (const [method, url] of [
         ['POST', '/api/competition/register'],

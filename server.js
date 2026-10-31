@@ -349,6 +349,8 @@ app.get('/api/settings', asyncHandler(async (req, res) => {
     if (!settingsObj.zelle_phone) {
         settingsObj.zelle_phone = '4252159818';
     }
+    // Zelle is off unless switched on in Admin → Settings (checkout is Venmo only)
+    if (settingsObj.zelle_enabled !== 'true') settingsObj.zelle_enabled = 'false';
     
     res.json(settingsObj);
 }));

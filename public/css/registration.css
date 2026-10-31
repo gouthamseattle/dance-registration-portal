@@ -220,3 +220,37 @@ body.crew-practice-mode { background: var(--bg); }
 .date-option { display: flex; align-items: center; gap: 8px; min-height: 48px; padding: 0 10px; white-space: nowrap; font-size: 15px; border: 1px solid var(--line); border-radius: 10px; font-weight: 600; cursor: pointer; }
 .date-option:has(input:checked) { border-color: var(--accent); }
 .date-option .form-check-input { margin: 0; }
+
+/* ---------- Checkout: pay, confirm, done (Oct 2026) ---------- */
+.pay-summary { display: flex; align-items: center; gap: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; margin-bottom: 16px; }
+.pay-summary-text { flex: 1 1 auto; min-width: 0; }
+.pay-summary-name { font-weight: 600; }
+.pay-summary-sub { font-size: 13px; color: var(--muted); margin-top: 2px; }
+.pay-summary-amount { font-family: var(--font-display); font-size: 26px; white-space: nowrap; }
+.pay-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 18px; display: flex; flex-direction: column; gap: 14px; }
+.pay-card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.pay-title { margin: 0; font-size: 18px; font-weight: 700; font-family: var(--font-body); }
+.pay-field { display: flex; flex-direction: column; }
+.pay-label { font-size: 12px; color: var(--faint); }
+.pay-field .copy-row { background: var(--surface-2); border-color: var(--surface-2); }
+.venmo-open-btn { background: #3D95CE !important; border-color: #3D95CE !important; color: #fff !important; width: 100%; }
+.venmo-open-btn:hover { background: #3388BF !important; }
+.pay-qr { text-align: center; }
+.pay-hint { font-size: 13px; color: var(--muted); line-height: 1.6; margin-top: 6px; }
+.pay-hint strong { color: var(--text); }
+.pay-actions { margin-top: 18px; display: flex; flex-direction: column; gap: 10px; }
+.pay-footnote { font-size: 13px; color: var(--faint); text-align: center; line-height: 1.5; }
+.pay-sheet-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.72); display: flex; align-items: flex-end; justify-content: center; z-index: 2000; }
+.pay-sheet { background: var(--surface); border-top: 1px solid var(--line); border-radius: 20px 20px 0 0; width: 100%; max-width: 560px; box-sizing: border-box; padding: 18px 20px calc(28px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 12px; }
+.pay-sheet h2 { margin: 4px 0 0; font-size: 20px; font-weight: 700; font-family: var(--font-body); }
+.pay-sheet p { margin: 0; font-size: 14px; color: var(--text-2); line-height: 1.5; }
+.pay-sheet-grip { width: 40px; height: 4px; border-radius: 4px; background: var(--line); align-self: center; }
+.pay-sheet-box { background: var(--surface-2); border-radius: var(--radius); padding: 14px; font-size: 15px; line-height: 1.6; }
+.pay-done { display: flex; flex-direction: column; gap: 18px; text-align: center; padding: 12px 0 4px; }
+.pay-done-icon { width: 72px; height: 72px; border-radius: 999px; background: var(--accent); color: var(--on-accent); display: flex; align-items: center; justify-content: center; margin: 0 auto; }
+.pay-done-title { margin: 0; font-family: var(--font-display); font-weight: 400; font-size: 32px; text-transform: uppercase; line-height: 1.1; }
+.pay-done-text { margin: 0; font-size: 16px; color: var(--text-2); line-height: 1.55; }
+.pay-done-rows { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; font-size: 14px; text-align: left; }
+.pay-done-rows > div { display: flex; justify-content: space-between; gap: 12px; }
+.pay-done-rows span { color: var(--muted); }
+.pay-done-rows strong { text-align: right; }

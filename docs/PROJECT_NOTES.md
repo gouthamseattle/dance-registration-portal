@@ -78,6 +78,18 @@ PR as any change that adds a decision, a link or a to-do.
 - **Admin → Settings → Test email** shows which email method is active and the exact
   error if sending fails.
 
+## Payments: Venmo only (Oct 2026)
+
+- Zelle is switched off with Admin → Settings → "Accept Zelle payments" (setting
+  `zelle_enabled`, off by default). Checkout then goes straight to Venmo. The Zelle code stays,
+  so it can be switched back on without a developer. Past Zelle payments keep their label.
+- The Venmo username comes from Settings on every checkout; changing it there is enough.
+  After a change, check both Venmo accounts for a few days before accepting pending payments.
+- Checkout (approved mockup https://claude.ai/artifact/1L1Xer2J16pou6G3RmZGuG): payment
+  screen → "Did you send the payment?" sheet (Yes, I've paid / Not yet) → "You're all done!"
+  screen that tells the student they've done their part. "Your spot is confirmed once we
+  receive your payment" sits under the button. The old PayPal "You're in!" screen is gone.
+
 ## Lite admin for helpers (`/admin-lite`)
 
 - Replaces the parked payment checker. The owner approves emails in Admin → Settings →

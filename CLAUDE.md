@@ -13,7 +13,7 @@ Scale is small (50–100 concurrent users): prefer simple over clever.
   - Student management (GouMo students vs crew members)
   - Waitlist
   - Dashboard stats
-  - Minimal settings (Venmo, Zelle, email on/off, registration open/closed)
+  - Minimal settings (Venmo, Zelle on/off, email on/off, registration open/closed)
 
 **Class model:** one class is one group at one time.
 - **Stored on the class:** name, type, `song_name` (shown as "Song / Style"), `instructor`, `required_student_type` (`any` | `crew_member`) and `session_dates` (a JSON array of `YYYY-MM-DD`).
@@ -69,7 +69,7 @@ The rest of `docs/` and `memory-bank/` are historical notes from earlier develop
 - **Database changes must be additive and idempotent.** Add schema changes to `database/initialize.js` using `CREATE TABLE IF NOT EXISTS` and `ADD COLUMN IF NOT EXISTS`, since they run on every startup. Write SQL with `$1, $2` placeholders; the code converts them for both SQLite and Postgres. Postgres needs `RETURNING id` to get the new row's id.
 - **Admin-only routes must use `requireAuth`.** Any route that changes data and isn't part of the public student flow needs it.
 - **Bump the cache version when editing front-end files.** Increase the `?v=` number in the HTML `<script>` and `<link>` tags so phones load the new version.
-- **Payments are Venmo and Zelle only.** The PayPal code is legacy.
+- **Payments are Venmo (and Zelle only when `zelle_enabled` is on in Settings; off by default).** The PayPal code is legacy.
 
 ## Commands
 
