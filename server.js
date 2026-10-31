@@ -38,7 +38,7 @@ app.use(bodyParser.urlencoded({ extended: true }));
 // Pages (HTML) must always be fresh, or phones and browsers keep showing an old
 // version with old links after a deploy. Scripts and styles are versioned (?v=)
 // in the HTML, so they can still be cached.
-const PAGE_ROUTES = new Set(['/', '/admin', '/my', '/privacy']);
+const PAGE_ROUTES = new Set(['/', '/admin', '/my', '/privacy', '/team']);
 app.use((req, res, next) => {
     if (req.method === 'GET' && (PAGE_ROUTES.has(req.path) || req.path.endsWith('.html'))) {
         res.set('Cache-Control', 'no-cache, must-revalidate');
@@ -108,6 +108,111 @@ app.get('/privacy', (req, res) => {
 app.get('/admin', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
+
+// ---------- Team access (lite admin at /team) ----------
+// Helpers approved by the admin (Settings → Team access) can list a class's
+// registrations, accept/cancel them and download a CSV. Nothing else.
+app.get('/team', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'team.html'));
+});
+
+const normEmail = (e) => String(e || '').trim().toLowerCase();
+
+// Allows the admin, or a signed-in helper who is still approved (removing
+// someone in Settings stops their access on their next click).
+const requireAdminOrTeam = asyncHandler(async (req, res, next) => {
+    if (req.session.adminId) return next();
+    if (req.session.teamMemberId) {
+        const member = await dbConfig.get('SELECT id, email FROM team_members WHERE id = $1', [req.session.teamMemberId]);
+        if (member) { req.teamEmail = member.email; return next(); }
+        delete req.session.teamMemberId;
+    }
+    res.status(401).json({ error: 'Authentication required' });
+});
+const handledBy = (req) => req.teamEmail || 'admin';
+
+function startTeamSession(req, member) {
+    return new Promise((resolve, reject) => req.session.regenerate(err => {
+        if (err) return reject(err);
+        req.session.teamMemberId = member.id;
+        req.session.save(e => e ? reject(e) : resolve());
+    }));
+}
+
+// Step 1 of sign-in: is this email approved, and has it set a password yet?
+app.post('/api/team/check-email', asyncHandler(async (req, res) => {
+    const member = await dbConfig.get('SELECT id, password_hash FROM team_members WHERE email = $1', [normEmail(req.body?.email)]);
+    if (!member) return res.status(403).json({ error: 'This email has not been approved. Ask Goutham to add you.' });
+    res.json({ approved: true, needs_password: !member.password_hash });
+}));
+
+// First sign-in only: choose a password (refused once one is set)
+app.post('/api/team/set-password', asyncHandler(async (req, res) => {
+    const email = normEmail(req.body?.email);
+    const password = String(req.body?.password || '');
+    if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
+    const member = await dbConfig.get('SELECT id, email, password_hash FROM team_members WHERE email = $1', [email]);
+    if (!member) return res.status(403).json({ error: 'This email has not been approved' });
+    if (member.password_hash) return res.status(409).json({ error: 'A password is already set. Sign in with it, or ask Goutham to reset your access.' });
+    const hash = await bcrypt.hash(password, 10);
+    await dbConfig.run('UPDATE team_members SET password_hash = $1, last_login = CURRENT_TIMESTAMP WHERE id = $2', [hash, member.id]);
+    await startTeamSession(req, member);
+    res.json({ success: true, email: member.email });
+}));
+
+app.post('/api/team/login', asyncHandler(async (req, res) => {
+    const member = await dbConfig.get('SELECT id, email, password_hash FROM team_members WHERE email = $1', [normEmail(req.body?.email)]);
+    const ok = member && member.password_hash && await bcrypt.compare(String(req.body?.password || ''), member.password_hash);
+    if (!ok) return res.status(401).json({ error: 'Wrong email or password' });
+    await dbConfig.run('UPDATE team_members SET last_login = CURRENT_TIMESTAMP WHERE id = $1', [member.id]);
+    await startTeamSession(req, member);
+    res.json({ success: true, email: member.email });
+}));
+
+app.get('/api/team/status', requireAdminOrTeam, (req, res) => {
+    res.json({ authenticated: true, email: req.teamEmail || 'Admin' });
+});
+
+app.post('/api/team/logout', (req, res) => {
+    delete req.session.teamMemberId;
+    req.session.save(() => res.json({ success: true }));
+});
+
+// Classes for the dropdown (hidden classes left out; test registrations not counted)
+app.get('/api/team/classes', requireAdminOrTeam, asyncHandler(async (req, res) => {
+    const hiddenOff = dbConfig.isProduction ? '(c.is_hidden IS NULL OR c.is_hidden = false)' : '(c.is_hidden IS NULL OR c.is_hidden = 0)';
+    const rows = await dbConfig.all(`
+        SELECT c.id, c.name, c.course_type, c.session_dates, c.is_active,
+               COUNT(CASE WHEN r.payment_status = 'pending' THEN 1 END) AS pending_count,
+               COUNT(CASE WHEN r.payment_status = 'completed' THEN 1 END) AS paid_count
+        FROM courses c
+        LEFT JOIN registrations r ON r.course_id = c.id AND ${NOT_TEST}
+        WHERE ${hiddenOff}
+        GROUP BY c.id, c.name, c.course_type, c.session_dates, c.is_active
+        ORDER BY c.id DESC`);
+    res.json(rows.map(r => ({ ...r, pending_count: Number(r.pending_count || 0), paid_count: Number(r.paid_count || 0) })));
+}));
+
+// Admin: manage who has team access
+app.get('/api/admin/team-members', requireAuth, asyncHandler(async (req, res) => {
+    const rows = await dbConfig.all('SELECT id, email, password_hash IS NOT NULL AS has_password, created_at, last_login FROM team_members ORDER BY email');
+    res.json(rows.map(r => ({ ...r, has_password: !!r.has_password })));
+}));
+
+app.post('/api/admin/team-members', requireAuth, asyncHandler(async (req, res) => {
+    const email = normEmail(req.body?.email);
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Enter a valid email' });
+    const existing = await dbConfig.get('SELECT id FROM team_members WHERE email = $1', [email]);
+    if (existing) return res.status(409).json({ error: 'That email is already approved' });
+    await dbConfig.run('INSERT INTO team_members (email) VALUES ($1)', [email]);
+    res.json({ success: true });
+}));
+
+// Removing someone ends their access; re-approving lets them choose a new password
+app.delete('/api/admin/team-members/:id', requireAuth, asyncHandler(async (req, res) => {
+    await dbConfig.run('DELETE FROM team_members WHERE id = $1', [req.params.id]);
+    res.json({ success: true });
+}));
 
 
 // API Routes
@@ -3750,6 +3855,7 @@ app.get('/api/registrations', requireAuth, asyncHandler(async (req, res) => {
         params.push(payment_status);
     }
     
+    if (req.teamEmail) conditions.push(NOT_TEST);
     if (conditions.length > 0) {
         query += ' WHERE ' + conditions.join(' AND ');
     }
@@ -3764,7 +3870,7 @@ app.get('/api/registrations', requireAuth, asyncHandler(async (req, res) => {
  * Admin CSV export for registrations
  * GET /api/admin/registrations/export?course_id=&payment_status=
  */
-app.get('/api/admin/registrations/export', requireAuth, asyncHandler(async (req, res) => {
+app.get('/api/admin/registrations/export', requireAdminOrTeam, asyncHandler(async (req, res) => {
     try {
         const { course_id, payment_status } = req.query;
 
@@ -3785,6 +3891,7 @@ app.get('/api/admin/registrations/export', requireAuth, asyncHandler(async (req,
             conditions.push('r.payment_status = $' + (params.length + 1));
             params.push(payment_status);
         }
+        if (req.teamEmail) conditions.push(NOT_TEST);
         if (conditions.length > 0) {
             query += ' WHERE ' + conditions.join(' AND ');
         }
@@ -3829,7 +3936,8 @@ app.get('/api/admin/registrations/export', requireAuth, asyncHandler(async (req,
         }
 
         const csv = lines.join('\n');
-        const filename = `registrations-${new Date().toISOString().slice(0,10)}.csv`;
+        const classSlug = course_id && rows[0]?.course_name ? String(rows[0].course_name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '-' : '';
+        const filename = `registrations-${classSlug}${new Date().toISOString().slice(0,10)}.csv`;
 
         res.setHeader('Content-Type', 'text/csv; charset=utf-8');
         res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
@@ -3841,7 +3949,7 @@ app.get('/api/admin/registrations/export', requireAuth, asyncHandler(async (req,
 }));
 
 // Alias endpoint for admin to fetch registrations (same behavior as /api/registrations)
-app.get('/api/admin/registrations', requireAuth, asyncHandler(async (req, res) => {
+app.get('/api/admin/registrations', requireAdminOrTeam, asyncHandler(async (req, res) => {
     const { course_id, payment_status } = req.query;
     
     let query = `
@@ -3984,7 +4092,7 @@ app.put('/api/registrations/:id/payment', requireAuth, asyncHandler(async (req, 
  * - If email notifications are enabled, sends a confirmation email to the student
  * - Never fails the payment update due to email errors; returns flags in response
  */
-app.put('/api/admin/registrations/:id/confirm-payment', requireAuth, asyncHandler(async (req, res) => {
+app.put('/api/admin/registrations/:id/confirm-payment', requireAdminOrTeam, asyncHandler(async (req, res) => {
     const { id } = req.params;
     const { venmo_transaction_note } = req.body;
 
@@ -3996,9 +4104,10 @@ app.put('/api/admin/registrations/:id/confirm-payment', requireAuth, asyncHandle
                 payment_status = 'completed',
                 payment_method = COALESCE(payment_method, 'Venmo'),
                 paypal_transaction_id = $1,
+                handled_by = $3,
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = $2
-        `, [venmo_transaction_note || `Venmo payment confirmed by admin`, regId]);
+        `, [venmo_transaction_note || `Payment confirmed by ${handledBy(req)}`, regId, handledBy(req)]);
     }
 
     console.log('✅ Admin confirmed Venmo payment for registration:', id);
@@ -4026,7 +4135,7 @@ app.put('/api/admin/registrations/:id/confirm-payment', requireAuth, asyncHandle
 
         // Send confirmation email via Gmail SMTP
         sendRegistrationConfirmationEmail(details.email, details).then(() => {
-            console.log('✉️  Sent confirmation email to:', reg.email);
+            console.log('✉️  Sent confirmation email to:', details.email);
         }).catch(err => {
             console.error('❌ Error sending confirmation email:', err.message, err.stack);
         });
@@ -4067,7 +4176,7 @@ app.post('/api/admin/registrations/:id/resend-confirmation', requireAuth, asyncH
         }
 
         sendRegistrationConfirmationEmail(details.email, details).then(() => {
-            console.log('✉️  Resent confirmation email to:', reg.email);
+            console.log('✉️  Resent confirmation email to:', details.email);
         }).catch(err => {
             console.error('❌ Error resending confirmation email:', err);
         });
@@ -4085,7 +4194,7 @@ app.post('/api/admin/registrations/:id/resend-confirmation', requireAuth, asyncH
  * PUT /api/admin/registrations/:id/cancel
  * Body: { reason?: string }
  */
-app.put('/api/admin/registrations/:id/cancel', requireAuth, asyncHandler(async (req, res) => {
+app.put('/api/admin/registrations/:id/cancel', requireAdminOrTeam, asyncHandler(async (req, res) => {
     const { id } = req.params;
     const { reason } = req.body || {};
     try {
@@ -4105,9 +4214,10 @@ app.put('/api/admin/registrations/:id/cancel', requireAuth, asyncHandler(async (
                     canceled_at = CURRENT_TIMESTAMP,
                     canceled_by = $1,
                     cancellation_reason = $2,
+                    handled_by = $4,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = $3
-            `, [req.session.adminId || null, reason || null, regId]);
+            `, [req.session.adminId || null, reason || null, regId, handledBy(req)]);
         }
 
         // Email notifications (optional)
