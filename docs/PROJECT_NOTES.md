@@ -156,3 +156,11 @@ PR as any change that adds a decision, a link or a to-do.
 - [ ] Run Admin → Students → Data check on live data and fix what it finds.
 - [ ] Ideas, not yet requested: emailed sign-in code for students, class reminder emails,
       a "you joined the waitlist" email.
+
+## Crew link and sign-in (Nov 2026)
+
+- The crew link (`/crew`) shows crew members every class they can take: crew practices first, then
+  all GouMo classes (owner: crew members should have access to all classes). The home page still
+  hides crew-only classes.
+- The registration page skips the email step when the phone already remembers an email (also after
+  pressing Back from checkout). "Use a different email" switches accounts.

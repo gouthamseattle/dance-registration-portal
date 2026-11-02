@@ -981,6 +981,12 @@ test('admin class list includes crew-only classes; public list does not', async 
     assert.ok(!publicList.some(c => Number(c.id) === id), 'public list still hides it');
 });
 
+test('crew link shows all classes; saved email skips the email step', async () => {
+    const js = await (await fetch(`${BASE}/js/email-profile-registration.js`)).text();
+    assert.ok(!js.includes("filter(c => c.required_student_type === 'crew_member')"), 'crew link no longer hides GouMo classes');
+    assert.ok(js.includes('Remembered on this phone: carry on to the classes'), 'remembered email continues straight to classes');
+});
+
 test('removed features are gone', async () => {
     for (const [method, url] of [
         ['POST', '/api/competition/register'],
