@@ -90,6 +90,20 @@ PR as any change that adds a decision, a link or a to-do.
   screen that tells the student they've done their part. "Your spot is confirmed once we
   receive your payment" sits under the button. The old PayPal "You're in!" screen is gone.
 
+## My classes page and crew progress (Nov 2026)
+
+- Page order: (crew only) highlighted "Your crew progress" card → next class (Add to calendar,
+  Directions) → "Coming up" dates grouped by week → History (5 shown, "Show all") → Browse classes,
+  details. Waitlists are not shown on this page.
+- Counts include every registration that isn't cancelled; payment status doesn't matter.
+- Attendance % = crew practice dates registered for ÷ crew practice dates held since the member's
+  first crew practice ("since joining"). Consistency badge: Legend 90%+, Pro 80–90, Committed
+  70–80, Rising 60–70, Warming up below 60. Only this badge for now; others may come later.
+- Rank among current crew members (not hidden, not test accounts) with 5+ practices held, by %
+  then number of practices; ties share a rank. Fewer than 5: "Ranked after 5 practices".
+- Calculated in `crewProgress()` in server.js, returned as `crew_progress` by `/api/my/profile`.
+- Mockup (approved): https://claude.ai/artifact/JBEr2UNNxFhLxjMz8VRcV9
+
 ## Instructor bios (home page)
 
 - Cards show role, years and style tags (styles each person *teaches*): Goutham Locking,
