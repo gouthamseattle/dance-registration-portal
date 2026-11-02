@@ -3323,84 +3323,108 @@ async function studentHistory(studentId) {
     };
 }
 
-// ---------- Crew progress (My classes, crew members) ----------
-// Counts every registration that isn't cancelled (payment status doesn't matter).
-// "Since joining" = the date of a member's first crew practice. Attendance % =
-// practice dates they registered for ÷ crew practice dates held since then.
-// Rank: crew members with 5+ practices held, by % then number of practices.
+// ---------- Progress on My classes (crew practices + GouMo classes) ----------
+// Counts every registration that isn't cancelled (payment status doesn't matter),
+// one per class date. For each kind (crew practice / GouMo class = everything else):
+//   attended = their class dates up to today; held = all class dates of that kind from
+//   their first one to today; % = attended ÷ held. Hidden classes count (hiding only tidies
+//   the admin). Settings "crew_progress_start" (Count crew practices from) applies to both.
+//   Classes a student taught ("Teaches as" on their profile matches the class instructor)
+//   are left out of both their counts. Rank: crew practices among current crew members,
+//   GouMo classes among all students (not hidden, not test accounts), 5+ held, by % then count.
+const MIN_FOR_RANK = 5;
 function parseDateList(v) {
     let list = v;
     if (typeof list === 'string') { try { list = JSON.parse(list); } catch (e) { list = []; } }
     return Array.isArray(list) ? list.map(d => String(d).slice(0, 10)).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d)) : [];
 }
+const isoDay = (v) => v ? String(v instanceof Date ? v.toISOString() : v).slice(0, 10) : '';
 function todaySeattle() {
     return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 }
-// Hidden practices are included: hiding a class only tidies it away in the admin; it still happened.
-async function crewPracticeDates() {
-    const rows = await dbConfig.all(`SELECT c.id, c.session_dates,
-        (SELECT s.practice_date FROM course_slots s WHERE s.course_id = c.id ORDER BY s.id LIMIT 1) AS practice_date
-        FROM courses c WHERE c.course_type = 'crew_practice'`);
-    // Admin → Settings "Crew progress starts on": earlier dates don't count (fresh start, nothing deleted)
-    const startRow = await dbConfig.get('SELECT setting_value FROM system_settings WHERE setting_key = $1', ['crew_progress_start']);
-    const start = parseDateList([startRow?.setting_value])[0] || '';
+// Dates of every class: session_dates, else slot dates, else weekly from start_date (as on the site)
+async function allClassDates(start) {
+    const courses = await dbConfig.all('SELECT id, course_type, instructor, session_dates, start_date, duration_weeks FROM courses');
+    const slots = await dbConfig.all('SELECT course_id, practice_date FROM course_slots WHERE practice_date IS NOT NULL');
+    const slotDates = {};
+    slots.forEach(s => (slotDates[s.course_id] = slotDates[s.course_id] || []).push(isoDay(s.practice_date)));
     const byCourse = {};
-    for (const r of rows) {
-        let ds = parseDateList(r.session_dates);
-        if (!ds.length && r.practice_date) ds = [String(r.practice_date instanceof Date ? r.practice_date.toISOString() : r.practice_date).slice(0, 10)];
-        byCourse[r.id] = [...new Set(ds)].filter(d => d >= start).sort();
+    for (const c of courses) {
+        let ds = parseDateList(c.session_dates);
+        if (!ds.length) ds = (slotDates[c.id] || []).filter(Boolean);
+        if (!ds.length && c.start_date) {
+            const d0 = new Date(isoDay(c.start_date) + 'T12:00:00Z');
+            const weeks = Math.max(1, Math.min(Number(c.duration_weeks) || 1, 26));
+            ds = Array.from({ length: weeks }, (_, i) => new Date(d0.getTime() + i * 7 * 86400000).toISOString().slice(0, 10));
+        }
+        byCourse[c.id] = { crew: c.course_type === 'crew_practice', instructor: c.instructor || '', dates: [...new Set(ds)].filter(d => d >= start).sort() };
     }
-    return { byCourse, start };
+    return byCourse;
 }
-// Per student: { attended, held, pct, since } from their crew practice registrations
-function crewStats(regs, byCourse, today, start = '') {
+function teaches(teachesAs, instructor) {
+    const name = String(teachesAs || '').trim();
+    if (!name || !instructor) return false;
+    return new RegExp('\\b' + name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'i').test(instructor);
+}
+// One student's numbers for one kind (crew = true/false)
+function kindStats(regs, byCourse, crew, today, teachesAs) {
+    const ok = (id) => byCourse[id] && byCourse[id].crew === crew && !teaches(teachesAs, byCourse[id].instructor);
     const mine = new Set();
     for (const r of regs) {
-        const all = byCourse[r.course_id] || [];
-        const picked = parseDateList(r.selected_dates);
-        (picked.length ? picked : all).forEach(d => mine.add(d));
+        if (!ok(r.course_id)) continue;
+        const all = byCourse[r.course_id].dates;
+        const picked = parseDateList(r.selected_dates).filter(d => all.includes(d));
+        (picked.length ? picked : all).forEach(d => { if (d <= today) mine.add(`${r.course_id}|${d}`); });
     }
-    const pastMine = [...mine].filter(d => d >= start && d <= today).sort();
-    if (!pastMine.length) return { attended: 0, held: 0, pct: null, since: null };
-    const since = pastMine[0];
-    const allDates = new Set();
-    Object.values(byCourse).forEach(ds => ds.forEach(d => { if (d >= since && d <= today) allDates.add(d); }));
-    const held = Math.max(allDates.size, pastMine.length);
-    return { attended: pastMine.length, held, pct: held ? Math.round(pastMine.length * 100 / held) : null, since };
+    if (!mine.size) return { attended: 0, held: 0, pct: null, since: null };
+    const since = [...mine].map(k => k.split('|')[1]).sort()[0];
+    let held = 0;
+    for (const [id, c] of Object.entries(byCourse)) if (ok(id)) held += c.dates.filter(d => d >= since && d <= today).length;
+    held = Math.max(held, mine.size);
+    return { attended: mine.size, held, pct: Math.round(mine.size * 100 / held), since };
 }
-async function crewProgress(studentId) {
+function rankOf(list, id) {
+    const ranked = list.filter(x => x.held >= MIN_FOR_RANK).sort((a, b) => (b.pct - a.pct) || (b.attended - a.attended));
+    const pos = ranked.findIndex(x => x.id === Number(id));
+    // Ties share a rank
+    const rank = pos < 0 ? null : ranked.findIndex(x => x.pct === ranked[pos].pct && x.attended === ranked[pos].attended) + 1;
+    return { rank, ranked_count: ranked.length };
+}
+async function studentProgress(studentId) {
     const today = todaySeattle();
-    const { byCourse, start } = await crewPracticeDates();
-    const notCanceled = "r.payment_status IS DISTINCT FROM 'canceled'";
-    const regs = await dbConfig.all(`SELECT r.student_id, r.course_id, r.selected_dates, s.student_type, s.is_tester, s.archived_at
-        FROM registrations r JOIN students s ON s.id = r.student_id JOIN courses c ON c.id = r.course_id
-        WHERE c.course_type = 'crew_practice' AND ${dbConfig.isProduction ? notCanceled : "(r.payment_status IS NULL OR r.payment_status != 'canceled')"}`);
+    const startRow = await dbConfig.get('SELECT setting_value FROM system_settings WHERE setting_key = $1', ['crew_progress_start']);
+    const start = parseDateList([startRow?.setting_value])[0] || '';
+    const byCourse = await allClassDates(start);
+    const notCanceled = dbConfig.isProduction ? "r.payment_status IS DISTINCT FROM 'canceled'" : "(r.payment_status IS NULL OR r.payment_status != 'canceled')";
+    const regs = await dbConfig.all(`SELECT r.student_id, r.course_id, r.selected_dates, s.student_type, s.is_tester, s.archived_at, s.teaches_as
+        FROM registrations r JOIN students s ON s.id = r.student_id WHERE r.course_id IS NOT NULL AND ${notCanceled}`);
     const byStudent = {};
     for (const r of regs) (byStudent[r.student_id] = byStudent[r.student_id] || { regs: [], info: r }).regs.push(r);
-    const me = crewStats((byStudent[studentId] || { regs: [] }).regs, byCourse, today, start);
-    // Rank among current crew members (not hidden, not test accounts) with 5+ practices held
-    const ranked = Object.entries(byStudent)
-        .filter(([, v]) => v.info.student_type === 'crew_member' && !v.info.archived_at && !isTrue(v.info.is_tester))
-        .map(([id, v]) => ({ id: Number(id), ...crewStats(v.regs, byCourse, today, start) }))
-        .filter(x => x.held >= 5)
-        .sort((a, b) => (b.pct - a.pct) || (b.attended - a.attended));
-    const pos = ranked.findIndex(x => x.id === Number(studentId));
-    let rank = null;
-    if (pos >= 0) {
-        // Ties share a rank
-        const first = ranked.findIndex(x => x.pct === ranked[pos].pct && x.attended === ranked[pos].attended);
-        rank = first + 1;
+    const me = await dbConfig.get('SELECT student_type, teaches_as FROM students WHERE id = $1', [studentId]);
+    const myRegs = (byStudent[studentId] || { regs: [] }).regs;
+    const counted = Object.entries(byStudent).filter(([, v]) => !v.info.archived_at && !isTrue(v.info.is_tester));
+    const goumo = { ...kindStats(myRegs, byCourse, false, today, me?.teaches_as),
+        ...rankOf(counted.map(([id, v]) => ({ id: Number(id), ...kindStats(v.regs, byCourse, false, today, v.info.teaches_as) })), studentId) };
+    let crew = null;
+    if (me && me.student_type === 'crew_member') {
+        crew = { ...kindStats(myRegs, byCourse, true, today, me.teaches_as),
+            ...rankOf(counted.filter(([, v]) => v.info.student_type === 'crew_member')
+                .map(([id, v]) => ({ id: Number(id), ...kindStats(v.regs, byCourse, true, today, v.info.teaches_as) })), studentId) };
     }
-    const classRow = await dbConfig.get(`SELECT COUNT(*) AS n FROM registrations r JOIN courses c ON c.id = r.course_id
-        WHERE r.student_id = $1 AND c.course_type <> 'crew_practice' AND ${dbConfig.isProduction ? notCanceled : "(r.payment_status IS NULL OR r.payment_status != 'canceled')"}`, [studentId]);
-    return { ...me, classes: Number(classRow?.n) || 0, rank, ranked_count: ranked.length, min_for_rank: 5 };
+    return { crew, goumo, min_for_rank: MIN_FOR_RANK, start: start || null };
 }
+
+app.put('/api/admin/students/:id/teaches-as', requireAuth, asyncHandler(async (req, res) => {
+    const name = String((req.body || {}).teaches_as || '').trim().slice(0, 100);
+    await dbConfig.run('UPDATE students SET teaches_as = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2', [name || null, req.params.id]);
+    res.json({ success: true, teaches_as: name || null });
+}));
 
 const STUDENT_PUBLIC_FIELDS = 'id, first_name, last_name, email, instagram_handle, dance_experience, student_type, created_at, is_tester, archived_at';
 
 // Admin: one student's profile, history and private notes
 app.get('/api/admin/students/:id', requireAuth, asyncHandler(async (req, res) => {
-    const student = await dbConfig.get(`SELECT ${STUDENT_PUBLIC_FIELDS}, admin_notes FROM students WHERE id = $1`, [req.params.id]);
+    const student = await dbConfig.get(`SELECT ${STUDENT_PUBLIC_FIELDS}, admin_notes, teaches_as FROM students WHERE id = $1`, [req.params.id]);
     if (!student) return res.status(404).json({ error: 'Student not found' });
     res.json({ student, ...(await studentHistory(student.id)) });
 }));
@@ -3420,8 +3444,7 @@ app.post('/api/my/profile', asyncHandler(async (req, res) => {
     if (!student) return res.status(404).json({ error: "We couldn't find that email. Register for a class first, or try the email you used before." });
     const history = await studentHistory(student.id);
     history.registrations.forEach(r => { delete r.combo_group; });
-    const crew = student.student_type === 'crew_member' ? await crewProgress(student.id) : null;
-    res.json({ student, ...history, crew_progress: crew });
+    res.json({ student, ...history, progress: await studentProgress(student.id) });
 }));
 
 app.put('/api/my/profile', asyncHandler(async (req, res) => {

@@ -1971,6 +1971,9 @@ class AdminDashboard {
             }).join('')}</div>` : '<p class="empty-line mb-3">No classes yet.</p>'}
             ${data.waitlists.length ? `<h6 class="mb-2">Waitlists</h6><ul class="mb-3">${data.waitlists.map(w => `<li>${C.esc(w.course_name)} · #${w.position}</li>`).join('')}</ul>` : ''}
             ${data.totals.attended_old_records ? `<p class="cell-sub mb-3">Attended (old records): ${data.totals.attended_old_records} class${data.totals.attended_old_records === 1 ? '' : 'es'} marked present before Oct 2026.</p>` : ''}
+            <h6 class="mb-2">Teaches as <span class="cell-sub">(instructors only)</span></h6>
+            <div class="d-flex gap-2 mb-1"><input class="form-control" id="studentTeachesAs" placeholder="e.g. Rudie" value="${C.esc(st.teaches_as || '')}" style="max-width:240px"><button class="btn btn-outline-secondary btn-sm" onclick="admin.saveTeachesAs(${st.id})">Save</button></div>
+            <p class="cell-sub mb-3">Classes whose instructor matches this name are left out of this person's progress on My classes.</p>
             <h6 class="mb-2">Private notes <span class="cell-sub">(only you see these)</span></h6>
             <textarea class="form-control mb-2" id="studentNotes" rows="3" placeholder="e.g. missed week 2, strong in footwork">${C.esc(st.admin_notes || '')}</textarea>
             <button class="btn btn-primary btn-sm" onclick="admin.saveStudentNotes(${st.id})">Save notes</button>
@@ -1980,6 +1983,11 @@ class AdminDashboard {
                 ${tester ? `<button class="btn btn-outline-danger btn-sm" onclick="admin.resetTestData(${st.id})">Reset test data</button>` : ''}
                 <span class="cell-sub">Test accounts can register when classes are full, closed or crew-only, and never count in numbers.</span>
             </div>`;
+    }
+
+    async saveTeachesAs(id) {
+        const r = await this.apiFetch(`/api/admin/students/${id}/teaches-as`, { method: 'PUT', body: { teaches_as: document.getElementById('studentTeachesAs').value } });
+        if (r.ok) this.showSuccess('Saved'); else this.showError('Could not save');
     }
 
     async setStudentHidden(id, hide) {

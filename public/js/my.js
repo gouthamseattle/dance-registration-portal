@@ -43,42 +43,43 @@
   const monthYear = (d) => new Date(d + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
   const shortDate = (d) => new Date(d + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
-  function renderCrew(p) {
+  // One panel: ring with %, "x of y", rank
+  function panel(title, k, unit, min) {
+    const pct = k.pct === null ? 0 : k.pct;
+    const rank = k.rank ? `<b>#${k.rank}</b><span>of ${k.ranked_count}</span>` : `<span>Ranked after ${min} ${unit}</span>`;
+    return `<div class="pnl"><strong>${esc(title)}</strong>
+      <div class="ring" style="background:conic-gradient(var(--accent) 0 ${pct}%, #2B2B32 ${pct}% 100%)"><span>${k.pct === null ? '–' : k.pct + '%'}</span></div>
+      <small>${k.held ? `${k.attended} of ${k.held} ${unit}` : `Starts with your first ${unit === 'practices' ? 'practice' : 'class'}`}</small>
+      <div class="rank">${rank}</div></div>`;
+  }
+
+  // Badge (switched off for now; see SHOW_BADGES)
+  function badgeHtml(p) {
+    if (!SHOW_BADGES || p.pct === null) return '';
+    const l = levelFor(p.pct);
+    const idx = LEVELS.indexOf(l);
+    const next = idx > 0 ? LEVELS[idx - 1] : null;
+    return `<button type="button" class="badge-btn" id="badgeBtn" aria-haspopup="dialog">${medal(l)}
+      <span class="badge-text"><small>Consistency badge</small><strong>${esc(l.name)}</strong>
+      <span>${esc(l.range)}${next ? ` · Next: <b>${esc(next.name)}</b> at ${next.min}%+` : ' · Top level!'} ›</span></span></button>`;
+  }
+
+  function renderProgress(prog) {
     const box = $('crewBox');
-    if (!p) { box.hidden = true; return; }
-    let badge = '';
-    if (!SHOW_BADGES) {
-      badge = '';
-    } else if (p.pct === null) {
-      badge = `<div class="badge-text"><small>Consistency badge</small><span>Your badge appears after your first crew practice.</span></div>`;
-    } else {
-      const l = levelFor(p.pct);
-      const idx = LEVELS.indexOf(l);
-      const next = idx > 0 ? LEVELS[idx - 1] : null;
-      badge = `<button type="button" class="badge-btn" id="badgeBtn" aria-haspopup="dialog">${medal(l)}
-        <span class="badge-text"><small>Consistency badge</small><strong>${esc(l.name)}</strong>
-        <span>${esc(l.range)}${next ? ` · Next: <b>${esc(next.name)}</b> at ${next.min}%+` : ' · Top level!'} ›</span></span></button>`;
-    }
-    const pct = p.pct === null ? 0 : p.pct;
-    const rank = p.rank
-      ? `<b class="hi">#${p.rank}</b><span>of ${p.ranked_count} in the crew</span>`
-      : `<b class="na">Ranked after ${p.min_for_rank} practices</b><span>Your crew rank</span>`;
+    if (!prog || !prog.goumo) { box.hidden = true; return; }
+    const crew = prog.crew;
     box.innerHTML = `
-      <p class="label">Your crew progress</p>
-      ${badge}
-      <div class="att">
-        <div class="ring" style="background:conic-gradient(var(--accent) 0 ${pct}%, #2B2B32 ${pct}% 100%)"><span>${p.pct === null ? '–' : p.pct + '%'}</span></div>
-        <div><strong>Attendance</strong><small>${p.held ? `${p.attended} of ${p.held} crew practices since you joined` : 'Starts with your first crew practice'}</small></div>
+      <p class="label">Your progress</p>
+      ${crew ? badgeHtml(crew) : ''}
+      <div class="pnls${crew ? '' : ' one'}">
+        ${crew ? panel('Crew practices', crew, 'practices', prog.min_for_rank) : ''}
+        ${panel('GouMo classes', prog.goumo, 'classes', prog.min_for_rank)}
       </div>
-      <div class="tiles">
-        <div class="tile">${rank}</div>
-        <div class="tile"><b>${p.attended}</b><span>crew practices</span></div>
-        <div class="tile"><b>${p.classes}</b><span>classes</span></div>
-      </div>`;
+      <p class="note">${crew ? 'Since your first practice / first class. Rank: crew practices among the crew, GouMo classes among all students.' : 'Since your first class. Ranked among all GouMo students.'}</p>`;
     box.hidden = false;
     const btn = $('badgeBtn');
     if (btn) btn.addEventListener('click', () => {
-      const mine = levelFor(p.pct);
+      const mine = levelFor(crew.pct);
       $('levelsList').innerHTML = LEVELS.map((l) => `<div class="lvl${l === mine ? ' me' : ''}">${medal(l, 'sm')}<div><strong>${esc(l.name)}</strong><small>${esc(l.range)}</small></div>${l === mine ? '<em>You are here</em>' : ''}</div>`).join('');
       $('levelsSheet').hidden = false;
     });
@@ -99,12 +100,13 @@
 
   function render(data) {
     const st = data.student;
-    const p = data.crew_progress;
+    const prog = data.progress;
+    const p = prog && prog.crew;
     $('hello').textContent = `Hi ${st.first_name || 'there'}`;
     $('who').textContent = st.student_type === 'crew_member'
       ? (p && p.since ? `Crew member since ${monthYear(p.since)}` : 'Crew member')
       : st.email;
-    renderCrew(p);
+    renderProgress(prog);
 
     // Every class date the student is registered for (cancelled left out)
     const now = today();
