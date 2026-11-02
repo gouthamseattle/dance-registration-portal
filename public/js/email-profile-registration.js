@@ -33,7 +33,14 @@ class EmailProfileRegistrationApp {
         this.init();
     }
 
+    // Phones keep a frozen copy of this page when the student goes to checkout. Coming Back shows
+    // that copy, "Loading…" overlay included, without running anything: take the overlay off.
+    watchBackNavigation() {
+        window.addEventListener('pageshow', (e) => { if (e.persisted) this.hideLoading(); });
+    }
+
     async init() {
+        this.watchBackNavigation();
         try {
             await this.loadSettings();
             await this.showSelectedClassSummary();

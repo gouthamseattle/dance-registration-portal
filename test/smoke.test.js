@@ -992,6 +992,11 @@ test('checkout "Back to classes" returns to the list the student came from', asy
     assert.ok(page.includes('cameFromList') && page.includes('window.history.back()'), 'goes back to the crew/sign-in list');
 });
 
+test('class list clears its loading overlay when shown again after Back', async () => {
+    const js = await (await fetch(`${BASE}/js/email-profile-registration.js`)).text();
+    assert.ok(js.includes("addEventListener('pageshow'") && js.includes('e.persisted'), 'handles the frozen page on Back');
+});
+
 test('removed features are gone', async () => {
     for (const [method, url] of [
         ['POST', '/api/competition/register'],
