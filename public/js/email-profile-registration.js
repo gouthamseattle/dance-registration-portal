@@ -41,11 +41,12 @@ class EmailProfileRegistrationApp {
             this.hideLoading();
             this.showEmailEntry();
             // Already signed in on this device (My classes, or an earlier checkout):
-            // when a class or combo was chosen, carry on without asking for the email again.
+            // carry on without asking for the email again. "Use a different email" switches.
             const saved = this.savedEmail();
             if (saved) {
                 document.getElementById('email').value = saved;
-                if (this.preselectCourseId || this.preselectComboId) this.handleEmailEntry();
+                // Remembered on this phone: carry on to the classes (also after pressing Back)
+                this.handleEmailEntry();
             }
         } catch (error) {
             console.error('Initialization error:', error);
@@ -398,16 +399,22 @@ class EmailProfileRegistrationApp {
 
         // Update filter info
         const studentType = this.currentStudent?.student_type || 'general';
+        // Crew link: crew members see every class they can take (crew practices listed first)
         if (this.crewMode) {
-            this.eligibleCourses = this.eligibleCourses.filter(c => c.required_student_type === 'crew_member');
+            const sel = document.getElementById('courseSelection');
+            const crewSec = document.getElementById('crewPracticeSection');
+            const firstHeader = sel && sel.querySelector('.section-header');
+            if (sel && crewSec && firstHeader && crewSec.compareDocumentPosition(firstHeader) & Node.DOCUMENT_POSITION_FOLLOWING) {
+                firstHeader.parentNode.insertBefore(crewSec, firstHeader);
+            }
         }
         const courseCount = this.eligibleCourses.length;
         let filterText = '';
         
         if (this.crewMode) {
             filterText = studentType === 'crew_member'
-                ? `Showing ${courseCount} crew classes`
-                : 'This page is for crew members. Ask GouMo if you think you should have access.';
+                ? `Showing ${courseCount} classes: crew practices and all GouMo classes`
+                : 'Crew practices are for crew members. Ask GouMo if you think you should have access.';
         } else if (studentType === 'crew_member') {
             filterText = `Showing ${courseCount} classes available to crew members`;
         } else {
