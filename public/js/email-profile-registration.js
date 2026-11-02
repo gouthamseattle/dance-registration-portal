@@ -528,11 +528,7 @@ class EmailProfileRegistrationApp {
 
     // Instructor photos: names in the class's Instructor field → /images/<name>.jpg
     instructorPics(instructor) {
-        const text = String(instructor || '').toLowerCase();
-        const known = [['goutham', 'goutham'], ['monica', 'monica'], ['moni', 'monica'], ['rudie', 'rudie'], ['rudhresh', 'rudie'], ['supriya', 'supriya']];
-        const keys = [];
-        known.forEach(([word, key]) => { if (text.includes(word) && !keys.includes(key)) keys.push(key); });
-        return keys.slice(0, 3).map(k => `<img src="/images/${k}.jpg" alt="" loading="lazy">`).join('');
+        return window.ClassInfo.instructorPics(instructor);
     }
 
     // One card for every class type (series, crew practice, drop-in)

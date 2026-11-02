@@ -168,3 +168,35 @@ a:hover { color: #fff; }
 .site-footer { margin-top: 48px; border-top: 1px solid var(--line-soft); }
 .site-footer .bar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; padding-top: 22px; padding-bottom: 28px; font-size: 13px; color: var(--faint); }
 .site-footer a { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-size: 14px; font-weight: 600; text-decoration: none; }
+
+/* ---------- Class list cards (home page, sign-in and crew pages) ---------- */
+.class-card-v2 { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 16px; display: flex; flex-direction: column; gap: 12px; color: var(--text); }
+.class-card-v2.is-done { border-color: rgba(124, 224, 166, 0.45); }
+.cc-top { display: flex; justify-content: space-between; gap: 10px; }
+.cc-head { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.cc-kicker { font-size: 11px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.6px; }
+.cc-crew { margin-left: 6px; padding: 2px 6px; border-radius: 999px; background: #1E2A44; color: #8DB4FF; text-transform: none; letter-spacing: 0; white-space: nowrap; }
+.cc-name { margin: 0; font-family: var(--font-body); font-size: 19px; font-weight: 700; line-height: 1.25; color: var(--text); text-transform: none; }
+.cc-who { display: flex; align-items: center; gap: 8px; margin-top: 2px; font-size: 13px; color: var(--text-2); }
+.cc-pics { display: flex; flex: 0 0 auto; }
+.cc-pics img { width: 30px; height: 30px; border-radius: 999px; object-fit: cover; border: 2px solid var(--surface); }
+.cc-pics img + img { margin-left: -10px; }
+.cc-price { text-align: right; flex: 0 0 auto; }
+.cc-price span { font-family: var(--font-display); font-size: 26px; line-height: 1; }
+.cc-price small { display: block; font-size: 11px; color: var(--muted); margin-top: 4px; }
+.cc-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; margin: 0; font-size: 13px; border-top: 1px solid var(--line-soft); padding-top: 12px; }
+.cc-grid dt { font-size: 11px; font-weight: 400; color: var(--faint); }
+.cc-grid dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+.cc-btn { margin-top: auto; text-decoration: none; display: flex; align-items: center; justify-content: center; width: 100%; height: 48px; border: 0; border-radius: 10px; background: var(--accent); color: var(--on-accent); font-family: inherit; font-weight: 700; font-size: 15px; cursor: pointer; }
+.cc-btn:active { transform: scale(0.98); }
+.cc-btn-outline { background: transparent; border: 1px solid var(--accent); color: var(--accent); }
+.cc-state { margin-top: auto; display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; border-radius: 10px; font-weight: 700; font-size: 15px; text-align: center; padding: 0 12px; }
+.cc-done { background: #12301F; color: #7CE0A6; }
+.cc-pending { background: #3A3210; color: var(--accent); }
+.cc-closed { border: 1px solid var(--line); color: var(--muted); }
+.cc-btn:hover { color: var(--on-accent); }
+.cc-btn-outline:hover { color: var(--accent); }
+.class-card-v2.cc-combo { border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+.cc-price small.cc-save { color: var(--accent); font-weight: 700; }
+.cc-grid .cc-wide { grid-column: 1 / -1; }
+.cc-desc { margin: 0; font-size: 13px; color: var(--muted); }
