@@ -98,7 +98,7 @@ PR as any change that adds a decision, a link or a to-do.
 - Counts include every registration that isn't cancelled; payment status doesn't matter.
 - Attendance % = crew practice dates registered for ÷ crew practice dates held since the member's
   first crew practice ("since joining"). Consistency badge: Legend 90%+, Pro 80–90, Committed
-  70–80, Rising 60–70, Warming up below 60. Only this badge for now; others may come later.
+  70–80, Rising 60–70, Warming up below 60. Badges are switched OFF for now (owner: too early for new members); turn on with `SHOW_BADGES` in my.js. The card shows attendance %, rank, practices and classes.
 - Rank among current crew members (not hidden, not test accounts) with 5+ practices held, by %
   then number of practices; ties share a rank. Fewer than 5: "Ranked after 5 practices".
 - Hidden crew practices still count (hiding only tidies the admin list; the practice happened).
