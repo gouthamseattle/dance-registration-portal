@@ -164,3 +164,9 @@ PR as any change that adds a decision, a link or a to-do.
   hides crew-only classes.
 - The registration page skips the email step when the phone already remembers an email (also after
   pressing Back from checkout). "Use a different email" switches accounts.
+- Class list cards (approved mockup https://claude.ai/artifact/4mgSPm2XSMeec2PMP1rgiR): one card for every
+  class type: kicker + price like the home page, instructor photo(s) (`/images/<name>.jpg`, matched from the
+  Instructor field), Dates/Time/Location/Spots grid, full-width yellow Register button; green bar when
+  registered. No logo watermark (owner tried it and declined).
+- Pressing Back from checkout on iPhone restores the page from memory; the class list clears its loading
+  screen on `pageshow` so it isn't stuck on "Loading".

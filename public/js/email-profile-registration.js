@@ -33,7 +33,14 @@ class EmailProfileRegistrationApp {
         this.init();
     }
 
+    // Phones keep a frozen copy of this page when the student goes to checkout. Coming Back shows
+    // that copy, "Loading…" overlay included, without running anything: take the overlay off.
+    watchBackNavigation() {
+        window.addEventListener('pageshow', (e) => { if (e.persisted) this.hideLoading(); });
+    }
+
     async init() {
+        this.watchBackNavigation();
         try {
             await this.loadSettings();
             await this.showSelectedClassSummary();
@@ -503,7 +510,7 @@ class EmailProfileRegistrationApp {
         if (dropInCourses.length > 0) {
             dropInSection.style.display = 'block';
             dropInCourses.forEach(course => {
-                const courseCard = this.createDropInCard(course);
+                const courseCard = this.createCourseCard(course);
                 dropInContainer.appendChild(courseCard);
             });
         } else {
@@ -519,207 +526,62 @@ class EmailProfileRegistrationApp {
     }
 
 
-    createCourseCard(course) {
-        const col = document.createElement('div');
-        col.className = 'col-lg-6 col-xl-4 mb-4';
-
-        const availableSpots = parseInt(course.available_spots) || 0;
-        const hasFullCoursePrice = course.full_course_price && course.full_course_price > 0;
-        const hasPerClassPrice = course.per_class_price && course.per_class_price > 0;
-        
-        // Check registration status
-        const registrationStatus = course.registration_status || 'not_registered';
-        const isRegistered = registrationStatus === 'registered_completed';
-        const isPending = registrationStatus === 'registered_pending';
-
-        // Build schedule from slots or fallback to schedule_info
-        let scheduleHtml = '';
-        if (course.slots && course.slots.length > 0) {
-            const scheduleItems = course.slots.map(slot => {
-                const parts = [];
-                if (course.course_type === 'crew_practice') {
-                    // All practice dates, not just the first one
-                    const ds = window.ClassInfo.dates(course);
-                    if (ds.length) parts.push(window.ClassInfo.formatDates(ds) + ' ·');
-                } else if (slot.day_of_week) {
-                    parts.push(`${slot.day_of_week}s`);
-                }
-                const start = slot.start_time || course.start_time;
-                const end = slot.end_time || course.end_time;
-                if (start && end) {
-                    parts.push(`${start} - ${end}`);
-                } else if (start) {
-                    parts.push(start);
-                }
-                if (slot.location) parts.push(`at ${slot.location}`);
-                let scheduleText = parts.join(' ');
-                if (course.slots.length > 1 && slot.difficulty_level) {
-                    scheduleText += ` (${slot.difficulty_level})`;
-                }
-                return scheduleText;
-            }).filter(t => t);
-
-            let dateInfo = '';
-            if (course.course_type !== 'crew_practice') {
-                if (course.start_date && course.end_date) {
-                    const startDate = formatLocalDate(course.start_date);
-                    const endDate = formatLocalDate(course.end_date);
-                    dateInfo = `<br><small>${startDate} - ${endDate}</small>`;
-                } else if (course.start_date) {
-                    const startDate = formatLocalDate(course.start_date);
-                    dateInfo = `<br><small>Starts ${startDate}</small>`;
-                }
-            }
-
-            if (scheduleItems.length > 0) {
-                scheduleHtml = `
-                    <div class="course-info-item">
-                        <i class="fas fa-calendar"></i>
-                        <span>${scheduleItems.join('<br>')}${dateInfo}</span>
-                    </div>
-                `;
-            }
-        }
-
-        if (!scheduleHtml && course.schedule_info) {
-            scheduleHtml = `
-                <div class="course-info-item">
-                    <i class="fas fa-calendar"></i>
-                    <span>${course.schedule_info}</span>
-                </div>
-            `;
-        }
-
-        // Add course type badge
-        let typeBadge = '';
-        if (course.course_type === 'crew_practice') {
-            typeBadge = '<span class="badge bg-warning mb-2">Crew Members Only</span>';
-        }
-
-        col.innerHTML = `
-            <div class="card course-card fade-in ${isRegistered ? 'registered-course' : ''} ${isPending ? 'pending-course' : ''}">
-                <div class="card-header">
-                    ${typeBadge}
-                    <h5 class="card-title">${course.name}</h5>
-                    <p class="card-subtitle">${course.course_type === 'crew_practice'
-                        ? `${window.ClassInfo.dates(course).length} practice${window.ClassInfo.dates(course).length === 1 ? '' : 's'} • ${window.ClassInfo.feeText(course)}`
-                        : `${course.level || 'All Levels'} • ${course.duration_weeks || 0} weeks`}</p>
-                    ${isRegistered ? `
-                        <div class="registration-status-badge registered">
-                            <i class="fas fa-check-circle"></i> Registered
-                        </div>
-                    ` : isPending ? `
-                        <div class="registration-status-badge pending">
-                            <i class="fas fa-clock"></i> Payment Pending
-                        </div>
-                    ` : ''}
-                </div>
-                <div class="card-body">
-                    ${course.description ? `<p class="text-muted mb-3">${course.description}</p>` : ''}
-                    
-                    <div class="course-info">
-                        ${scheduleHtml}
-                        ${course.prerequisites ? `
-                            <div class="course-info-item">
-                                <i class="fas fa-info-circle"></i>
-                                <span>${course.prerequisites}</span>
-                            </div>
-                        ` : ''}
-                    </div>
-
-
-                    <button class="btn register-btn ${availableSpots <= 0 && !isRegistered && !isPending ? 'waitlist-btn' : ''}" 
-                            onclick="app.selectCourse(${course.id})"
-                            ${availableSpots <= 0 && !isRegistered && !isPending ? '' : isRegistered || isPending ? 'disabled' : ''}>
-                        <i class="fas ${isRegistered ? 'fa-check' : isPending ? 'fa-clock' : availableSpots > 0 ? 'fa-user-plus' : 'fa-list-alt'}"></i>
-                        ${isRegistered ? 'Already Registered' : isPending ? 'Payment Pending' : availableSpots > 0 ? 'Register Now' : 'Join Waitlist'}
-                    </button>
-                </div>
-            </div>
-        `;
-
-        return col;
+    // Instructor photos: names in the class's Instructor field → /images/<name>.jpg
+    instructorPics(instructor) {
+        const text = String(instructor || '').toLowerCase();
+        const known = [['goutham', 'goutham'], ['monica', 'monica'], ['moni', 'monica'], ['rudie', 'rudie'], ['rudhresh', 'rudie'], ['supriya', 'supriya']];
+        const keys = [];
+        known.forEach(([word, key]) => { if (text.includes(word) && !keys.includes(key)) keys.push(key); });
+        return keys.slice(0, 3).map(k => `<img src="/images/${k}.jpg" alt="" loading="lazy">`).join('');
     }
 
-    createDropInCard(course) {
+    // One card for every class type (series, crew practice, drop-in)
+    createCourseCard(course) {
+        const C = window.ClassInfo;
+        const esc = C.esc;
         const col = document.createElement('div');
-        col.className = 'col-lg-6 mb-3';
+        col.className = 'col-12 col-lg-6 mb-3';
 
-        const availableSpots = parseInt(course.available_spots) || 0;
-        const hasPerClassPrice = course.per_class_price && course.per_class_price > 0;
+        const status = course.registration_status || 'not_registered';
+        const isRegistered = status === 'registered_completed';
+        const isPending = status === 'registered_pending';
+        const spots = parseInt(course.available_spots);
+        const isFull = Number.isFinite(spots) && spots <= 0;
+        const tester = !!(this.currentStudent && (this.currentStudent.is_tester === true || this.currentStudent.is_tester === 1 || this.currentStudent.is_tester === 't'));
+        const isClosed = !tester && !C.isOpen(course);
+        const f = C.fees(course);
 
-        // For drop-in classes, get the class date from the slot
-        let classDate = '';
-        let classTime = '';
-        if (course.slots && course.slots.length > 0) {
-            const slot = course.slots[0];
-            if (slot.practice_date) {
-                classDate = formatLocalDate(slot.practice_date);
-            }
-            if (slot.start_time && slot.end_time) {
-                classTime = `${slot.start_time} - ${slot.end_time}`;
-            } else if (slot.start_time) {
-                classTime = slot.start_time;
-            }
-        }
+        const ds = C.dates(course);
+        let datesText = ds.length ? C.formatDates(ds) : '';
+        if (!datesText && course.start_date) datesText = formatLocalDate(course.start_date);
+        const spotsText = isFull ? 'Full · waitlist' : (Number.isFinite(spots) && spots <= 10 ? `${spots} left` : 'Open');
+        const cells = [['Dates', datesText], ['Time', C.timeRange(course)], ['Location', C.location(course)], ['Spots', (isRegistered || isPending) ? '' : spotsText]]
+            .filter(([, v]) => v);
+
+        const crewOnly = course.required_student_type === 'crew_member' || course.course_type === 'crew_practice'
+            ? ' <span class="cc-crew">Crew only</span>' : '';
+        const pics = this.instructorPics(course.instructor);
+
+        let action;
+        if (isRegistered) action = '<div class="cc-state cc-done"><i class="fas fa-check-circle"></i> You\'re registered · Confirmed</div>';
+        else if (isPending) action = '<div class="cc-state cc-pending"><i class="fas fa-clock"></i> Registered · checking payment</div>';
+        else if (isClosed) action = '<div class="cc-state cc-closed">Registration closed</div>';
+        else if (isFull && !tester) action = `<button type="button" class="cc-btn cc-btn-outline" onclick="app.selectCourse(${Number(course.id)})">Join waitlist</button>`;
+        else action = `<button type="button" class="cc-btn" onclick="app.selectCourse(${Number(course.id)})">Register</button>`;
 
         col.innerHTML = `
-            <div class="card dropin-card fade-in">
-                <div class="dropin-card-header">
-                    <div class="goumo-text-logo">GouMo Dance Chronicles</div>
-                </div>
-                <div class="card-body">
-                    <div class="dropin-header">
-                        <div>
-                            <h6 class="dropin-title">${course.name}</h6>
-                            <small class="text-muted">Drop-in Class</small>
-                        </div>
-                        <div class="dropin-price">$${course.per_class_price || '0'}</div>
+            <article class="class-card-v2 fade-in${isRegistered ? ' is-done' : ''}">
+                <div class="cc-top">
+                    <div class="cc-head">
+                        <span class="cc-kicker">${esc(C.kicker(course))}${crewOnly}</span>
+                        <h3 class="cc-name">${esc(course.name)}</h3>
+                        ${course.instructor ? `<span class="cc-who">${pics ? `<span class="cc-pics">${pics}</span>` : ''}<span>with ${esc(course.instructor)}</span></span>` : ''}
                     </div>
-                    
-                    <div class="dropin-details">
-                        ${classDate ? `
-                            <div class="dropin-detail">
-                                <i class="fas fa-calendar"></i>
-                                <span>${classDate}</span>
-                            </div>
-                        ` : ''}
-                        ${classTime ? `
-                            <div class="dropin-detail">
-                                <i class="fas fa-clock"></i>
-                                <span>${classTime}</span>
-                            </div>
-                        ` : ''}
-                        ${course.instructor ? `
-                            <div class="dropin-detail">
-                                <i class="fas fa-user"></i>
-                                <span>${course.instructor}</span>
-                            </div>
-                        ` : ''}
-                        ${availableSpots <= 0 ? `
-                        <div class="dropin-detail">
-                            <i class="fas fa-users"></i>
-                            <span>FULL</span>
-                        </div>` : 
-                        availableSpots < 10 ? `
-                        <div class="dropin-detail">
-                            <i class="fas fa-users"></i>
-                            <span>Last few spots!</span>
-                        </div>` : ''}
-                    </div>
-
-                    ${course.description ? `<p class="text-muted small mb-3">${course.description}</p>` : ''}
-
-                    <button class="btn register-btn ${availableSpots <= 0 ? 'waitlist-btn' : ''}" 
-                            onclick="app.selectCourse(${course.id})"
-                            ${availableSpots <= 0 ? '' : ''}>
-                        <i class="fas ${availableSpots > 0 ? 'fa-user-plus' : 'fa-list-alt'}"></i>
-                        ${availableSpots > 0 ? 'Register Now' : 'Join Waitlist'}
-                    </button>
+                    ${f.headline ? `<div class="cc-price"><span>$${Number(f.headline).toFixed(0)}</span>${f.unit ? `<small>${esc(f.unit)}</small>` : ''}</div>` : ''}
                 </div>
-            </div>
-        `;
-
+                ${cells.length ? `<dl class="cc-grid">${cells.map(([k, v]) => `<div><dt>${k}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>` : ''}
+                ${action}
+            </article>`;
         return col;
     }
 

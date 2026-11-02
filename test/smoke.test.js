@@ -992,6 +992,24 @@ test('checkout "Back to classes" returns to the list the student came from', asy
     assert.ok(page.includes('cameFromList') && page.includes('window.history.back()'), 'goes back to the crew/sign-in list');
 });
 
+test('class list clears its loading overlay when shown again after Back', async () => {
+    const js = await (await fetch(`${BASE}/js/email-profile-registration.js`)).text();
+    assert.ok(js.includes("addEventListener('pageshow'") && js.includes('e.persisted'), 'handles the frozen page on Back');
+});
+
+test('class list uses the new cards with a clear Register button and instructor photos', async () => {
+    const js = await (await fetch(`${BASE}/js/email-profile-registration.js`)).text();
+    assert.ok(js.includes('class-card-v2') && js.includes('class="cc-btn"'), 'new card and button');
+    assert.ok(!js.includes('createDropInCard'), 'one card for every class type');
+    assert.ok(js.includes('/images/${k}.jpg'), 'instructor photos');
+    for (const name of ['goutham', 'monica', 'rudie', 'supriya']) {
+        const res = await fetch(`${BASE}/images/${name}.jpg`);
+        assert.equal(res.status, 200, `${name} photo is served`);
+    }
+    const css = await (await fetch(`${BASE}/css/registration.css`)).text();
+    assert.ok(css.includes('.cc-btn'), 'card styles are present');
+});
+
 test('removed features are gone', async () => {
     for (const [method, url] of [
         ['POST', '/api/competition/register'],
