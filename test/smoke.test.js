@@ -912,6 +912,32 @@ test('My classes: crew members get crew progress (attendance %, rank); others do
     assert.ok(page.includes('id="crewBox"') && page.includes('id="levelsSheet"'), 'new My classes layout');
 });
 
+test('crew progress: Settings start date leaves earlier practices out', async () => {
+    const email = `crewstart.${unique}@example.com`;
+    await api('POST', '/api/create-student-profile', { email, first_name: 'Crew', last_name: 'Start' });
+    const id = (await api('POST', '/api/my/profile', { email })).body.student.id;
+    await api('POST', '/api/admin/students/bulk', { action: 'make_crew', ids: [id] }, { admin: true });
+    const crew = await api('POST', '/api/courses', {
+        name: `Start Crew ${unique}`, course_type: 'crew_practice', required_student_type: 'crew_member', session_dates: ['2030-02-01'],
+        slots: [{ slot_name: 'Practice', difficulty_level: 'All Levels', capacity: 50, start_time: '18:00', end_time: '20:00', location: 'Start Studio', pricing: { drop_in: 15 } }]
+    }, { admin: true });
+    const reg = await api('POST', '/api/register', { first_name: 'Crew', email, course_id: crew.body.courseId, payment_amount: 15 });
+    assert.equal(reg.status, 200, JSON.stringify(reg.body));
+    // Move the practice into the past: two dates, one before and one after the start date
+    const { Pool } = require('pg');
+    const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: process.env.DATABASE_SSL === 'false' ? false : { rejectUnauthorized: false } });
+    await pool.query(`UPDATE courses SET session_dates = '["2020-01-03","2020-01-10"]' WHERE id = $1`, [crew.body.courseId]);
+    await pool.end();
+    let p = (await api('POST', '/api/my/profile', { email })).body.crew_progress;
+    assert.equal(p.attended, 2, 'both past practices count with no start date');
+    await api('PUT', '/api/settings', { crew_progress_start: '2020-01-05' }, { admin: true });
+    assert.equal((await api('GET', '/api/settings')).body.crew_progress_start, '2020-01-05');
+    p = (await api('POST', '/api/my/profile', { email })).body.crew_progress;
+    assert.equal(p.attended, 1, 'practice before the start date is left out');
+    assert.equal(p.since, '2020-01-10');
+    await api('PUT', '/api/settings', { crew_progress_start: '' }, { admin: true });
+});
+
 test('removed features are gone', async () => {
     for (const [method, url] of [
         ['POST', '/api/competition/register'],

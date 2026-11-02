@@ -3341,23 +3341,26 @@ async function crewPracticeDates() {
     const rows = await dbConfig.all(`SELECT c.id, c.session_dates,
         (SELECT s.practice_date FROM course_slots s WHERE s.course_id = c.id ORDER BY s.id LIMIT 1) AS practice_date
         FROM courses c WHERE c.course_type = 'crew_practice'`);
+    // Admin → Settings "Crew progress starts on": earlier dates don't count (fresh start, nothing deleted)
+    const startRow = await dbConfig.get('SELECT setting_value FROM system_settings WHERE setting_key = $1', ['crew_progress_start']);
+    const start = parseDateList([startRow?.setting_value])[0] || '';
     const byCourse = {};
     for (const r of rows) {
         let ds = parseDateList(r.session_dates);
         if (!ds.length && r.practice_date) ds = [String(r.practice_date instanceof Date ? r.practice_date.toISOString() : r.practice_date).slice(0, 10)];
-        byCourse[r.id] = [...new Set(ds)].sort();
+        byCourse[r.id] = [...new Set(ds)].filter(d => d >= start).sort();
     }
-    return byCourse;
+    return { byCourse, start };
 }
 // Per student: { attended, held, pct, since } from their crew practice registrations
-function crewStats(regs, byCourse, today) {
+function crewStats(regs, byCourse, today, start = '') {
     const mine = new Set();
     for (const r of regs) {
         const all = byCourse[r.course_id] || [];
         const picked = parseDateList(r.selected_dates);
         (picked.length ? picked : all).forEach(d => mine.add(d));
     }
-    const pastMine = [...mine].filter(d => d <= today).sort();
+    const pastMine = [...mine].filter(d => d >= start && d <= today).sort();
     if (!pastMine.length) return { attended: 0, held: 0, pct: null, since: null };
     const since = pastMine[0];
     const allDates = new Set();
@@ -3367,18 +3370,18 @@ function crewStats(regs, byCourse, today) {
 }
 async function crewProgress(studentId) {
     const today = todaySeattle();
-    const byCourse = await crewPracticeDates();
+    const { byCourse, start } = await crewPracticeDates();
     const notCanceled = "r.payment_status IS DISTINCT FROM 'canceled'";
     const regs = await dbConfig.all(`SELECT r.student_id, r.course_id, r.selected_dates, s.student_type, s.is_tester, s.archived_at
         FROM registrations r JOIN students s ON s.id = r.student_id JOIN courses c ON c.id = r.course_id
         WHERE c.course_type = 'crew_practice' AND ${dbConfig.isProduction ? notCanceled : "(r.payment_status IS NULL OR r.payment_status != 'canceled')"}`);
     const byStudent = {};
     for (const r of regs) (byStudent[r.student_id] = byStudent[r.student_id] || { regs: [], info: r }).regs.push(r);
-    const me = crewStats((byStudent[studentId] || { regs: [] }).regs, byCourse, today);
+    const me = crewStats((byStudent[studentId] || { regs: [] }).regs, byCourse, today, start);
     // Rank among current crew members (not hidden, not test accounts) with 5+ practices held
     const ranked = Object.entries(byStudent)
         .filter(([, v]) => v.info.student_type === 'crew_member' && !v.info.archived_at && !isTrue(v.info.is_tester))
-        .map(([id, v]) => ({ id: Number(id), ...crewStats(v.regs, byCourse, today) }))
+        .map(([id, v]) => ({ id: Number(id), ...crewStats(v.regs, byCourse, today, start) }))
         .filter(x => x.held >= 5)
         .sort((a, b) => (b.pct - a.pct) || (b.attended - a.attended));
     const pos = ranked.findIndex(x => x.id === Number(studentId));

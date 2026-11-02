@@ -103,6 +103,10 @@ PR as any change that adds a decision, a link or a to-do.
   then number of practices; ties share a rank. Fewer than 5: "Ranked after 5 practices".
 - Hidden crew practices still count (hiding only tidies the admin list; the practice happened).
 - Calculated in `crewProgress()` in server.js, returned as `crew_progress` by `/api/my/profile`.
+- **Fresh start (Nov 2026):** Admin → Settings → "Count crew practices from" (`crew_progress_start`).
+  Practices before that date are left out of attended, held, % and rank; nothing is deleted, and
+  clearing the date brings the old numbers back. The owner chose this over cancelling old
+  registrations so payment history stays intact. Chosen start date: 2026-11-01.
 - Mockup (approved): https://claude.ai/artifact/JBEr2UNNxFhLxjMz8VRcV9
 
 ## Instructor bios (home page)
