@@ -1001,13 +1001,20 @@ test('class list uses the new cards with a clear Register button and instructor 
     const js = await (await fetch(`${BASE}/js/email-profile-registration.js`)).text();
     assert.ok(js.includes('class-card-v2') && js.includes('class="cc-btn"'), 'new card and button');
     assert.ok(!js.includes('createDropInCard'), 'one card for every class type');
-    assert.ok(js.includes('/images/${k}.jpg'), 'instructor photos');
+    const info = await (await fetch(`${BASE}/js/class-info.js`)).text();
+    assert.ok(info.includes('/images/${k}.jpg'), 'instructor photos');
     for (const name of ['goutham', 'monica', 'rudie', 'supriya']) {
         const res = await fetch(`${BASE}/images/${name}.jpg`);
         assert.equal(res.status, 200, `${name} photo is served`);
     }
-    const css = await (await fetch(`${BASE}/css/registration.css`)).text();
-    assert.ok(css.includes('.cc-btn'), 'card styles are present');
+    const css = await (await fetch(`${BASE}/css/site.css`)).text();
+    assert.ok(css.includes('.cc-btn'), 'card styles are in the design system');
+});
+
+test('home page uses the same class cards', async () => {
+    const js = await (await fetch(`${BASE}/js/home.js`)).text();
+    assert.ok(js.includes('class-card-v2') && js.includes('class="cc-btn"') && js.includes('C.instructorPics'), 'same card, button and photos');
+    assert.ok(js.includes('cc-combo'), 'combos use it too');
 });
 
 test('removed features are gone', async () => {

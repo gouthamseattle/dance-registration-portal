@@ -12,44 +12,48 @@
   let combos = [];
   let activeFilter = 'All';
 
+  // Same card as the sign-in / crew class list (styles: .class-card-v2 in site.css)
+  function whoHtml(names) {
+    if (!names) return '';
+    const pics = C.instructorPics(names);
+    return `<span class="cc-who">${pics ? `<span class="cc-pics">${pics}</span>` : ''}<span>with ${C.esc(names)}</span></span>`;
+  }
+  function gridHtml(cells) {
+    const list = cells.filter((c) => c[1]);
+    return list.length ? `<dl class="cc-grid">${list.map(([k, v, wide]) => `<div${wide ? ' class="cc-wide"' : ''}><dt>${C.esc(k)}</dt><dd>${C.esc(v)}</dd></div>`).join('')}</dl>` : '';
+  }
+
   function cardHtml(course) {
     const esc = C.esc;
-    const crewOnly = course.required_student_type === 'crew_member' ? ' <span class="badge">Crew only</span>' : '';
+    const crewOnly = course.required_student_type === 'crew_member' ? ' <span class="cc-crew">Crew only</span>' : '';
     const spots = Number(course.available_spots);
     const isFull = Number.isFinite(spots) && spots <= 0;
     const tester = C.isTesterDevice();
     const isClosed = !tester && !C.isOpen(course);
     const f = C.fees(course);
     const registerUrl = `/email-profile.html?course=${encodeURIComponent(course.id)}`;
-    const rows = C.rows(course).filter(([k]) => !(isFull && k === 'Fees'));
-    if (isClosed) rows.push(['Status', 'Registration closed']);
-    else if (isFull) rows.push(['Status', 'Full · waitlist open']);
-    const fewLeft = !isClosed && !isFull && Number.isFinite(spots) && spots <= 5;
+    const ds = C.dates(course);
+    const spotsText = isClosed ? 'Closed' : isFull ? 'Full · waitlist' : (Number.isFinite(spots) && spots <= 10 ? `${spots} left` : 'Open');
 
     return `
-      <article class="card class-card" data-type="${esc(C.typeLabel(course))}">
-        <div class="top">
-          <div>
-            <span class="type">${esc(C.kicker(course))}${crewOnly}</span>
-            <h3>${esc(course.name)}</h3>
-            ${course.instructor ? `<span class="when">with ${esc(course.instructor)}</span>` : ''}
+      <article class="class-card-v2" data-type="${esc(C.typeLabel(course))}">
+        <div class="cc-top">
+          <div class="cc-head">
+            <span class="cc-kicker">${esc(C.kicker(course))}${crewOnly}</span>
+            <h3 class="cc-name">${esc(course.name)}</h3>
+            ${whoHtml(course.instructor)}
           </div>
-          <span class="price">${f.headline ? `$${Number(f.headline).toFixed(0)}` : ''}${f.unit ? `<small>${esc(f.unit)}</small>` : ''}</span>
+          ${f.headline ? `<div class="cc-price"><span>$${Number(f.headline).toFixed(0)}</span>${f.unit ? `<small>${esc(f.unit)}</small>` : ''}</div>` : ''}
         </div>
-        <dl class="rows">
-          ${rows.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}
-        </dl>
-        ${course.description ? `<p class="desc">${esc(course.description)}</p>` : ''}
-        <div class="actions">
-          <span class="spots">${fewLeft ? `Only ${spots} spot${spots === 1 ? '' : 's'} left` : ''}</span>
-          ${isClosed
-            ? '<span class="btn btn-outline" aria-disabled="true">Registration closed</span>'
-            : isFull && tester
-            ? `<a class="btn btn-primary" href="${registerUrl}">Register (test)</a>`
-            : isFull
-            ? `<a class="btn btn-outline" href="${registerUrl}">Join waitlist</a>`
-            : `<a class="btn btn-primary" href="${registerUrl}">Register</a>`}
-        </div>
+        ${gridHtml([[ds.length === 1 ? 'Date' : 'Dates', ds.length ? C.formatDates(ds) : ''], ['Time', C.timeRange(course)], ['Location', C.location(course)], ['Spots', spotsText]])}
+        ${course.description ? `<p class="cc-desc">${esc(course.description)}</p>` : ''}
+        ${isClosed
+          ? '<div class="cc-state cc-closed">Registration closed</div>'
+          : isFull && tester
+          ? `<a class="cc-btn" href="${registerUrl}">Register (test)</a>`
+          : isFull
+          ? `<a class="cc-btn cc-btn-outline" href="${registerUrl}">Join waitlist</a>`
+          : `<a class="cc-btn" href="${registerUrl}">Register</a>`}
       </article>`;
   }
 
@@ -59,27 +63,24 @@
     const spots = Number(combo.available_spots);
     const isFull = Number.isFinite(spots) && spots <= 0;
     const who = C.comboInstructors(combo.classes);
-    const crewOnly = combo.classes.some((c) => c.required_student_type === 'crew_member') ? ' <span class="badge">Crew only</span>' : '';
-    const fewLeft = !isFull && Number.isFinite(spots) && spots <= 5;
+    const crewOnly = combo.classes.some((c) => c.required_student_type === 'crew_member') ? ' <span class="cc-crew">Crew only</span>' : '';
+    const fewLeft = !isFull && Number.isFinite(spots) && spots <= 10;
+    const cells = C.comboRows(combo.classes).map(([k, v]) => [k, v, true]);
+    cells.push(['Location', C.location(combo.classes[0] || {})]);
+    cells.push(['Spots', isFull ? 'Full' : fewLeft ? `${spots} left` : 'Open']);
     return `
-      <article class="card class-card combo-card" data-type="Combos">
-        <div class="top">
-          <div>
-            <span class="type">${esc(C.comboKicker(combo.classes))}${crewOnly}</span>
-            <h3>${esc(combo.name)}</h3>
-            ${who ? `<span class="when">with ${esc(who)}</span>` : ''}
+      <article class="class-card-v2 cc-combo" data-type="Combos">
+        <div class="cc-top">
+          <div class="cc-head">
+            <span class="cc-kicker">${esc(C.comboKicker(combo.classes))}${crewOnly}</span>
+            <h3 class="cc-name">${esc(combo.name)}</h3>
+            ${whoHtml(who)}
           </div>
-          <span class="price">$${Number(combo.price).toFixed(0)}${combo.savings > 0 ? `<small class="save">save $${Number(combo.savings).toFixed(0)}</small>` : ''}</span>
+          <div class="cc-price"><span>$${Number(combo.price).toFixed(0)}</span>${combo.savings > 0 ? `<small class="cc-save">save $${Number(combo.savings).toFixed(0)}</small>` : '<small>one payment</small>'}</div>
         </div>
-        <dl class="rows">
-          ${C.comboRows(combo.classes).map(([k, v]) => `<div class="stack"><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}
-          ${C.location(combo.classes[0] || {}) ? `<div><dt>Location</dt><dd>${esc(C.location(combo.classes[0]))}</dd></div>` : ''}
-        </dl>
-        ${combo.description ? `<p class="desc">${esc(combo.description)}</p>` : ''}
-        <div class="actions">
-          <span class="spots">${isFull ? 'Full' : fewLeft ? `Only ${spots} spot${spots === 1 ? '' : 's'} left` : 'One payment, all classes'}</span>
-          ${isFull ? '' : `<a class="btn btn-primary" href="/email-profile.html?combo=${encodeURIComponent(combo.id)}">Register</a>`}
-        </div>
+        ${gridHtml(cells)}
+        ${combo.description ? `<p class="cc-desc">${esc(combo.description)}</p>` : ''}
+        ${isFull ? '<div class="cc-state cc-closed">Full</div>' : `<a class="cc-btn" href="/email-profile.html?combo=${encodeURIComponent(combo.id)}">Register</a>`}
       </article>`;
   }
 
