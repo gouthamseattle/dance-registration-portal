@@ -385,8 +385,15 @@
             // Set up back button to return to email profile
             // Back to the class list on the home page (the old sign-in page with no
             // class chosen just bounced to the home page, which felt like a log-out)
+            // Back to the class list the student came from (e.g. the crew link, which shows
+            // crew practices); only fall back to the home page's list when there is none.
             document.getElementById('backToEmailProfile').addEventListener('click', function() {
-                window.location.href = '/#classes';
+                let from = null;
+                try { from = document.referrer ? new URL(document.referrer) : null; } catch (e) { from = null; }
+                const cameFromList = from && from.origin === window.location.origin &&
+                    (from.pathname === '/email-profile.html' || from.pathname === '/crew');
+                if (cameFromList && window.history.length > 1) window.history.back();
+                else window.location.href = '/#classes';
             });
         });
     </script>

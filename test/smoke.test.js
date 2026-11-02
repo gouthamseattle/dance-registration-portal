@@ -987,6 +987,11 @@ test('crew link shows all classes; saved email skips the email step', async () =
     assert.ok(js.includes('Remembered on this phone: carry on to the classes'), 'remembered email continues straight to classes');
 });
 
+test('checkout "Back to classes" returns to the list the student came from', async () => {
+    const page = await (await fetch(`${BASE}/index-registration.html`)).text();
+    assert.ok(page.includes('cameFromList') && page.includes('window.history.back()'), 'goes back to the crew/sign-in list');
+});
+
 test('removed features are gone', async () => {
     for (const [method, url] of [
         ['POST', '/api/competition/register'],
