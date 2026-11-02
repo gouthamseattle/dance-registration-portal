@@ -962,6 +962,18 @@ test('progress: GouMo classes count per date; "Teaches as" leaves out classes th
     assert.equal(g.attended, 2, 'class they taught is left out');
 });
 
+test('admin class list includes crew-only classes; public list does not', async () => {
+    const res = await api('POST', '/api/courses', {
+        name: `Admin Sees Crew ${unique}`, course_type: 'crew_practice', required_student_type: 'crew_member', session_dates: ['2030-05-01'],
+        slots: [{ slot_name: 'Practice', difficulty_level: 'All Levels', capacity: 50, start_time: '18:00', end_time: '20:00', location: 'Crew Studio', pricing: { drop_in: 30 } }]
+    }, { admin: true });
+    const id = Number(res.body.courseId);
+    const adminList = (await api('GET', '/api/courses', null, { admin: true })).body;
+    assert.ok(adminList.some(c => Number(c.id) === id), 'admin sees the crew-only class');
+    const publicList = (await api('GET', '/api/courses')).body;
+    assert.ok(!publicList.some(c => Number(c.id) === id), 'public list still hides it');
+});
+
 test('removed features are gone', async () => {
     for (const [method, url] of [
         ['POST', '/api/competition/register'],

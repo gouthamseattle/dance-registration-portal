@@ -435,7 +435,10 @@ app.get('/api/courses', asyncHandler(async (req, res) => {
     }
     
     // Filter courses based on student access level
-    if (studentType === 'crew_member' || (include_crew === 'true' && !student_email)) {
+    // The signed-in admin sees every class (crew-only ones too) in the admin portal
+    if (req.session && req.session.adminId && !student_email) {
+        // no student-type filter
+    } else if (studentType === 'crew_member' || (include_crew === 'true' && !student_email)) {
         // Crew members can access all courses (and the public listing shows them all)
         conditions.push('(c.required_student_type = \'any\' OR c.required_student_type = \'crew_member\')');
     } else {
