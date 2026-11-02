@@ -622,6 +622,7 @@ class AdminDashboard {
         document.getElementById('emailNotifications').checked = this.settings.email_notifications_enabled === 'true';
         document.getElementById('waitlistHoldHours').value = this.settings.waitlist_hold_hours || '24';
         document.getElementById('crewProgressStart').value = this.settings.crew_progress_start || '';
+        document.getElementById('goumoProgressStart').value = this.settings.goumo_progress_start || '2026-01-01';
         const zelleOn = this.settings.zelle_enabled === 'true';
         document.getElementById('zelleEnabled').checked = zelleOn;
         document.getElementById('zelleFields').style.display = zelleOn ? '' : 'none';
@@ -662,7 +663,8 @@ class AdminDashboard {
             email_notifications_enabled: formData.has('email_notifications_enabled').toString(),
             zelle_enabled: formData.has('zelle_enabled').toString(),
             waitlist_hold_hours: formData.get('waitlist_hold_hours') || '24',
-            crew_progress_start: formData.get('crew_progress_start') || ''
+            crew_progress_start: formData.get('crew_progress_start') || '',
+            goumo_progress_start: formData.get('goumo_progress_start') || ''
         };
 
         try {

@@ -98,7 +98,7 @@ PR as any change that adds a decision, a link or a to-do.
   (everyone; = every class that isn't a crew practice). Each shows a % ring, "x of y" and rank.
 - Counting: every registration that isn't cancelled (payment status ignored), one per class date.
   Total for % = all class dates of that kind from the person's first one to today. Hidden classes
-  count. Settings "Count crew practices from" (`crew_progress_start`) applies to crew practices only; GouMo classes always count from the beginning.
+  count. Settings "Count crew practices from" (`crew_progress_start`, empty = all) applies to crew practices; "Count GouMo classes from" (`goumo_progress_start`, empty = Jan 1, 2026) to GouMo classes. Each panel shows a small "Since <date>" tag. Classes with no real registrations (e.g. "Test class") don't count as held. Classes running at the same time still count separately (owner chose not to change this yet). For "Teaches as" to work, the class's Instructor field must name the person (many older classes have it blank).
 - "Teaches as" on a student's admin profile (e.g. Rudie for Rudhresh, Supriya): classes whose
   instructor matches are left out of that person's counts and totals.
 - Rank: crew practices among current crew members, GouMo classes among all students (not hidden,

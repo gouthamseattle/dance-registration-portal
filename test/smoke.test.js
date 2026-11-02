@@ -954,6 +954,9 @@ test('progress: GouMo classes count per date; "Teaches as" leaves out classes th
     await pool.query(`UPDATE courses SET session_dates = '["2021-03-01","2021-03-08"]' WHERE id = ANY($1)`, [[a, b]]);
     await pool.end();
     let g = (await api('POST', '/api/my/profile', { email })).body.progress.goumo;
+    assert.equal(g.attended, 0, 'classes before the GouMo start date (default Jan 1, 2026) are left out');
+    await api('PUT', '/api/settings', { goumo_progress_start: '2000-01-01' }, { admin: true });
+    g = (await api('POST', '/api/my/profile', { email })).body.progress.goumo;
     assert.equal(g.attended, 4, 'two classes × two dates');
     assert.ok(g.held >= 4 && g.pct > 0);
     assert.equal((await api('PUT', `/api/admin/students/${id}/teaches-as`, { teaches_as: `Teacher${unique}` })).status, 401, 'admin only');
@@ -963,7 +966,7 @@ test('progress: GouMo classes count per date; "Teaches as" leaves out classes th
     await api('PUT', '/api/settings', { crew_progress_start: '2029-01-01' }, { admin: true });
     g = (await api('POST', '/api/my/profile', { email })).body.progress.goumo;
     assert.equal(g.attended, 2, 'crew start date does not affect GouMo classes');
-    await api('PUT', '/api/settings', { crew_progress_start: '' }, { admin: true });
+    await api('PUT', '/api/settings', { crew_progress_start: '', goumo_progress_start: '' }, { admin: true });
 });
 
 test('admin class list includes crew-only classes; public list does not', async () => {
