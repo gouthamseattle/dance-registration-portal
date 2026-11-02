@@ -66,6 +66,16 @@
     .crew .tile b.hi { color: var(--accent); }
     .crew .tile span { font-size: 12px; color: var(--muted); }
     .crew .tile b.na { font-family: var(--font-body); font-weight: 700; font-size: 13px; line-height: 1.3; padding-top: 4px; }
+    .pnls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .pnls.one { grid-template-columns: minmax(0, 1fr); }
+    .pnl { background: var(--bg); border-radius: 14px; padding: 14px; display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
+    .pnl > strong { font-size: 13px; }
+    .pnl .ring { width: 84px; height: 84px; flex-basis: 84px; }
+    .pnl .ring > span { width: 66px; height: 66px; font-size: 22px; }
+    .pnl small { font-size: 12px; color: var(--muted); }
+    .pnl .rank { display: flex; align-items: baseline; gap: 4px; font-size: 12px; color: var(--muted); }
+    .pnl .rank b { font-family: var(--font-display); font-weight: 400; font-size: 24px; color: var(--accent); }
+    .crew .note { margin: 0; font-size: 12px; color: var(--faint); line-height: 1.5; }
     /* Next class */
     .next { padding: 16px; display: flex; flex-direction: column; gap: 10px; }
     .next .top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
@@ -191,6 +201,6 @@
   </div>
 
   <script src="/js/class-info.js?v=6"></script>
-  <script src="/js/my.js?v=7"></script>
+  <script src="/js/my.js?v=8"></script>
 </body>
 </html>

@@ -288,9 +288,11 @@ async function ensureTeamTable(dbConfig) {
         )`);
         if (dbConfig.isProduction) {
             await dbConfig.run('ALTER TABLE registrations ADD COLUMN IF NOT EXISTS handled_by VARCHAR(255)');
+            await dbConfig.run('ALTER TABLE students ADD COLUMN IF NOT EXISTS teaches_as VARCHAR(100)');
             await dbConfig.run('ALTER TABLE courses ADD COLUMN IF NOT EXISTS registration_closed_at TIMESTAMP');
         } else {
             await dbConfig.run('ALTER TABLE registrations ADD COLUMN handled_by TEXT').catch(() => {});
+            await dbConfig.run('ALTER TABLE students ADD COLUMN teaches_as TEXT').catch(() => {});
             await dbConfig.run('ALTER TABLE courses ADD COLUMN registration_closed_at TIMESTAMP').catch(() => {});
         }
         console.log('✅ Ensured team_members table exists');

@@ -901,12 +901,13 @@ test('My classes: crew members get crew progress (attendance %, rank); others do
     await api('POST', '/api/create-student-profile', { email, first_name: 'Crew', last_name: 'Prog' });
     let prof = await api('POST', '/api/my/profile', { email });
     assert.equal(prof.status, 200);
-    assert.equal(prof.body.crew_progress, null, 'not shown to GouMo students');
+    assert.equal(prof.body.progress.crew, null, 'no crew panel for GouMo students');
+    assert.ok(prof.body.progress.goumo, 'GouMo classes panel for everyone');
     await api('POST', '/api/admin/students/bulk', { action: 'make_crew', ids: [prof.body.student.id] }, { admin: true });
     prof = await api('POST', '/api/my/profile', { email });
-    const p = prof.body.crew_progress;
+    const p = prof.body.progress.crew;
     assert.ok(p, 'crew progress for crew members');
-    for (const k of ['attended', 'held', 'pct', 'classes', 'rank', 'ranked_count', 'min_for_rank']) assert.ok(k in p, `has ${k}`);
+    for (const k of ['attended', 'held', 'pct', 'rank', 'ranked_count']) assert.ok(k in p && k in prof.body.progress.goumo, `has ${k}`);
     assert.equal(p.attended, 0); assert.equal(p.pct, null, 'no % before the first practice');
     const page = await (await fetch(`${BASE}/my`)).text();
     assert.ok(page.includes('id="crewBox"') && page.includes('id="levelsSheet"'), 'new My classes layout');
@@ -928,14 +929,37 @@ test('crew progress: Settings start date leaves earlier practices out', async ()
     const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: process.env.DATABASE_SSL === 'false' ? false : { rejectUnauthorized: false } });
     await pool.query(`UPDATE courses SET session_dates = '["2020-01-03","2020-01-10"]' WHERE id = $1`, [crew.body.courseId]);
     await pool.end();
-    let p = (await api('POST', '/api/my/profile', { email })).body.crew_progress;
+    let p = (await api('POST', '/api/my/profile', { email })).body.progress.crew;
     assert.equal(p.attended, 2, 'both past practices count with no start date');
     await api('PUT', '/api/settings', { crew_progress_start: '2020-01-05' }, { admin: true });
     assert.equal((await api('GET', '/api/settings')).body.crew_progress_start, '2020-01-05');
-    p = (await api('POST', '/api/my/profile', { email })).body.crew_progress;
+    p = (await api('POST', '/api/my/profile', { email })).body.progress.crew;
     assert.equal(p.attended, 1, 'practice before the start date is left out');
     assert.equal(p.since, '2020-01-10');
     await api('PUT', '/api/settings', { crew_progress_start: '' }, { admin: true });
+});
+
+test('progress: GouMo classes count per date; "Teaches as" leaves out classes they taught', async () => {
+    const email = `goumoprog.${unique}@example.com`;
+    await api('POST', '/api/create-student-profile', { email, first_name: 'Go', last_name: 'Prog' });
+    const id = (await api('POST', '/api/my/profile', { email })).body.student.id;
+    const mk = async (name, instructor) => (await api('POST', '/api/courses', {
+        name: `${name} ${unique}`, course_type: 'multi-week', instructor, session_dates: ['2030-03-01', '2030-03-08'],
+        slots: [{ slot_name: 'Main', difficulty_level: 'All Levels', capacity: 50, start_time: '10:00', end_time: '11:00', location: 'Prog Studio', pricing: { full_package: 40 } }]
+    }, { admin: true })).body.courseId;
+    const a = await mk('Prog A', 'Monica'), b = await mk('Prog B', `Teacher${unique}`);
+    for (const c of [a, b]) assert.equal((await api('POST', '/api/register', { first_name: 'Go', email, course_id: c, payment_amount: 40 })).status, 200);
+    const { Pool } = require('pg');
+    const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: process.env.DATABASE_SSL === 'false' ? false : { rejectUnauthorized: false } });
+    await pool.query(`UPDATE courses SET session_dates = '["2021-03-01","2021-03-08"]' WHERE id = ANY($1)`, [[a, b]]);
+    await pool.end();
+    let g = (await api('POST', '/api/my/profile', { email })).body.progress.goumo;
+    assert.equal(g.attended, 4, 'two classes × two dates');
+    assert.ok(g.held >= 4 && g.pct > 0);
+    assert.equal((await api('PUT', `/api/admin/students/${id}/teaches-as`, { teaches_as: `Teacher${unique}` })).status, 401, 'admin only');
+    await api('PUT', `/api/admin/students/${id}/teaches-as`, { teaches_as: `Teacher${unique}` }, { admin: true });
+    g = (await api('POST', '/api/my/profile', { email })).body.progress.goumo;
+    assert.equal(g.attended, 2, 'class they taught is left out');
 });
 
 test('removed features are gone', async () => {

@@ -90,23 +90,21 @@ PR as any change that adds a decision, a link or a to-do.
   screen that tells the student they've done their part. "Your spot is confirmed once we
   receive your payment" sits under the button. The old PayPal "You're in!" screen is gone.
 
-## My classes page and crew progress (Nov 2026)
+## My classes page and progress (Nov 2026)
 
-- Page order: (crew only) highlighted "Your crew progress" card → next class (Add to calendar,
-  Directions) → "Coming up" dates grouped by week → History (5 shown, "Show all") → Browse classes,
-  details. Waitlists are not shown on this page.
-- Counts include every registration that isn't cancelled; payment status doesn't matter.
-- Attendance % = crew practice dates registered for ÷ crew practice dates held since the member's
-  first crew practice ("since joining"). Consistency badge: Legend 90%+, Pro 80–90, Committed
-  70–80, Rising 60–70, Warming up below 60. Badges are switched OFF for now (owner: too early for new members); turn on with `SHOW_BADGES` in my.js. The card shows attendance %, rank, practices and classes.
-- Rank among current crew members (not hidden, not test accounts) with 5+ practices held, by %
-  then number of practices; ties share a rank. Fewer than 5: "Ranked after 5 practices".
-- Hidden crew practices still count (hiding only tidies the admin list; the practice happened).
-- Calculated in `crewProgress()` in server.js, returned as `crew_progress` by `/api/my/profile`.
-- **Fresh start (Nov 2026):** Admin → Settings → "Count crew practices from" (`crew_progress_start`).
-  Practices before that date are left out of attended, held, % and rank; nothing is deleted, and
-  clearing the date brings the old numbers back. The owner chose this over cancelling old
-  registrations so payment history stays intact. Chosen start date: 2026-11-01.
+- Page order: highlighted "Your progress" card → next class (Add to calendar, Directions) →
+  "Coming up" dates by week → History (5 shown, "Show all") → Browse classes, details. No waitlists.
+- "Your progress" has two panels: **Crew practices** (crew members only) and **GouMo classes**
+  (everyone; = every class that isn't a crew practice). Each shows a % ring, "x of y" and rank.
+- Counting: every registration that isn't cancelled (payment status ignored), one per class date.
+  Total for % = all class dates of that kind from the person's first one to today. Hidden classes
+  count. Settings "Count crew practices from" (`crew_progress_start`) applies to both panels.
+- "Teaches as" on a student's admin profile (e.g. Rudie for Rudhresh, Supriya): classes whose
+  instructor matches are left out of that person's counts and totals.
+- Rank: crew practices among current crew members, GouMo classes among all students (not hidden,
+  not test accounts); 5+ held; by % then count; ties share a rank.
+- Badges are switched OFF (owner: too early for new members); `SHOW_BADGES` in my.js.
+- Calculated in `studentProgress()` in server.js, returned as `progress` by `/api/my/profile`.
 - Mockup (approved): https://claude.ai/artifact/JBEr2UNNxFhLxjMz8VRcV9
 
 ## Instructor bios (home page)
