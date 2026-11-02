@@ -3336,11 +3336,11 @@ function parseDateList(v) {
 function todaySeattle() {
     return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 }
+// Hidden practices are included: hiding a class only tidies it away in the admin; it still happened.
 async function crewPracticeDates() {
-    const hiddenOff = dbConfig.isProduction ? '(c.is_hidden IS NULL OR c.is_hidden = false)' : '(c.is_hidden IS NULL OR c.is_hidden = 0)';
     const rows = await dbConfig.all(`SELECT c.id, c.session_dates,
         (SELECT s.practice_date FROM course_slots s WHERE s.course_id = c.id ORDER BY s.id LIMIT 1) AS practice_date
-        FROM courses c WHERE c.course_type = 'crew_practice' AND ${hiddenOff}`);
+        FROM courses c WHERE c.course_type = 'crew_practice'`);
     const byCourse = {};
     for (const r of rows) {
         let ds = parseDateList(r.session_dates);

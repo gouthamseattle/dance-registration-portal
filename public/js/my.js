@@ -27,6 +27,8 @@
   };
   const chip = (r) => { const [t, c] = STATUS[r.payment_status] || ['Registered', 'ok']; return `<span class="status ${c}">${esc(t)}</span>`; };
 
+  // Badges are switched off for now (Nov 2026: too early for new members). Set to true to bring them back.
+  const SHOW_BADGES = false;
   // Consistency badge levels (attendance % since joining the crew)
   const LEVELS = [
     { name: 'Legend', min: 90, range: '90% and above', bg: 'radial-gradient(circle at 35% 30%, #FFF3A6, #E0B400)', ring: '#FFD60A' },
@@ -45,7 +47,9 @@
     const box = $('crewBox');
     if (!p) { box.hidden = true; return; }
     let badge = '';
-    if (p.pct === null) {
+    if (!SHOW_BADGES) {
+      badge = '';
+    } else if (p.pct === null) {
       badge = `<div class="badge-text"><small>Consistency badge</small><span>Your badge appears after your first crew practice.</span></div>`;
     } else {
       const l = levelFor(p.pct);
