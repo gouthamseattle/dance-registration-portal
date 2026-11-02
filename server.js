@@ -3331,7 +3331,7 @@ async function studentHistory(studentId) {
 // one per class date. For each kind (crew practice / GouMo class = everything else):
 //   attended = their class dates up to today; held = all class dates of that kind from
 //   their first one to today; % = attended ÷ held. Hidden classes count (hiding only tidies
-//   the admin). Settings "crew_progress_start" (Count crew practices from) applies to both.
+//   the admin). Settings "crew_progress_start" (Count crew practices from) applies to crew practices only.
 //   Classes a student taught ("Teaches as" on their profile matches the class instructor)
 //   are left out of both their counts. Rank: crew practices among current crew members,
 //   GouMo classes among all students (not hidden, not test accounts), 5+ held, by % then count.
@@ -3360,7 +3360,9 @@ async function allClassDates(start) {
             const weeks = Math.max(1, Math.min(Number(c.duration_weeks) || 1, 26));
             ds = Array.from({ length: weeks }, (_, i) => new Date(d0.getTime() + i * 7 * 86400000).toISOString().slice(0, 10));
         }
-        byCourse[c.id] = { crew: c.course_type === 'crew_practice', instructor: c.instructor || '', dates: [...new Set(ds)].filter(d => d >= start).sort() };
+        const crew = c.course_type === 'crew_practice';
+        // "Count crew practices from" only applies to crew practices
+        byCourse[c.id] = { crew, instructor: c.instructor || '', dates: [...new Set(ds)].filter(d => !crew || d >= start).sort() };
     }
     return byCourse;
 }

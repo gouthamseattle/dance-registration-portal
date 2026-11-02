@@ -960,6 +960,10 @@ test('progress: GouMo classes count per date; "Teaches as" leaves out classes th
     await api('PUT', `/api/admin/students/${id}/teaches-as`, { teaches_as: `Teacher${unique}` }, { admin: true });
     g = (await api('POST', '/api/my/profile', { email })).body.progress.goumo;
     assert.equal(g.attended, 2, 'class they taught is left out');
+    await api('PUT', '/api/settings', { crew_progress_start: '2029-01-01' }, { admin: true });
+    g = (await api('POST', '/api/my/profile', { email })).body.progress.goumo;
+    assert.equal(g.attended, 2, 'crew start date does not affect GouMo classes');
+    await api('PUT', '/api/settings', { crew_progress_start: '' }, { admin: true });
 });
 
 test('admin class list includes crew-only classes; public list does not', async () => {
