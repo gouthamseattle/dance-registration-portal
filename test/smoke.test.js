@@ -896,6 +896,22 @@ test('home page: instructor cards have style tags and open a bio', async () => {
     assert.ok(js.includes('first student turned instructor') && js.includes('classesWith'), 'bios and classes per instructor');
 });
 
+test('My classes: crew members get crew progress (attendance %, rank); others do not', async () => {
+    const email = `crewprog.${unique}@example.com`;
+    await api('POST', '/api/create-student-profile', { email, first_name: 'Crew', last_name: 'Prog' });
+    let prof = await api('POST', '/api/my/profile', { email });
+    assert.equal(prof.status, 200);
+    assert.equal(prof.body.crew_progress, null, 'not shown to GouMo students');
+    await api('POST', '/api/admin/students/bulk', { action: 'make_crew', ids: [prof.body.student.id] }, { admin: true });
+    prof = await api('POST', '/api/my/profile', { email });
+    const p = prof.body.crew_progress;
+    assert.ok(p, 'crew progress for crew members');
+    for (const k of ['attended', 'held', 'pct', 'classes', 'rank', 'ranked_count', 'min_for_rank']) assert.ok(k in p, `has ${k}`);
+    assert.equal(p.attended, 0); assert.equal(p.pct, null, 'no % before the first practice');
+    const page = await (await fetch(`${BASE}/my`)).text();
+    assert.ok(page.includes('id="crewBox"') && page.includes('id="levelsSheet"'), 'new My classes layout');
+});
+
 test('removed features are gone', async () => {
     for (const [method, url] of [
         ['POST', '/api/competition/register'],

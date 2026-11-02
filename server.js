@@ -3323,6 +3323,76 @@ async function studentHistory(studentId) {
     };
 }
 
+// ---------- Crew progress (My classes, crew members) ----------
+// Counts every registration that isn't cancelled (payment status doesn't matter).
+// "Since joining" = the date of a member's first crew practice. Attendance % =
+// practice dates they registered for ÷ crew practice dates held since then.
+// Rank: crew members with 5+ practices held, by % then number of practices.
+function parseDateList(v) {
+    let list = v;
+    if (typeof list === 'string') { try { list = JSON.parse(list); } catch (e) { list = []; } }
+    return Array.isArray(list) ? list.map(d => String(d).slice(0, 10)).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d)) : [];
+}
+function todaySeattle() {
+    return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+}
+async function crewPracticeDates() {
+    const hiddenOff = dbConfig.isProduction ? '(c.is_hidden IS NULL OR c.is_hidden = false)' : '(c.is_hidden IS NULL OR c.is_hidden = 0)';
+    const rows = await dbConfig.all(`SELECT c.id, c.session_dates,
+        (SELECT s.practice_date FROM course_slots s WHERE s.course_id = c.id ORDER BY s.id LIMIT 1) AS practice_date
+        FROM courses c WHERE c.course_type = 'crew_practice' AND ${hiddenOff}`);
+    const byCourse = {};
+    for (const r of rows) {
+        let ds = parseDateList(r.session_dates);
+        if (!ds.length && r.practice_date) ds = [String(r.practice_date instanceof Date ? r.practice_date.toISOString() : r.practice_date).slice(0, 10)];
+        byCourse[r.id] = [...new Set(ds)].sort();
+    }
+    return byCourse;
+}
+// Per student: { attended, held, pct, since } from their crew practice registrations
+function crewStats(regs, byCourse, today) {
+    const mine = new Set();
+    for (const r of regs) {
+        const all = byCourse[r.course_id] || [];
+        const picked = parseDateList(r.selected_dates);
+        (picked.length ? picked : all).forEach(d => mine.add(d));
+    }
+    const pastMine = [...mine].filter(d => d <= today).sort();
+    if (!pastMine.length) return { attended: 0, held: 0, pct: null, since: null };
+    const since = pastMine[0];
+    const allDates = new Set();
+    Object.values(byCourse).forEach(ds => ds.forEach(d => { if (d >= since && d <= today) allDates.add(d); }));
+    const held = Math.max(allDates.size, pastMine.length);
+    return { attended: pastMine.length, held, pct: held ? Math.round(pastMine.length * 100 / held) : null, since };
+}
+async function crewProgress(studentId) {
+    const today = todaySeattle();
+    const byCourse = await crewPracticeDates();
+    const notCanceled = "r.payment_status IS DISTINCT FROM 'canceled'";
+    const regs = await dbConfig.all(`SELECT r.student_id, r.course_id, r.selected_dates, s.student_type, s.is_tester, s.archived_at
+        FROM registrations r JOIN students s ON s.id = r.student_id JOIN courses c ON c.id = r.course_id
+        WHERE c.course_type = 'crew_practice' AND ${dbConfig.isProduction ? notCanceled : "(r.payment_status IS NULL OR r.payment_status != 'canceled')"}`);
+    const byStudent = {};
+    for (const r of regs) (byStudent[r.student_id] = byStudent[r.student_id] || { regs: [], info: r }).regs.push(r);
+    const me = crewStats((byStudent[studentId] || { regs: [] }).regs, byCourse, today);
+    // Rank among current crew members (not hidden, not test accounts) with 5+ practices held
+    const ranked = Object.entries(byStudent)
+        .filter(([, v]) => v.info.student_type === 'crew_member' && !v.info.archived_at && !isTrue(v.info.is_tester))
+        .map(([id, v]) => ({ id: Number(id), ...crewStats(v.regs, byCourse, today) }))
+        .filter(x => x.held >= 5)
+        .sort((a, b) => (b.pct - a.pct) || (b.attended - a.attended));
+    const pos = ranked.findIndex(x => x.id === Number(studentId));
+    let rank = null;
+    if (pos >= 0) {
+        // Ties share a rank
+        const first = ranked.findIndex(x => x.pct === ranked[pos].pct && x.attended === ranked[pos].attended);
+        rank = first + 1;
+    }
+    const classRow = await dbConfig.get(`SELECT COUNT(*) AS n FROM registrations r JOIN courses c ON c.id = r.course_id
+        WHERE r.student_id = $1 AND c.course_type <> 'crew_practice' AND ${dbConfig.isProduction ? notCanceled : "(r.payment_status IS NULL OR r.payment_status != 'canceled')"}`, [studentId]);
+    return { ...me, classes: Number(classRow?.n) || 0, rank, ranked_count: ranked.length, min_for_rank: 5 };
+}
+
 const STUDENT_PUBLIC_FIELDS = 'id, first_name, last_name, email, instagram_handle, dance_experience, student_type, created_at, is_tester, archived_at';
 
 // Admin: one student's profile, history and private notes
@@ -3347,7 +3417,8 @@ app.post('/api/my/profile', asyncHandler(async (req, res) => {
     if (!student) return res.status(404).json({ error: "We couldn't find that email. Register for a class first, or try the email you used before." });
     const history = await studentHistory(student.id);
     history.registrations.forEach(r => { delete r.combo_group; });
-    res.json({ student, ...history });
+    const crew = student.student_type === 'crew_member' ? await crewProgress(student.id) : null;
+    res.json({ student, ...history, crew_progress: crew });
 }));
 
 app.put('/api/my/profile', asyncHandler(async (req, res) => {

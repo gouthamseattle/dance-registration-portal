@@ -1,6 +1,6 @@
 /**
- * "My classes" page for students: sign in with email, then see upcoming and
- * past classes, payment status, waitlists, and edit basic details.
+ * "My classes" page for students: sign in with email, then see the next class,
+ * upcoming dates, history and (crew members) crew progress, and edit basic details.
  * The email is remembered on this phone (localStorage) for next time.
  */
 (function () {
@@ -22,50 +22,141 @@
 
   const STATUS = {
     completed: ['Confirmed', 'ok'],
-    pending: ['Payment being checked', 'wait'],
-    canceled: ['Canceled', 'off'],
+    pending: ['Checking payment', 'wait'],
     failed: ['Payment problem', 'off']
   };
+  const chip = (r) => { const [t, c] = STATUS[r.payment_status] || ['Registered', 'ok']; return `<span class="status ${c}">${esc(t)}</span>`; };
 
-  // One line per class: name and status. Finished classes are shown as "Done".
-  function row(name, label, cls, done) {
-    return `<div class="class-row${done ? ' done' : ''}"><span class="name">${esc(name)}</span><span class="status ${cls}">${esc(label)}</span></div>`;
+  // Consistency badge levels (attendance % since joining the crew)
+  const LEVELS = [
+    { name: 'Legend', min: 90, range: '90% and above', bg: 'radial-gradient(circle at 35% 30%, #FFF3A6, #E0B400)', ring: '#FFD60A' },
+    { name: 'Pro', min: 80, range: '80–90%', bg: 'radial-gradient(circle at 35% 30%, #F4F6F8, #9DA3AB)', ring: '#C9CDD3' },
+    { name: 'Committed', min: 70, range: '70–80%', bg: 'radial-gradient(circle at 35% 30%, #F0B784, #B5682F)', ring: '#D08A4E' },
+    { name: 'Rising', min: 60, range: '60–70%', bg: 'radial-gradient(circle at 35% 30%, #BFD4F2, #5F86BF)', ring: '#7FA6D9' },
+    { name: 'Warming up', min: 0, range: 'Below 60%', bg: 'radial-gradient(circle at 35% 30%, #8A8A94, #4A4A52)', ring: '#5C5C66', fg: '#F5F5F4' }
+  ];
+  const levelFor = (pct) => LEVELS.find((l) => pct >= l.min);
+  const STAR = (w) => `<svg width="${w}" height="${w}" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.5l2.9 5.9 6.5.9-4.7 4.6 1.1 6.5L12 17.3l-5.8 3.1 1.1-6.5-4.7-4.6 6.5-.9z"/></svg>`;
+  const medal = (l, cls) => `<span class="medal ${cls || ''}" style="--medal-bg:${l.bg};--medal-ring:${l.ring};--medal-fg:${l.fg || '#3A3D42'}">${STAR(cls ? 18 : 42)}</span>`;
+  const monthYear = (d) => new Date(d + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+  const shortDate = (d) => new Date(d + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+  function renderCrew(p) {
+    const box = $('crewBox');
+    if (!p) { box.hidden = true; return; }
+    let badge = '';
+    if (p.pct === null) {
+      badge = `<div class="badge-text"><small>Consistency badge</small><span>Your badge appears after your first crew practice.</span></div>`;
+    } else {
+      const l = levelFor(p.pct);
+      const idx = LEVELS.indexOf(l);
+      const next = idx > 0 ? LEVELS[idx - 1] : null;
+      badge = `<button type="button" class="badge-btn" id="badgeBtn" aria-haspopup="dialog">${medal(l)}
+        <span class="badge-text"><small>Consistency badge</small><strong>${esc(l.name)}</strong>
+        <span>${esc(l.range)}${next ? ` · Next: <b>${esc(next.name)}</b> at ${next.min}%+` : ' · Top level!'} ›</span></span></button>`;
+    }
+    const pct = p.pct === null ? 0 : p.pct;
+    const rank = p.rank
+      ? `<b class="hi">#${p.rank}</b><span>of ${p.ranked_count} in the crew</span>`
+      : `<b class="na">Ranked after ${p.min_for_rank} practices</b><span>Your crew rank</span>`;
+    box.innerHTML = `
+      <p class="label">Your crew progress</p>
+      ${badge}
+      <div class="att">
+        <div class="ring" style="background:conic-gradient(var(--accent) 0 ${pct}%, #2B2B32 ${pct}% 100%)"><span>${p.pct === null ? '–' : p.pct + '%'}</span></div>
+        <div><strong>Attendance</strong><small>${p.held ? `${p.attended} of ${p.held} crew practices since you joined` : 'Starts with your first crew practice'}</small></div>
+      </div>
+      <div class="tiles">
+        <div class="tile">${rank}</div>
+        <div class="tile"><b>${p.attended}</b><span>crew practices</span></div>
+        <div class="tile"><b>${p.classes}</b><span>classes</span></div>
+      </div>`;
+    box.hidden = false;
+    const btn = $('badgeBtn');
+    if (btn) btn.addEventListener('click', () => {
+      const mine = levelFor(p.pct);
+      $('levelsList').innerHTML = LEVELS.map((l) => `<div class="lvl${l === mine ? ' me' : ''}">${medal(l, 'sm')}<div><strong>${esc(l.name)}</strong><small>${esc(l.range)}</small></div>${l === mine ? '<em>You are here</em>' : ''}</div>`).join('');
+      $('levelsSheet').hidden = false;
+    });
+  }
+
+  // Calendar file for one class date (opens in the phone's calendar app)
+  function icsFor(item) {
+    const r = item.reg, s = (r.slots || [])[0] || {};
+    const t = (v, def) => String(v || def).replace(/:/g, '').slice(0, 4).padEnd(4, '0') + '00';
+    const day = item.date.replace(/-/g, '');
+    const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//GouMo//Classes//EN', 'BEGIN:VEVENT',
+      `UID:goumo-${r.id}-${day}@goumo`, `DTSTART;TZID=America/Los_Angeles:${day}T${t(s.start_time, '18:00')}`,
+      `DTEND;TZID=America/Los_Angeles:${day}T${t(s.end_time || s.start_time, '19:00')}`,
+      `SUMMARY:${(r.course_name || 'GouMo class').replace(/[,;\n]/g, ' ')}`,
+      s.location ? `LOCATION:${String(s.location).replace(/[,;\n]/g, ' ')}` : '', 'END:VEVENT', 'END:VCALENDAR'].filter(Boolean);
+    return URL.createObjectURL(new Blob([lines.join('\r\n')], { type: 'text/calendar' }));
   }
 
   function render(data) {
     const st = data.student;
+    const p = data.crew_progress;
     $('hello').textContent = `Hi ${st.first_name || 'there'}`;
-    $('who').textContent = [st.email, st.student_type === 'crew_member' ? 'Crew member' : 'GouMo student'].join(' · ');
+    $('who').textContent = st.student_type === 'crew_member'
+      ? (p && p.since ? `Crew member since ${monthYear(p.since)}` : 'Crew member')
+      : st.email;
+    renderCrew(p);
 
+    // Every class date the student is registered for (cancelled left out)
     const now = today();
-    const isFinished = (r) => { const ds = regDates(r); return ds.length > 0 && ds[ds.length - 1] < now; };
-    const upcoming = data.registrations.filter((r) => r.payment_status !== 'canceled' && !isFinished(r));
+    const items = [];
+    data.registrations.filter((r) => r.payment_status !== 'canceled').forEach((r) => {
+      const ds = regDates(r);
+      if (!ds.length) { items.push({ date: String(r.registration_date || '').slice(0, 10), reg: r, n: 1, of: 1, undated: true }); return; }
+      ds.forEach((d, k) => items.push({ date: d, reg: r, n: k + 1, of: ds.length }));
+    });
+    const upcoming = items.filter((x) => !x.undated && x.date >= now).sort((a, b) => a.date.localeCompare(b.date));
+    const past = items.filter((x) => x.undated || x.date < now).sort((a, b) => b.date.localeCompare(a.date));
+    const title = (x) => `${x.reg.course_name || 'Class'}${x.of > 1 && x.reg.course_type !== 'crew_practice' ? ` · ${x.n} of ${x.of}` : ''}`;
+    const who = (x) => [C.timeRange(x.reg), x.reg.instructor ? `with ${x.reg.instructor}` : ''].filter(Boolean).join(' · ');
 
-    // Crew members: crew practice is counted apart from regular classes,
-    // and finished practices collapse into one "Crew practice" line.
-    const isCrewPractice = (r) => r.course_type === 'crew_practice';
-    const showCrew = st.student_type === 'crew_member' || data.registrations.some(isCrewPractice);
-    $('statClasses').textContent = showCrew ? data.totals.regular_classes : data.totals.classes_paid;
-    $('statThirdLabel').textContent = showCrew ? 'Crew practice' : 'Waitlists';
-    $('statWaitlists').textContent = showCrew ? data.totals.crew_practices : data.waitlists.length;
-    $('statUpcoming').textContent = upcoming.length;
+    // Next class
+    const nx = upcoming[0];
+    if (nx) {
+      const days = Math.round((new Date(nx.date + 'T12:00:00') - new Date(now + 'T12:00:00')) / 86400000);
+      const when = days === 0 ? 'today' : days === 1 ? 'tomorrow' : `in ${days} days`;
+      const loc = C.location(nx.reg);
+      $('nextBox').innerHTML = `
+        <div class="top"><span class="label" style="margin:0">Next class · ${esc(when)}</span>${chip(nx.reg)}</div>
+        <h3>${esc(title(nx))}</h3>
+        <p>${esc(C.formatOneDate(nx.date))}${C.timeRange(nx.reg) ? ' · ' + esc(C.timeRange(nx.reg)) : ''}<br>${esc([nx.reg.instructor ? 'with ' + nx.reg.instructor : '', loc].filter(Boolean).join(' · '))}</p>
+        <div class="actions">
+          <a class="btn btn-primary" href="${icsFor(nx)}" download="goumo-class.ics">Add to calendar</a>
+          ${loc ? `<a class="btn btn-outline" href="https://maps.google.com/?q=${encodeURIComponent(loc)}" target="_blank" rel="noopener">Directions</a>` : ''}
+        </div>`;
+    }
+    $('nextBox').hidden = !nx;
 
-    const sorted = [...data.registrations].sort((a, b) => (regDates(b)[0] || '').localeCompare(regDates(a)[0] || ''));
-    const donePractices = showCrew ? sorted.filter((r) => isCrewPractice(r) && isFinished(r) && r.payment_status === 'completed') : [];
-    const listed = sorted.filter((r) => !donePractices.includes(r));
-    const rows = [
-      ...data.waitlists.map((w) => w.status === 'notified'
-        ? row(w.course_name, 'Spot offered: check your email', 'ok', false)
-        : row(w.course_name, `Waitlist #${w.position}`, 'wait', false)),
-      ...(donePractices.length ? [row('Crew practice', `${donePractices.length} attended`, 'ok', false)] : []),
-      ...listed.map((r) => {
-        const finished = isFinished(r) && r.payment_status === 'completed';
-        const [label, cls] = finished ? ['Done', 'off'] : (STATUS[r.payment_status] || [r.payment_status || '', 'off']);
-        return row(r.course_name || 'Class', label, cls, finished || r.payment_status === 'canceled');
-      })
-    ];
-    $('classList').innerHTML = rows.length ? rows.join('')
-      : '<p class="empty">No classes yet. <a class="accent" href="/#classes">See what\'s on</a>.</p>';
+    // Coming up, grouped by week
+    if (upcoming.length) {
+      const groupOf = (d) => { const n = Math.round((new Date(d + 'T12:00:00') - new Date(now + 'T12:00:00')) / 86400000); return n < 7 ? 'This week' : n < 14 ? 'Next week' : 'Later'; };
+      let last = '', html = '';
+      upcoming.slice(0, 12).forEach((x) => {
+        const g = groupOf(x.date);
+        if (g !== last) { html += `<div class="week">${g}</div>`; last = g; }
+        const dt = new Date(x.date + 'T12:00:00');
+        html += `<div class="card date-row"><div class="day"><small>${dt.toLocaleDateString('en-US', { weekday: 'short' })}</small><b>${dt.getDate()}</b></div>
+          <div class="what"><strong>${esc(title(x))}</strong><span>${esc(who(x))}</span></div>${chip(x.reg)}</div>`;
+      });
+      $('upcomingList').innerHTML = html;
+    }
+    $('upcomingBox').hidden = !upcoming.length;
+
+    // History: newest first, five at a time
+    let shown = 5;
+    const drawHistory = () => {
+      $('historyList').innerHTML = past.slice(0, shown).map((x) => `<div class="hist-row"><span>${esc(title(x))}</span><span>${x.undated ? '' : esc(shortDate(x.date))}</span></div>`).join('')
+        + (past.length > shown ? `<button type="button" class="more-btn" id="moreHistory">Show all ${past.length}</button>` : '');
+      const m = $('moreHistory'); if (m) m.addEventListener('click', () => { shown = past.length; drawHistory(); });
+    };
+    drawHistory();
+    $('historyBox').hidden = !past.length;
+    $('noClasses').hidden = items.length > 0;
 
     // Test accounts: remember it on this device so other pages let it through,
     // and offer a switch between crew member and GouMo student views
@@ -84,6 +175,9 @@
     $('signIn').hidden = true;
     $('profile').hidden = false;
   }
+
+  $('levelsClose').addEventListener('click', () => { $('levelsSheet').hidden = true; });
+  $('levelsSheet').addEventListener('click', (e) => { if (e.target.id === 'levelsSheet') $('levelsSheet').hidden = true; });
 
   async function load(value) {
     const msg = $('signInMsg');
