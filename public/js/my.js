@@ -41,6 +41,7 @@
   const STAR = (w) => `<svg width="${w}" height="${w}" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.5l2.9 5.9 6.5.9-4.7 4.6 1.1 6.5L12 17.3l-5.8 3.1 1.1-6.5-4.7-4.6 6.5-.9z"/></svg>`;
   const medal = (l, cls) => `<span class="medal ${cls || ''}" style="--medal-bg:${l.bg};--medal-ring:${l.ring};--medal-fg:${l.fg || '#3A3D42'}">${STAR(cls ? 18 : 42)}</span>`;
   const monthYear = (d) => new Date(d + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+  const longDate = (d) => new Date(d + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   const shortDate = (d) => new Date(d + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
   // One panel: ring with %, "x of y", rank
@@ -50,6 +51,7 @@
     return `<div class="pnl"><strong>${esc(title)}</strong>
       <div class="ring" style="background:conic-gradient(var(--accent) 0 ${pct}%, #2B2B32 ${pct}% 100%)"><span>${k.pct === null ? '–' : k.pct + '%'}</span></div>
       <small>${k.held ? `${k.attended} of ${k.held} ${unit}` : `Starts with your first ${unit === 'practices' ? 'practice' : 'class'}`}</small>
+      ${k.from ? `<span class="since">Since ${esc(k.from)}</span>` : ''}
       <div class="rank">${rank}</div></div>`;
   }
 
@@ -72,10 +74,10 @@
       <p class="label">Your progress</p>
       ${crew ? badgeHtml(crew) : ''}
       <div class="pnls${crew ? '' : ' one'}">
-        ${crew ? panel('Crew practices', crew, 'practices', prog.min_for_rank) : ''}
-        ${panel('GouMo classes', prog.goumo, 'classes', prog.min_for_rank)}
+        ${crew ? panel('Crew practices', { ...crew, from: prog.start ? longDate(prog.start) : '' }, 'practices', prog.min_for_rank) : ''}
+        ${panel('GouMo classes', { ...prog.goumo, from: prog.goumo_start ? longDate(prog.goumo_start) : '' }, 'classes', prog.min_for_rank)}
       </div>
-      <p class="note">${crew ? 'Since your first practice / first class. Rank: crew practices among the crew, GouMo classes among all students.' : 'Since your first class. Ranked among all GouMo students.'}</p>`;
+      <p class="note">${crew ? 'Rank: crew practices among the crew, GouMo classes among all students.' : 'Ranked among all GouMo students.'}</p>`;
     box.hidden = false;
     const btn = $('badgeBtn');
     if (btn) btn.addEventListener('click', () => {

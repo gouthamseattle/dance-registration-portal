@@ -3333,9 +3333,11 @@ async function studentHistory(studentId) {
 //   their first one to today; % = attended ÷ held. Hidden classes count (hiding only tidies
 //   the admin). Settings "crew_progress_start" (Count crew practices from) applies to crew practices only.
 //   Classes a student taught ("Teaches as" on their profile matches the class instructor)
-//   are left out of both their counts. Rank: crew practices among current crew members,
+//   are left out of both their counts. GouMo classes count from Settings "goumo_progress_start"
+//   (default 2026-01-01). Classes with no real registrations (e.g. a test class) aren't counted as held. Rank: crew practices among current crew members,
 //   GouMo classes among all students (not hidden, not test accounts), 5+ held, by % then count.
 const MIN_FOR_RANK = 5;
+const DEFAULT_GOUMO_START = '2026-01-01';
 function parseDateList(v) {
     let list = v;
     if (typeof list === 'string') { try { list = JSON.parse(list); } catch (e) { list = []; } }
@@ -3346,7 +3348,7 @@ function todaySeattle() {
     return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 }
 // Dates of every class: session_dates, else slot dates, else weekly from start_date (as on the site)
-async function allClassDates(start) {
+async function allClassDates(start, goumoStart) {
     const courses = await dbConfig.all('SELECT id, course_type, instructor, session_dates, start_date, duration_weeks FROM courses');
     const slots = await dbConfig.all('SELECT course_id, practice_date FROM course_slots WHERE practice_date IS NOT NULL');
     const slotDates = {};
@@ -3362,7 +3364,7 @@ async function allClassDates(start) {
         }
         const crew = c.course_type === 'crew_practice';
         // "Count crew practices from" only applies to crew practices
-        byCourse[c.id] = { crew, instructor: c.instructor || '', dates: [...new Set(ds)].filter(d => !crew || d >= start).sort() };
+        byCourse[c.id] = { crew, instructor: c.instructor || '', dates: [...new Set(ds)].filter(d => d >= (crew ? start : goumoStart)).sort() };
     }
     return byCourse;
 }
@@ -3399,10 +3401,16 @@ async function studentProgress(studentId) {
     const today = todaySeattle();
     const startRow = await dbConfig.get('SELECT setting_value FROM system_settings WHERE setting_key = $1', ['crew_progress_start']);
     const start = parseDateList([startRow?.setting_value])[0] || '';
-    const byCourse = await allClassDates(start);
+    // GouMo classes count from Settings "Count GouMo classes from" (default Jan 1, 2026)
+    const gRow = await dbConfig.get('SELECT setting_value FROM system_settings WHERE setting_key = $1', ['goumo_progress_start']);
+    const goumoStart = parseDateList([gRow?.setting_value])[0] || DEFAULT_GOUMO_START;
+    const byCourse = await allClassDates(start, goumoStart);
     const notCanceled = dbConfig.isProduction ? "r.payment_status IS DISTINCT FROM 'canceled'" : "(r.payment_status IS NULL OR r.payment_status != 'canceled')";
-    const regs = await dbConfig.all(`SELECT r.student_id, r.course_id, r.selected_dates, s.student_type, s.is_tester, s.archived_at, s.teaches_as
+    const regs = await dbConfig.all(`SELECT r.student_id, r.course_id, r.selected_dates, r.is_test, s.student_type, s.is_tester, s.archived_at, s.teaches_as
         FROM registrations r JOIN students s ON s.id = r.student_id WHERE r.course_id IS NOT NULL AND ${notCanceled}`);
+    // A class nobody (real) registered for didn't really happen (e.g. a "Test class"): leave it out
+    const used = new Set(regs.filter(r => !isTrue(r.is_test) && !isTrue(r.is_tester)).map(r => String(r.course_id)));
+    for (const id of Object.keys(byCourse)) if (!used.has(String(id))) delete byCourse[id];
     const byStudent = {};
     for (const r of regs) (byStudent[r.student_id] = byStudent[r.student_id] || { regs: [], info: r }).regs.push(r);
     const me = await dbConfig.get('SELECT student_type, teaches_as FROM students WHERE id = $1', [studentId]);
@@ -3416,7 +3424,7 @@ async function studentProgress(studentId) {
             ...rankOf(counted.filter(([, v]) => v.info.student_type === 'crew_member')
                 .map(([id, v]) => ({ id: Number(id), ...kindStats(v.regs, byCourse, true, today, v.info.teaches_as) })), studentId) };
     }
-    return { crew, goumo, min_for_rank: MIN_FOR_RANK, start: start || null };
+    return { crew, goumo, min_for_rank: MIN_FOR_RANK, start: start || null, goumo_start: goumoStart };
 }
 
 app.put('/api/admin/students/:id/teaches-as', requireAuth, asyncHandler(async (req, res) => {
