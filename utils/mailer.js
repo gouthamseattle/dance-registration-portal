@@ -273,7 +273,9 @@ async function sendWaitlistNotificationEmail(to, data = {}) {
   const { courseName, scheduleInfo, amount, studentName, position, registrationUrl, expiresAt, expiresHours = 48 } = data;
   const from = getFromAddress();
   const subject = `Spot Available! ${courseName || 'Dance Class'} - Register Now`;
-  const safeAmount = typeof amount === 'number' ? amount.toFixed(2) : amount;
+  const isFreeAmount = amount !== undefined && amount !== null && amount !== '' && Number(amount) === 0;
+  const safeAmount = isFreeAmount ? 'Free' : typeof amount === 'number' ? amount.toFixed(2) : amount;
+  const priceText = isFreeAmount ? 'Free' : `$${safeAmount}`;
   const expirationDate = new Date(expiresAt);
   const expirationDisplay = expirationDate.toLocaleDateString('en-US', { weekday:'long', year:'numeric', month:'long', day:'numeric', hour:'numeric', minute:'2-digit', timeZoneName:'short' });
 
@@ -297,7 +299,7 @@ async function sendWaitlistNotificationEmail(to, data = {}) {
   <table width="100%" cellpadding="8" cellspacing="0" border="0" style="background:#f8f9fa;border-radius:6px;margin:20px 0;"><tr><td style="padding:20px;">
     <h3 style="margin:0 0 16px;color:#e91e63;font-size:18px;">Class Details</h3>
     ${scheduleInfo ? `<p style="margin:0 0 12px;font-size:14px;color:#555;"><strong>Schedule:</strong> ${escapeHtml(scheduleInfo)}</p>` : ''}
-    ${safeAmount ? `<p style="margin:0 0 12px;font-size:14px;color:#555;"><strong>Price:</strong> <span style="color:#28a745;font-size:18px;font-weight:bold;">$${escapeHtml(String(safeAmount))}</span></p>` : ''}
+    ${safeAmount ? `<p style="margin:0 0 12px;font-size:14px;color:#555;"><strong>Price:</strong> <span style="color:#28a745;font-size:18px;font-weight:bold;">${escapeHtml(String(priceText))}</span></p>` : ''}
     <p style="margin:0;font-size:14px;color:#555;"><strong>Waitlist Position:</strong> #${position || 'Next'}</p>
   </td></tr></table>
   <div style="text-align:center;margin:30px 0;">
@@ -321,7 +323,7 @@ async function sendWaitlistNotificationEmail(to, data = {}) {
   <p style="margin:0;color:#adb5bd;font-size:11px;">&copy; 2024 GouMo Dance Chronicles. All rights reserved.</p>
 </td></tr></table></td></tr></table></body></html>`;
 
-  const text = `Spot Available!\n\nHi ${studentName || 'Student'},\n\nA spot opened in ${courseName || 'Dance Class'}!\n\nYou have ${expiresHours} hours. Expires: ${expirationDisplay}\n\nREGISTER NOW: ${registrationUrl}\n\n${scheduleInfo ? `Schedule: ${scheduleInfo}\n` : ''}${safeAmount ? `Price: $${safeAmount}\n` : ''}Position: #${position || 'Next'}`;
+  const text = `Spot Available!\n\nHi ${studentName || 'Student'},\n\nA spot opened in ${courseName || 'Dance Class'}!\n\nYou have ${expiresHours} hours. Expires: ${expirationDisplay}\n\nREGISTER NOW: ${registrationUrl}\n\n${scheduleInfo ? `Schedule: ${scheduleInfo}\n` : ''}${safeAmount ? `Price: ${priceText}\n` : ''}Position: #${position || 'Next'}`;
 
   dbg('sending waitlist email', { to, from, subject, courseName, position, expiresHours });
 
