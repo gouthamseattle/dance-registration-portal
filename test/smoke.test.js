@@ -207,7 +207,7 @@ test('paid student cannot register twice for the same course', async () => {
 test('free ($0) class: registration is confirmed straight away; paid classes still need an amount', async () => {
     const free = await api('POST', '/api/courses', {
         name: `Smoke Free Class ${unique}`, course_type: 'drop_in', session_dates: ['2030-03-01'],
-        slots: [{ slot_name: 'Main', capacity: 10, start_time: '10:00', end_time: '11:00', location: 'Test Studio',
+        slots: [{ slot_name: 'Main', difficulty_level: 'All Levels', capacity: 10, start_time: '10:00', end_time: '11:00', location: 'Test Studio',
             practice_date: '2030-03-01', pricing: { drop_in: 0, full_package: 0 } }]
     }, { admin: true });
     assert.equal(free.status, 200, JSON.stringify(free.body));

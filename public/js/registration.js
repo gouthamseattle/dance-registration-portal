@@ -1684,7 +1684,7 @@ class DanceRegistrationApp {
         container.innerHTML = `
             <div class="pay-done">
                 <div class="pay-done-icon" aria-hidden="true"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
-                <h2 class="pay-done-title">${free ? 'You\'re in!' : 'You\'re all done!'}</h2>
+                <h2 class="pay-done-title">${free ? "You're in!" : "You're all done!"}</h2>
                 <p class="pay-done-text">${free
                     ? `Your spot in <strong>${esc(this.paymentClassName())}</strong> is confirmed. We'll email the details to <strong>${esc(this.registrationData.email || '')}</strong>.`
                     : `Thanks for registering for <strong>${esc(this.paymentClassName())}</strong>. We'll match your ${method} payment and email your confirmation to <strong>${esc(this.registrationData.email || '')}</strong>.`}</p>
