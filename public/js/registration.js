@@ -675,11 +675,18 @@ class DanceRegistrationApp {
         const option = document.querySelector('input[name="payment_option"]:checked');
         const picker = document.getElementById('datePicker');
         if (picker) picker.hidden = !(option && option.value === 'pick-dates');
+        // Free class: say "Free", hide the payment choice and don't mention payment on the button
+        const free = window.ClassInfo.isFree(this.selectedCourse);
+        const chooser = document.querySelector('.payment-method-selection');
+        const methodSection = chooser ? chooser.closest('.col-12') : null;
+        if (free && methodSection) methodSection.style.display = 'none';
+        const proceed = document.getElementById('proceedToPayment');
+        if (free && proceed) proceed.innerHTML = 'Continue <i class="fas fa-arrow-right"></i>';
         const choice = this.getAmountChoice();
-        totalAmountSpan.textContent = `$${choice.amount}`;
+        totalAmountSpan.textContent = free ? 'Free' : `$${choice.amount}`;
         const label = totalAmountSpan.previousElementSibling;
         if (label) {
-            label.textContent = choice.dates
+            label.textContent = choice.dates && !free
                 ? `Total · ${choice.dates.length} date${choice.dates.length === 1 ? '' : 's'} × $${this.classFees.perDate}`
                 : 'Total';
         }
@@ -765,7 +772,7 @@ class DanceRegistrationApp {
     applyPaymentOptions() {
         const chooser = document.querySelector('.payment-method-selection');
         const section = chooser ? chooser.closest('.col-12') : null;
-        if (this.zelleOn()) {
+        if (this.zelleOn() && !window.ClassInfo.isFree(this.selectedCourse || {})) {
             if (section) section.style.display = '';
         } else {
             if (section) section.style.display = 'none';
@@ -902,7 +909,7 @@ class DanceRegistrationApp {
 
         // Validate payment method selection (Venmo only when Zelle is switched off)
         if (!this.selectedPaymentMethod && !this.zelleOn()) this.selectedPaymentMethod = 'venmo';
-        if (!this.selectedPaymentMethod) {
+        if (!this.selectedPaymentMethod && !window.ClassInfo.isFree(this.selectedCourse || {})) {
             this.showError('Please choose a payment method to continue.');
             // Scroll to payment method section
             const paymentMethodSection = document.querySelector('.payment-method-selection').closest('.col-12');
@@ -1003,7 +1010,6 @@ class DanceRegistrationApp {
             this.registrationData.free = !!result.free;
             this.registrationData.payment_method = this.registrationData.free ? null : this.registrationData.payment_method;
             this.showPaymentSection();
-            if (this.registrationData.free) this.showFreeConfirm();
 
         } catch (error) {
             console.error('Registration error:', error);
@@ -1241,6 +1247,8 @@ class DanceRegistrationApp {
 
         const header = document.querySelector('#paymentSection .card-header');
         if (header) header.style.display = '';
+        // Free class: no Venmo screen at all (it would fail on a $0 amount)
+        if (this.registrationData.free) { this.showFreeConfirm(); return; }
         this.populatePaymentSummary();
         this.initializePaymentOptions();
         this.scrollToTop();
