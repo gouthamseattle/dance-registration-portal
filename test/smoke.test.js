@@ -246,6 +246,12 @@ test('free class checkout never opens the Venmo screen', async () => {
     assert.ok(js.includes("free ? 'Free'"), 'form shows Free instead of $0');
 });
 
+test('waitlist screen is rebuilt for each person and hidden when switching email', async () => {
+    const js = await (await fetch(`${BASE}/js/email-profile-registration.js`)).text();
+    assert.ok(js.includes("'courseSelection',\n            'waitlistSuccessSection'"), 'hidden with the other screens');
+    assert.ok(js.includes('Built fresh every time'), 'not reused with old details');
+});
+
 test('closed registration is enforced', async () => {
     await api('PUT', '/api/settings', { registration_open: 'false' }, { admin: true });
     const res = await api('POST', '/api/register', {
