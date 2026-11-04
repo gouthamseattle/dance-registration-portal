@@ -232,6 +232,12 @@ test('free ($0) class: registration is confirmed straight away; paid classes sti
     assert.equal(paid.status, 400, 'paid class rejects $0');
     const paidCheck = await api('POST', '/api/register', { first_name: 'P', email: `p.${unique}@example.com`, course_id: courseId, payment_amount: 100, dry_run: true });
     assert.equal(paidCheck.body.free, false);
+
+    // Free class full: joining the waitlist works with a $0 amount; a paid class still needs one
+    const wl = await api('POST', '/api/waitlist', { first_name: 'Wait', email: `wait.${unique}@example.com`, course_id: freeId, payment_amount: 0 });
+    assert.equal(wl.status, 200, JSON.stringify(wl.body));
+    const wlPaid = await api('POST', '/api/waitlist', { first_name: 'Wait', email: `waitp.${unique}@example.com`, course_id: courseId, payment_amount: 0 });
+    assert.equal(wlPaid.status, 400, 'paid class waitlist still needs an amount');
 });
 
 test('free class checkout never opens the Venmo screen', async () => {

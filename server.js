@@ -2209,7 +2209,9 @@ app.post('/api/waitlist', asyncHandler(async (req, res) => {
         effectiveLastName = parts.join(' ') || '';
     }
     
-    if (!email || !course_id || !payment_amount) {
+    // A free class has a $0 amount (decided from the saved prices); paid classes still need one
+    const courseFree = course_id ? await isFreeCourse(course_id) : false;
+    if (!email || !course_id || (!courseFree && !payment_amount)) {
         return res.status(400).json({ error: 'Required fields missing: email, course_id, and payment_amount are required' });
     }
     
