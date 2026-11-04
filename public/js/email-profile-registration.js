@@ -687,66 +687,66 @@ class EmailProfileRegistrationApp {
         this.currentStep = 'waitlist-success';
         this.hideAllSections();
         
-        // Create waitlist success section if it doesn't exist
+        // Built fresh every time, so switching emails never shows the previous person's details
         let waitlistSection = document.getElementById('waitlistSuccessSection');
         if (!waitlistSection) {
             waitlistSection = document.createElement('section');
             waitlistSection.id = 'waitlistSuccessSection';
             waitlistSection.className = 'py-5';
-            waitlistSection.innerHTML = `
-                <div class="container">
-                    <div class="row justify-content-center">
-                        <div class="col-md-8">
-                            <div class="card text-center success-animation">
-                                <div class="card-header">
-                                    <h3><i class="fas fa-list-alt text-warning"></i> You're on the Waitlist!</h3>
+            document.getElementById('mainContent').appendChild(waitlistSection);
+        }
+        const C = window.ClassInfo;
+        const esc = C.esc;
+        const free = C.isFree(course);
+        const price = free ? 'Free' : `$${course.full_course_price || course.per_class_price || 0}`;
+        waitlistSection.innerHTML = `
+            <div class="container">
+                <div class="row justify-content-center">
+                    <div class="col-md-8">
+                        <div class="card text-center success-animation">
+                            <div class="card-header">
+                                <h3><i class="fas fa-list-alt text-warning"></i> You're on the Waitlist!</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-4">
+                                    <i class="fas fa-clock fa-4x text-warning mb-3"></i>
+                                    <h4 id="waitlistCourseName">${esc(course.name)}</h4>
+                                    <p class="lead">You are <strong>#${esc(String(position))}</strong> on the waitlist</p>
                                 </div>
-                                <div class="card-body">
-                                    <div class="mb-4">
-                                        <i class="fas fa-clock fa-4x text-warning mb-3"></i>
-                                        <h4 id="waitlistCourseName">${course.name}</h4>
-                                        <p class="lead">You are <strong>#${position}</strong> on the waitlist</p>
-                                    </div>
-                                    <div class="alert alert-info mb-4">
-                                        <h6><i class="fas fa-info-circle"></i> What happens next?</h6>
-                                        <ol class="text-left mb-0">
-                                            <li>We'll notify you by email when a spot becomes available</li>
-                                            <li>You'll have 48 hours to complete your registration</li>
-                                            <li>Payment is only required when you get notified</li>
-                                        </ol>
-                                    </div>
-                                    <div class="confirmation-details">
-                                        <div class="confirmation-item">
-                                            <span class="confirmation-label">Course:</span>
-                                            <span class="confirmation-value">${course.name}</span>
-                                        </div>
-                                        <div class="confirmation-item">
-                                            <span class="confirmation-label">Your Email:</span>
-                                            <span class="confirmation-value">${this.currentEmail}</span>
-                                        </div>
-                                        <div class="confirmation-item">
-                                            <span class="confirmation-label">Waitlist Position:</span>
-                                            <span class="confirmation-value">#${position}</span>
-                                        </div>
-                                        <div class="confirmation-item">
-                                            <span class="confirmation-label">Expected Price:</span>
-                                            <span class="confirmation-value">$${course.full_course_price || course.per_class_price || 0}</span>
-                                        </div>
-                                    </div>
-                                    <button class="btn btn-primary btn-lg" onclick="app.showAvailableCourses()">
-                                        <i class="fas fa-plus"></i> Register for Another Class
-                                    </button>
+                                <div class="alert alert-info mb-4">
+                                    <h6><i class="fas fa-info-circle"></i> What happens next?</h6>
+                                    <ol class="text-left mb-0">
+                                        <li>We'll email you if a spot opens up</li>
+                                        <li>The email has a link to claim your spot; it's held for you for a limited time</li>
+                                        ${free ? '' : '<li>Payment is only needed once you claim the spot</li>'}
+                                    </ol>
                                 </div>
+                                <div class="confirmation-details">
+                                    <div class="confirmation-item">
+                                        <span class="confirmation-label">Class:</span>
+                                        <span class="confirmation-value">${esc(course.name)}</span>
+                                    </div>
+                                    <div class="confirmation-item">
+                                        <span class="confirmation-label">Your email:</span>
+                                        <span class="confirmation-value">${esc(this.currentEmail)}</span>
+                                    </div>
+                                    <div class="confirmation-item">
+                                        <span class="confirmation-label">Waitlist position:</span>
+                                        <span class="confirmation-value">#${esc(String(position))}</span>
+                                    </div>
+                                    <div class="confirmation-item">
+                                        <span class="confirmation-label">Price:</span>
+                                        <span class="confirmation-value">${price}</span>
+                                    </div>
+                                </div>
+                                <button class="btn btn-primary btn-lg" onclick="app.showAvailableCourses()">
+                                    <i class="fas fa-plus"></i> Register for Another Class
+                                </button>
                             </div>
                         </div>
                     </div>
                 </div>
-            `;
-            document.getElementById('mainContent').appendChild(waitlistSection);
-        }
-        
-        // Update dynamic content
-        document.getElementById('waitlistCourseName').textContent = course.name;
+            </div>`;
         waitlistSection.style.display = 'block';
         this.scrollToTop();
     }
@@ -757,7 +757,8 @@ class EmailProfileRegistrationApp {
             'emailEntrySection',
             'profileCreationSection', 
             'welcomeBackSection',
-            'courseSelection'
+            'courseSelection',
+            'waitlistSuccessSection'
         ];
         
         sections.forEach(id => {
