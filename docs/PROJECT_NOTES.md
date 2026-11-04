@@ -90,6 +90,15 @@ PR as any change that adds a decision, a link or a to-do.
   screen that tells the student they've done their part. "Your spot is confirmed once we
   receive your payment" sits under the button. The old PayPal "You're in!" screen is gone.
 
+## Free classes (Nov 2026)
+
+- A class is free when its fee is set to $0 in the class form (every saved price is $0). The fee box can't be
+  left blank any more; type 0 for free.
+- Students see "Free" on the card, no payment screen, and one "Confirm my spot" button. The registration is
+  confirmed straight away (payment method "Free") and the normal confirmation email goes out (worded
+  "Your spot is confirmed", "Fee: Free"). The server decides "free" from the saved prices, never from the phone,
+  so paid classes behave exactly as before (a $0 amount for a paid class is still rejected).
+
 ## My classes page and progress (Nov 2026)
 
 - Page order: highlighted "Your progress" card → next class (Add to calendar, Directions) →

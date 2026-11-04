@@ -204,6 +204,36 @@ test('paid student cannot register twice for the same course', async () => {
     assert.equal(res.status, 400);
 });
 
+test('free ($0) class: registration is confirmed straight away; paid classes still need an amount', async () => {
+    const free = await api('POST', '/api/courses', {
+        name: `Smoke Free Class ${unique}`, course_type: 'drop_in', session_dates: ['2030-03-01'],
+        slots: [{ slot_name: 'Main', capacity: 10, start_time: '10:00', end_time: '11:00', location: 'Test Studio',
+            practice_date: '2030-03-01', pricing: { drop_in: 0, full_package: 0 } }]
+    }, { admin: true });
+    assert.equal(free.status, 200, JSON.stringify(free.body));
+    const freeId = free.body.id || free.body.courseId || free.body.course?.id;
+    const email = `free.${unique}@example.com`;
+
+    const check = await api('POST', '/api/register', { first_name: 'Free', email, course_id: freeId, payment_amount: 0, dry_run: true });
+    assert.equal(check.status, 200, JSON.stringify(check.body));
+    assert.equal(check.body.free, true);
+    assert.equal(check.body.payment_amount, 0);
+
+    const reg = await api('POST', '/api/register', { first_name: 'Free', email, course_id: freeId, payment_amount: 0 });
+    assert.equal(reg.status, 200, JSON.stringify(reg.body));
+    const list = await api('GET', '/api/admin/registrations', null, { admin: true });
+    const rows = Array.isArray(list.body) ? list.body : (list.body.registrations || []);
+    const row = rows.find(r => Number(r.id) === Number(reg.body.registrationId));
+    assert.equal(row.payment_status, 'completed', 'confirmed without payment');
+    assert.equal(row.payment_method, 'Free');
+
+    // A paid class is unchanged: $0 from the phone is still rejected, nothing auto-confirms
+    const paid = await api('POST', '/api/register', { first_name: 'Sneaky', email: `zero.${unique}@example.com`, course_id: courseId, payment_amount: 0 });
+    assert.equal(paid.status, 400, 'paid class rejects $0');
+    const paidCheck = await api('POST', '/api/register', { first_name: 'P', email: `p.${unique}@example.com`, course_id: courseId, payment_amount: 100, dry_run: true });
+    assert.equal(paidCheck.body.free, false);
+});
+
 test('closed registration is enforced', async () => {
     await api('PUT', '/api/settings', { registration_open: 'false' }, { admin: true });
     const res = await api('POST', '/api/register', {

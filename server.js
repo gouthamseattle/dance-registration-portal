@@ -710,7 +710,7 @@ app.get('/api/drop-in-classes', asyncHandler(async (req, res) => {
             schedule_info: computedScheduleInfo,
             // Backward compatibility fields
             full_course_price: slotsWithPricing[0]?.pricing?.full_package || 0,
-            per_class_price: slotsWithPricing[0]?.pricing?.drop_in || 30 // Default $30 for drop-ins
+            per_class_price: slotsWithPricing[0]?.pricing?.drop_in ?? 30 // Default $30 for drop-ins (a free class keeps $0)
         };
     }));
     
@@ -1244,14 +1244,14 @@ app.post('/api/courses', requireAuth, asyncHandler(async (req, res) => {
         }
         
         // Create pricing records
-        if (pricing.full_package) {
+        if (hasPrice(pricing.full_package)) {
             await dbConfig.run(`
                 INSERT INTO course_pricing (course_slot_id, pricing_type, price)
                 VALUES ($1, 'full_package', $2)
             `, [slotId, pricing.full_package]);
         }
         
-        if (pricing.drop_in) {
+        if (hasPrice(pricing.drop_in)) {
             await dbConfig.run(`
                 INSERT INTO course_pricing (course_slot_id, pricing_type, price)
                 VALUES ($1, 'drop_in', $2)
@@ -1362,14 +1362,14 @@ app.put('/api/courses/:id', requireAuth, asyncHandler(async (req, res) => {
             }
 
             // Create pricing records
-            if (pricing.full_package) {
+            if (hasPrice(pricing.full_package)) {
                 await dbConfig.run(`
                     INSERT INTO course_pricing (course_slot_id, pricing_type, price)
                     VALUES ($1, 'full_package', $2)
                 `, [slotId, pricing.full_package]);
             }
 
-            if (pricing.drop_in) {
+            if (hasPrice(pricing.drop_in)) {
                 await dbConfig.run(`
                     INSERT INTO course_pricing (course_slot_id, pricing_type, price)
                     VALUES ($1, 'drop_in', $2)
@@ -1433,14 +1433,14 @@ app.post('/api/courses/:id/slots', requireAuth, asyncHandler(async (req, res) =>
     }
     
     // Create pricing records
-    if (pricing.full_package) {
+    if (hasPrice(pricing.full_package)) {
         await dbConfig.run(`
             INSERT INTO course_pricing (course_slot_id, pricing_type, price)
             VALUES ($1, 'full_package', $2)
         `, [slotId, pricing.full_package]);
     }
     
-    if (pricing.drop_in) {
+    if (hasPrice(pricing.drop_in)) {
         await dbConfig.run(`
             INSERT INTO course_pricing (course_slot_id, pricing_type, price)
             VALUES ($1, 'drop_in', $2)
@@ -1474,14 +1474,14 @@ app.put('/api/courses/:courseId/slots/:slotId', requireAuth, asyncHandler(async 
         await dbConfig.run('DELETE FROM course_pricing WHERE course_slot_id = $1', [slotId]);
         
         // Create new pricing records
-        if (pricing.full_package) {
+        if (hasPrice(pricing.full_package)) {
             await dbConfig.run(`
                 INSERT INTO course_pricing (course_slot_id, pricing_type, price)
                 VALUES ($1, 'full_package', $2)
             `, [slotId, pricing.full_package]);
         }
         
-        if (pricing.drop_in) {
+        if (hasPrice(pricing.drop_in)) {
             await dbConfig.run(`
                 INSERT INTO course_pricing (course_slot_id, pricing_type, price)
                 VALUES ($1, 'drop_in', $2)
@@ -3000,6 +3000,39 @@ app.put('/api/courses/:id/registration-open', requireAuth, asyncHandler(async (r
 }));
 
 // 'venmo' / 'zelle' from the checkout page -> 'Venmo' / 'Zelle' (anything else: not recorded)
+// A price was given ($0 counts: free class). Missing/blank = not offered.
+function hasPrice(v) {
+    return v !== undefined && v !== null && v !== '' && Number.isFinite(Number(v)) && Number(v) >= 0;
+}
+
+// A class is free when it has prices saved and every one of them is $0
+async function isFreeCourse(courseId) {
+    const row = await dbConfig.get(`
+        SELECT COUNT(*) AS n, MAX(cp.price) AS mx FROM course_pricing cp
+        JOIN course_slots cs ON cp.course_slot_id = cs.id
+        WHERE cs.course_id = $1
+    `, [courseId]);
+    return Number(row?.n) > 0 && Number(row?.mx) === 0;
+}
+
+// Free class: confirmed straight away (no payment to check) and the usual confirmation email goes out
+async function confirmFreeRegistration(regId) {
+    await dbConfig.run(`
+        UPDATE registrations SET payment_status = 'completed', payment_method = 'Free', payment_amount = 0,
+            paypal_transaction_id = 'Free class', updated_at = CURRENT_TIMESTAMP
+        WHERE id = $1
+    `, [regId]);
+    try {
+        const setting = await dbConfig.get('SELECT setting_value FROM system_settings WHERE setting_key = $1', ['email_notifications_enabled']);
+        if (!setting || setting.setting_value !== 'true') return;
+        const details = await registrationEmailDetails(regId);
+        if (details) sendRegistrationConfirmationEmail(details.email, { ...details, free: true })
+            .catch(err => console.error('❌ Free class confirmation email failed:', err.message));
+    } catch (err) {
+        console.error('❌ Free class confirmation email failed:', err.message);
+    }
+}
+
 function paymentMethodLabel(value) {
     const v = String(value || '').toLowerCase();
     return v === 'venmo' ? 'Venmo' : v === 'zelle' ? 'Zelle' : null;
@@ -3802,7 +3835,10 @@ app.post('/api/register', asyncHandler(async (req, res) => {
         effectiveLastName = parts.join(' ') || '';
     }
     
-    if (!email || !course_id || !payment_amount) {
+    // Free class = every price saved on the class is $0 (checked here, never trusted from the phone)
+    const courseFree = course_id ? await isFreeCourse(course_id) : false;
+    if (courseFree) payment_amount = 0;
+    if (!email || !course_id || (!courseFree && !payment_amount)) {
         return res.status(400).json({ error: 'Required fields missing: email, course_id, and payment_amount are required' });
     }
     
@@ -3875,10 +3911,10 @@ app.post('/api/register', asyncHandler(async (req, res) => {
             ORDER BY cs.id LIMIT 1
         `, [course_id]);
         const perDate = Number(priceRow?.price);
-        if (!perDate) {
+        if (!perDate && !courseFree) {
             return res.status(400).json({ error: 'This class does not offer individual dates' });
         }
-        payment_amount = perDate * pickedDates.length;
+        payment_amount = courseFree ? 0 : perDate * pickedDates.length;
     }
     const pickedDatesJson = pickedDates ? JSON.stringify(pickedDates) : null;
 
@@ -3893,7 +3929,7 @@ app.post('/api/register', asyncHandler(async (req, res) => {
             );
             if (paid) return res.status(400).json({ error: 'You are already registered and paid for this course' });
         }
-        return res.json({ success: true, dry_run: true, payment_amount: Number(payment_amount) });
+        return res.json({ success: true, dry_run: true, payment_amount: Number(payment_amount), free: courseFree });
     }
 
     // Create or update student
@@ -3959,7 +3995,9 @@ app.post('/api/register', asyncHandler(async (req, res) => {
         );
         console.log('ℹ️ Updated existing pending registration', { id: existingPending.id, student_id: student.id, course_id });
         if (offer) await dbConfig.run("UPDATE waitlist SET status = 'registered', registration_id = $1, payment_link_token = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = $2", [existingPending.id, offer.id]);
+        if (courseFree) await confirmFreeRegistration(existingPending.id);
         return res.json({ 
+            free: courseFree,
             success: true, 
             registrationId: existingPending.id, 
             studentId: student.id,
@@ -3990,8 +4028,10 @@ app.post('/api/register', asyncHandler(async (req, res) => {
     if (offer) await dbConfig.run("UPDATE waitlist SET status = 'registered', registration_id = $1, payment_link_token = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = $2", [registrationId, offer.id]);
     
     console.log('📝 Registration created', { id: registrationId, course_id, email });
+    if (courseFree) await confirmFreeRegistration(registrationId);
     res.json({ 
         success: true, 
+        free: courseFree,
         registrationId: registrationId,
         studentId: student.id,
         payment_amount: Number(payment_amount)

@@ -867,8 +867,9 @@ class AdminDashboard {
         if (payload.course_type === 'crew_practice' && n < 1) problems.push('Add at least 1 practice date');
         if (!slot.start_time || !slot.end_time) problems.push('Add a start and end time');
         if (slot.capacity < 1) problems.push('Capacity must be at least 1');
-        const fee = Number(document.getElementById('mainFee').value);
-        if (!(fee > 0) && payload.course_type !== 'crew_practice') problems.push('Add the fee');
+        const feeRaw = String(document.getElementById('mainFee').value || '').trim();
+        if (feeRaw === '') problems.push('Add the fee (0 for a free class)');
+        else if (!(Number(feeRaw) >= 0)) problems.push('The fee can\'t be negative');
         return problems;
     }
 

@@ -152,7 +152,13 @@
     known.forEach(([word, key]) => { if (text.includes(word) && !keys.includes(key)) keys.push(key); });
     return keys.slice(0, 3).map((k) => `<img src="/images/${k}.jpg" alt="" loading="lazy">`).join('');
   }
+  // Free class: prices are saved and every one is $0 (classes with no prices saved are not "free")
+  function isFree(course) {
+    const pricing = slot(course).pricing || {};
+    const vals = Object.values(pricing).map(Number);
+    return vals.length > 0 && vals.every((v) => v === 0);
+  }
   function isTesterDevice() { try { return localStorage.getItem('goumo_tester') === '1'; } catch (e) { return false; } }
 
-  window.ClassInfo = { instructorPics, isTesterDevice, isOpen, comboRows, comboInstructors, comboKicker, esc, toDate, formatTime, formatDates, formatOneDate, dates, slot, typeLabel, timeRange, location, style, fees, feeText, rows, kicker, isPerDate };
+  window.ClassInfo = { isFree, instructorPics, isTesterDevice, isOpen, comboRows, comboInstructors, comboKicker, esc, toDate, formatTime, formatDates, formatOneDate, dates, slot, typeLabel, timeRange, location, style, fees, feeText, rows, kicker, isPerDate };
 })();

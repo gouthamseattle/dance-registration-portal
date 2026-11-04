@@ -1000,7 +1000,10 @@ class DanceRegistrationApp {
             // The server works out the amount (picked dates, combos); use its figure
             if (result.payment_amount) this.registrationData.payment_amount = result.payment_amount;
             this.registrationData.registrationId = null;
+            this.registrationData.free = !!result.free;
+            this.registrationData.payment_method = this.registrationData.free ? null : this.registrationData.payment_method;
             this.showPaymentSection();
+            if (this.registrationData.free) this.showFreeConfirm();
 
         } catch (error) {
             console.error('Registration error:', error);
@@ -1623,6 +1626,29 @@ class DanceRegistrationApp {
         sheet.querySelector('#paySentYes').focus();
     }
 
+    // Free class: no payment screen, one button that saves and confirms the spot
+    showFreeConfirm() {
+        const esc = window.ClassInfo ? window.ClassInfo.esc : (v) => v;
+        const summary = document.getElementById('paymentSummary');
+        if (summary) summary.style.display = 'none';
+        const header = document.querySelector('#paymentSection .card-header');
+        if (header) header.style.display = 'none';
+        const dates = this.paymentDatesText();
+        const container = document.getElementById('paypal-button-container');
+        container.innerHTML = `
+            <div class="pay-done">
+                <h2 class="pay-done-title">This class is free</h2>
+                <p class="pay-done-text">No payment needed. Tap below to confirm your spot.</p>
+                <div class="pay-done-rows">
+                    <div><span>Class</span><strong>${esc(this.paymentClassName())}</strong></div>
+                    ${dates ? `<div><span>Dates</span><strong>${esc(dates)}</strong></div>` : ''}
+                    <div><span>Fee</span><strong>Free</strong></div>
+                </div>
+                <div class="d-grid"><button type="button" class="btn btn-primary btn-lg" onclick="app.showPaymentSentConfirmation(this)">Confirm my spot</button></div>
+            </div>`;
+        this.scrollToTop();
+    }
+
     async showPaymentSentConfirmation(button) {
         if (this._savingRegistration) return;
         this._savingRegistration = true;
@@ -1653,16 +1679,19 @@ class DanceRegistrationApp {
         if (header) header.style.display = 'none';
         const dates = this.paymentDatesText();
         const method = this.selectedPaymentMethod === 'zelle' ? 'Zelle' : 'Venmo';
+        const free = !!this.registrationData.free;
         const container = document.getElementById('paypal-button-container');
         container.innerHTML = `
             <div class="pay-done">
                 <div class="pay-done-icon" aria-hidden="true"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
-                <h2 class="pay-done-title">You're all done!</h2>
-                <p class="pay-done-text">Thanks for registering for <strong>${esc(this.paymentClassName())}</strong>. We'll match your ${method} payment and email your confirmation to <strong>${esc(this.registrationData.email || '')}</strong>.</p>
+                <h2 class="pay-done-title">${free ? 'You\'re in!' : 'You\'re all done!'}</h2>
+                <p class="pay-done-text">${free
+                    ? `Your spot in <strong>${esc(this.paymentClassName())}</strong> is confirmed. We'll email the details to <strong>${esc(this.registrationData.email || '')}</strong>.`
+                    : `Thanks for registering for <strong>${esc(this.paymentClassName())}</strong>. We'll match your ${method} payment and email your confirmation to <strong>${esc(this.registrationData.email || '')}</strong>.`}</p>
                 <div class="pay-done-rows">
                     <div><span>Class</span><strong>${esc(this.paymentClassName())}</strong></div>
                     ${dates ? `<div><span>Dates</span><strong>${esc(dates)}</strong></div>` : ''}
-                    <div><span>Paid</span><strong>$${esc(String(this.registrationData.payment_amount))} by ${method}</strong></div>
+                    ${free ? '<div><span>Fee</span><strong>Free</strong></div>' : `<div><span>Paid</span><strong>$${esc(String(this.registrationData.payment_amount))} by ${method}</strong></div>`}
                 </div>
                 <div class="d-grid gap-2">
                     <a class="btn btn-primary btn-lg" href="/">Back to GouMo home</a>
