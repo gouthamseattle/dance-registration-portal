@@ -43,7 +43,7 @@
             <h3 class="cc-name">${esc(course.name)}</h3>
             ${whoHtml(course.instructor)}
           </div>
-          ${f.headline ? `<div class="cc-price"><span>$${Number(f.headline).toFixed(0)}</span>${f.unit ? `<small>${esc(f.unit)}</small>` : ''}</div>` : ''}
+          ${C.isFree(course) ? '<div class="cc-price"><span>Free</span></div>' : f.headline ? `<div class="cc-price"><span>$${Number(f.headline).toFixed(0)}</span>${f.unit ? `<small>${esc(f.unit)}</small>` : ''}</div>` : ''}
         </div>
         ${gridHtml([[ds.length === 1 ? 'Date' : 'Dates', ds.length ? C.formatDates(ds) : ''], ['Time', C.timeRange(course)], ['Location', C.location(course)], ['Spots', spotsText]])}
         ${course.description ? `<p class="cc-desc">${esc(course.description)}</p>` : ''}

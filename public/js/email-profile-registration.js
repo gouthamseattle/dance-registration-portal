@@ -573,7 +573,7 @@ class EmailProfileRegistrationApp {
                         <h3 class="cc-name">${esc(course.name)}</h3>
                         ${course.instructor ? `<span class="cc-who">${pics ? `<span class="cc-pics">${pics}</span>` : ''}<span>with ${esc(course.instructor)}</span></span>` : ''}
                     </div>
-                    ${f.headline ? `<div class="cc-price"><span>$${Number(f.headline).toFixed(0)}</span>${f.unit ? `<small>${esc(f.unit)}</small>` : ''}</div>` : ''}
+                    ${C.isFree(course) ? '<div class="cc-price"><span>Free</span></div>' : f.headline ? `<div class="cc-price"><span>$${Number(f.headline).toFixed(0)}</span>${f.unit ? `<small>${esc(f.unit)}</small>` : ''}</div>` : ''}
                 </div>
                 ${cells.length ? `<dl class="cc-grid">${cells.map(([k, v]) => `<div><dt>${k}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>` : ''}
                 ${action}

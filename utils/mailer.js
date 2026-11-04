@@ -140,10 +140,14 @@ function isEmailConfigured() {
 async function sendRegistrationConfirmationEmail(to, data = {}) {
   ensureConfigured();
 
-  const { courseName, scheduleInfo, amount, registrationId, studentName } = data;
+  const { courseName, scheduleInfo, amount, registrationId, studentName, free } = data;
   const from = getFromAddress();
   const subject = `Registration Confirmed - ${courseName || 'Dance Class'}`;
   const safeAmount = typeof amount === 'number' ? amount.toFixed(2) : amount;
+  // Free class: no payment, so the wording changes (paid classes are unchanged)
+  const confirmedLine = free ? 'Your spot is confirmed for' : 'Your payment has been confirmed for';
+  const amountLabel = free ? 'Fee' : 'Amount Paid';
+  const amountText = free ? 'Free' : `$${safeAmount || ''}`;
 
   const html = `<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -157,11 +161,11 @@ async function sendRegistrationConfirmationEmail(to, data = {}) {
 </td></tr>
 <tr><td style="padding:30px;">
   <p style="margin:0 0 16px;font-size:16px;color:#333;">Hi ${studentName ? escapeHtml(studentName) : 'Student'},</p>
-  <p style="margin:0 0 20px;font-size:16px;color:#333;">Your payment has been confirmed for <strong>${escapeHtml(courseName || 'Dance Class')}</strong>. Welcome to the class!</p>
+  <p style="margin:0 0 20px;font-size:16px;color:#333;">${confirmedLine} <strong>${escapeHtml(courseName || 'Dance Class')}</strong>. Welcome to the class!</p>
   <table width="100%" cellpadding="8" cellspacing="0" border="0" style="background:#f8f9fa;border-radius:6px;margin:20px 0;"><tr><td style="padding:20px;">
     <h3 style="margin:0 0 16px;color:#e91e63;font-size:18px;">Registration Details</h3>
     ${scheduleInfo ? `<p style="margin:0 0 12px;font-size:14px;color:#555;"><strong>Schedule:</strong> ${escapeHtml(scheduleInfo)}</p>` : ''}
-    <p style="margin:0 0 12px;font-size:14px;color:#555;"><strong>Amount Paid:</strong> <span style="color:#28a745;font-size:18px;font-weight:bold;">$${escapeHtml(String(safeAmount || ''))}</span></p>
+    <p style="margin:0 0 12px;font-size:14px;color:#555;"><strong>${amountLabel}:</strong> <span style="color:#28a745;font-size:18px;font-weight:bold;">${escapeHtml(String(amountText))}</span></p>
     <p style="margin:0;font-size:14px;color:#555;"><strong>Registration ID:</strong> #${escapeHtml(String(registrationId || ''))}</p>
   </td></tr></table>
   <div style="margin:24px 0;padding:20px;background:#e8f5e8;border-radius:6px;border-left:4px solid #28a745;">
@@ -179,7 +183,7 @@ async function sendRegistrationConfirmationEmail(to, data = {}) {
   <p style="margin:0;color:#adb5bd;font-size:11px;">&copy; 2024 GouMo Dance Chronicles. All rights reserved.</p>
 </td></tr></table></td></tr></table></body></html>`;
 
-  const text = `Registration Confirmed!\n\nHi ${studentName || 'Student'},\n\nYour payment has been confirmed for ${courseName || 'Dance Class'}. Welcome to the class!\n\n${scheduleInfo ? `Schedule: ${scheduleInfo}\n` : ''}Amount Paid: $${safeAmount || ''}\nRegistration ID: #${registrationId || ''}\n\nWe look forward to seeing you in class!\n\nFollow us: @goumo_dancechronicles`;
+  const text = `Registration Confirmed!\n\nHi ${studentName || 'Student'},\n\n${confirmedLine} ${courseName || 'Dance Class'}. Welcome to the class!\n\n${scheduleInfo ? `Schedule: ${scheduleInfo}\n` : ''}${amountLabel}: ${amountText}\nRegistration ID: #${registrationId || ''}\n\nWe look forward to seeing you in class!\n\nFollow us: @goumo_dancechronicles`;
 
   dbg('sending confirmation email', { to, from, subject, registrationId });
 
