@@ -75,6 +75,7 @@ async function ensureSchema(dbConfig) {
         await ensureComboTables(dbConfig);
         await ensureSessionTable(dbConfig);
         await ensureTeamTable(dbConfig);
+        await ensureAttendanceTables(dbConfig);
 
         // Ensure student profile and access control columns exist
         await ensureStudentProfileColumns(dbConfig);
@@ -298,6 +299,37 @@ async function ensureTeamTable(dbConfig) {
         console.log('✅ Ensured team_members table exists');
     } catch (e) {
         console.log('ℹ️ team table check skipped:', e.message || e);
+    }
+}
+
+/**
+ * Attendance (Nov 2026): everyone registered for a class date counts as attended
+ * unless marked "No show". attendance_no_shows: one row per no show (registration + date).
+ * attendance_checks: someone pressed "Done" for that class date (who and when).
+ */
+async function ensureAttendanceTables(dbConfig) {
+    try {
+        const pk = dbConfig.isProduction ? 'SERIAL PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT';
+        await dbConfig.run(`CREATE TABLE IF NOT EXISTS attendance_no_shows (
+            id ${pk},
+            registration_id INTEGER NOT NULL,
+            course_id INTEGER NOT NULL,
+            class_date VARCHAR(10) NOT NULL,
+            marked_by VARCHAR(255),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (registration_id, class_date)
+        )`);
+        await dbConfig.run(`CREATE TABLE IF NOT EXISTS attendance_checks (
+            id ${pk},
+            course_id INTEGER NOT NULL,
+            class_date VARCHAR(10) NOT NULL,
+            checked_by VARCHAR(255),
+            checked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (course_id, class_date)
+        )`);
+        console.log('✅ Ensured attendance tables exist');
+    } catch (e) {
+        console.log('ℹ️ attendance table check skipped:', e.message || e);
     }
 }
 

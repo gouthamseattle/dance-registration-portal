@@ -54,8 +54,8 @@ PR as any change that adds a decision, a link or a to-do.
 - **Students are hidden, never deleted** (`archived_at`), so payment history stays intact.
 - **Only the admin can cancel registrations.** Cancelling a paid one offers the spot to
   the waitlist automatically, in order, held for the "waitlist hold" time (default 24h).
-- **"Classes taken" = paid registrations.** No roll call / attendance taking. Old
-  attendance records from before Oct 2026 show on profiles as "Attended (old records)".
+- **"Classes taken" = paid registrations.** Old attendance records from before Oct 2026 show on
+  profiles as "Attended (old records)". Since Nov 2026 attendance is "mark no shows only" (see below).
 - **Crew members' crew practices are counted separately** from regular classes.
 - **Crew practice can have several dates** at a fee per practice; students pick 1, 2 or all dates and the server works out the amount. No spot limit is needed for crew practice (set a large capacity).
 - **Crew-only classes are hidden from the public home page.** Crew members register through the `/crew` link, shared only in the crew WhatsApp group; it opens the register page listing only crew-only classes.
@@ -89,6 +89,19 @@ PR as any change that adds a decision, a link or a to-do.
   screen → "Did you send the payment?" sheet (Yes, I've paid / Not yet) → "You're all done!"
   screen that tells the student they've done their part. "Your spot is confirmed once we
   receive your payment" sits under the button. The old PayPal "You're in!" screen is gone.
+
+## Attendance (Nov 2026)
+
+- Approved mockup: https://claude.ai/artifact/2g72cAojccNxHbZBuzb6ux
+- Everyone registered for a class date (not cancelled, not a test account) counts as **Attended**. In Admin →
+  Attendance (and the lite admin's Attendance tab) you pick the class (one list, newest class date first), and tap
+  **No show** on anyone who didn't come; each tap saves. **Done** marks the class date as checked
+  ("Checked" / "Not checked" on the list). Helpers can mark the last 7 days; the admin any past date.
+- Tables `attendance_no_shows` (registration + date, who marked) and `attendance_checks` (class date checked, by whom).
+- Progress on My classes counts **attended** dates only ("Attended 6 of 9"); rank reads "Your rank · 4th of 20 students".
+  A missed date shows a small "No show" tag in the student's history. Students never see counts or money.
+- Main admin only (no refunds, so these are just for the owner): student profile Attended / No shows / Attendance %,
+  dashboard turnout per class and "Attendance to check: N class dates" (last 14 days, not checked).
 
 ## Free classes (Nov 2026)
 

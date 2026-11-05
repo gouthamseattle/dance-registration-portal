@@ -225,6 +225,20 @@
 
     async function refresh() { await loadClasses(); await loadRegs(); }
 
+    // Registrations | Attendance switch (attendance screen: js/attendance.js)
+    let attendance = null;
+    function showTab(att) {
+        $('tabRegs').classList.toggle('is-on', !att); $('tabRegs').setAttribute('aria-selected', String(!att));
+        $('tabAtt').classList.toggle('is-on', att); $('tabAtt').setAttribute('aria-selected', String(att));
+        $('regsPane').hidden = att; $('attPane').hidden = !att;
+        if (att) {
+            if (!attendance) attendance = window.GouMoAttendance.mount($('attPane'), { helper: true });
+            else attendance.refresh();
+        }
+    }
+    $('tabRegs').addEventListener('click', () => showTab(false));
+    $('tabAtt').addEventListener('click', () => showTab(true));
+
     async function start() {
         const s = await api('GET', '/api/lite/status');
         $('whoami').textContent = s.email;

@@ -248,6 +248,10 @@ class AdminDashboard {
             case 'waitlist':
                 this.loadWaitlistManagement();
                 break;
+            case 'attendance':
+                if (!this.attendance) this.attendance = window.GouMoAttendance.mount(document.getElementById('attendanceRoot'), { helper: false });
+                else this.attendance.refresh();
+                break;
             case 'settings':
                 this.loadSettings();
                 break;
@@ -310,6 +314,7 @@ class AdminDashboard {
         document.getElementById('sessionSummary').textContent = `${range} · ${active.length} active class${active.length === 1 ? '' : 'es'}`;
 
         this.renderClassReport(active);
+        this.loadAttendanceSummary();
         // The payment-check list still shows test registrations (marked "Test") so they can be confirmed
         this.renderPendingList(this.regsList().filter(r => r.payment_status === 'pending'));
         this.addStatCardClickHandlers();
@@ -325,6 +330,7 @@ class AdminDashboard {
         }
         const sorted = [...active].sort((a, b) => (C.dates(a)[0] || '9999').localeCompare(C.dates(b)[0] || '9999'));
         el.innerHTML = `
+            <p class="empty-line" id="attToCheck" hidden></p>
             <div class="table-responsive">
                 <table class="table admin-table class-report mb-0">
                     <thead><tr><th>Class</th><th>Registration</th><th>Filled</th><th class="text-end">Paid</th><th class="text-end">Pending</th><th class="text-end">Revenue</th></tr></thead>
@@ -335,7 +341,7 @@ class AdminDashboard {
                             const pct = cap ? Math.min(100, Math.round((s.paid / cap) * 100)) : 0;
                             const crew = c.required_student_type === 'crew_member' ? ' <span class="pill pill-muted">Crew only</span>' : '';
                             return `<tr>
-                                <td><a href="#" class="row-link" onclick="admin.showRegistrationsFor(${c.id});return false">${C.esc(c.name)}</a>${crew}<div class="cell-sub">${C.esc(C.kicker(c))}</div></td>
+                                <td><a href="#" class="row-link" onclick="admin.showRegistrationsFor(${c.id});return false">${C.esc(c.name)}</a>${crew}<div class="cell-sub">${C.esc(C.kicker(c))}</div><div class="cell-sub" data-turnout="${Number(c.id)}"></div></td>
                                 <td><label class="reg-switch ${C.isOpen(c) ? 'on' : ''}"><input type="checkbox" class="form-check-input" ${C.isOpen(c) ? 'checked' : ''} onchange="admin.setClassRegistration(${c.id}, this.checked)"> <span>${C.isOpen(c) ? 'Open' : 'Closed'}</span></label></td>
                                 <td><div class="fill"><div class="fill-bar"><span style="width:${pct}%"></span></div><span class="fill-num">${s.paid}/${cap || '—'}</span></div></td>
                                 <td class="text-end">${s.paid}</td>
@@ -346,6 +352,28 @@ class AdminDashboard {
                     </tbody>
                 </table>
             </div>`;
+    }
+
+    // Attendance (main admin only): turnout per class and class dates nobody has checked yet
+    async loadAttendanceSummary() {
+        try {
+            const res = await this.apiFetch('/api/attendance/summary');
+            if (!res.ok) return;
+            const data = await res.json();
+            const box = document.getElementById('attToCheck');
+            if (box) {
+                box.hidden = !data.to_check;
+                box.innerHTML = `Attendance to check: <a href="#" onclick="admin.showSection('attendance');return false">${data.to_check} class date${data.to_check === 1 ? '' : 's'} →</a>`;
+            }
+            document.querySelectorAll('[data-turnout]').forEach(el => {
+                const c = (data.courses || {})[el.dataset.turnout];
+                if (!c || !c.dates) { el.textContent = ''; return; }
+                const parts = [];
+                if (c.turnout_pct != null) parts.push(`Turnout ${c.turnout_pct}% · ${c.no_shows} no show${c.no_shows === 1 ? '' : 's'} across ${c.dates} date${c.dates === 1 ? '' : 's'}`);
+                if (c.unchecked) parts.push(`${c.unchecked} not checked yet`);
+                el.textContent = parts.join(' · ');
+            });
+        } catch (e) { /* attendance numbers are optional on the dashboard */ }
     }
 
     // One line per payment to check; a combo shows once with its total
@@ -1956,6 +1984,11 @@ class AdminDashboard {
                 <div class="stat"><span class="stat-label">Paid</span><span class="stat-number">${this.money(data.totals.amount_paid)}</span></div>
                 <div class="stat"><span class="stat-label">Pending</span><span class="stat-number">${data.totals.pending}</span></div>
             </div>
+            ${data.attendance ? `<div class="stat-grid mb-3" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+                <div class="stat"><span class="stat-label">Attended</span><span class="stat-number">${data.attendance.attended}</span><span class="stat-foot">class dates so far</span></div>
+                <div class="stat"><span class="stat-label">No shows</span><span class="stat-number">${data.attendance.no_shows}</span></div>
+                <div class="stat"><span class="stat-label">Attendance</span><span class="stat-number">${data.attendance.pct == null ? '—' : data.attendance.pct + '%'}</span></div>
+            </div>` : ''}
             <h6 class="mb-2">Classes</h6>
             ${data.registrations.length ? `<div class="reg-list mb-3">${data.registrations.map(r => {
                 const [label, cls] = STATUS[r.payment_status] || [r.payment_status || '—', 'pill-muted'];
@@ -1965,6 +1998,7 @@ class AdminDashboard {
                     <div class="min-w-0">
                         <div class="fw-semibold">${C.esc(r.course_name || 'Class')}</div>
                         <div class="cell-sub">${C.esc([C.formatDates(ds), r.combo_name ? `Combo: ${r.combo_name}` : ''].filter(Boolean).join(' · '))}</div>
+                        ${(r.no_show_dates || []).length ? `<div class="mt-1">${r.no_show_dates.map(d => `<span class="att-tag">No show · ${C.esc(C.formatOneDate(d))}</span>`).join(' ')}</div>` : ''}
                     </div>
                     <div class="text-end text-nowrap">
                         <div>${this.money(r.payment_amount)} <span class="pill ${cls}">${C.esc(label)}</span></div>
