@@ -19,7 +19,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    <link href="/css/site.css?v=3" rel="stylesheet">
+    <link href="/css/site.css?v=4" rel="stylesheet">
     <link href="/css/registration.css?v=6" rel="stylesheet">
     <link href="/css/admin.css?v=5" rel="stylesheet">
 </head>
@@ -66,6 +66,7 @@
                 <a class="nav-link" href="#" data-section="dashboard">Dashboard</a>
                 <a class="nav-link" href="#" data-section="courses">Classes</a>
                 <a class="nav-link" href="#" data-section="registrations">Registrations <span class="nav-count" id="navPendingCount" hidden></span></a>
+                <a class="nav-link" href="#" data-section="attendance">Attendance</a>
                 <a class="nav-link" href="#" data-section="waitlist">Waitlists</a>
                 <a class="nav-link" href="#" data-section="students">Students</a>
                 <a class="nav-link" href="#" data-section="settings">Settings</a>
@@ -200,6 +201,16 @@
         </section>
 
         <!-- Waitlists Section -->
+        <section id="attendanceSection" class="content-section" style="display: none;">
+            <div class="page-head">
+                <div>
+                    <h1 class="page-title">Attendance</h1>
+                    <p class="page-sub">Mark who didn't come. Everyone else counts as attended.</p>
+                </div>
+            </div>
+            <div id="attendanceRoot"></div>
+        </section>
+
         <section id="waitlistSection" class="content-section" style="display: none;">
             <div class="page-head">
                 <div>
@@ -566,6 +577,7 @@
     <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="/js/class-info.js?v=8"></script>
-    <script src="/js/admin.js?v=43"></script>
+    <script src="/js/attendance.js?v=1"></script>
+    <script src="/js/admin.js?v=44"></script>
 </body>
 </html>

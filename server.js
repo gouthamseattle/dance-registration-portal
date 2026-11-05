@@ -3338,6 +3338,10 @@ async function studentHistory(studentId) {
         WHERE w.student_id = $1 AND w.status IN ('active', 'notified')
         ORDER BY w.created_at DESC
     `, [studentId]);
+    const regIds = registrations.map(r => Number(r.id)).filter(Boolean);
+    const misses = regIds.length ? await dbConfig.all(
+        `SELECT registration_id, class_date FROM attendance_no_shows WHERE registration_id IN (${regIds.map((_, i) => '$' + (i + 1)).join(',')})`, regIds) : [];
+    registrations.forEach(r => { r.no_show_dates = misses.filter(m => Number(m.registration_id) === Number(r.id)).map(m => m.class_date).sort(); });
     const paid = registrations.filter(r => r.payment_status === 'completed');
     const crewPaid = paid.filter(r => r.course_type === 'crew_practice').length;
     // Attendance marked in the old (pre-Oct 2026) roll-call screens, if that table is still there
@@ -3364,7 +3368,7 @@ async function studentHistory(studentId) {
 // ---------- Progress on My classes (crew practices + GouMo classes) ----------
 // Counts every registration that isn't cancelled (payment status doesn't matter),
 // one per class date. For each kind (crew practice / GouMo class = everything else):
-//   attended = their class dates up to today; held = all class dates of that kind from
+//   attended = their class dates up to today, minus dates marked "No show" (Attendance); held = all class dates of that kind from
 //   their first one to today; % = attended ÷ held. Hidden classes count (hiding only tidies
 //   the admin). Settings "crew_progress_start" (Count crew practices from) applies to crew practices only.
 //   Classes a student taught ("Teaches as" on their profile matches the class instructor)
@@ -3409,14 +3413,16 @@ function teaches(teachesAs, instructor) {
     return new RegExp('\\b' + name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'i').test(instructor);
 }
 // One student's numbers for one kind (crew = true/false)
-function kindStats(regs, byCourse, crew, today, teachesAs) {
+function kindStats(regs, byCourse, crew, today, teachesAs, noShows) {
     const ok = (id) => byCourse[id] && byCourse[id].crew === crew && !teaches(teachesAs, byCourse[id].instructor);
     const mine = new Set();
     for (const r of regs) {
         if (!ok(r.course_id)) continue;
         const all = byCourse[r.course_id].dates;
         const picked = parseDateList(r.selected_dates).filter(d => all.includes(d));
-        (picked.length ? picked : all).forEach(d => { if (d <= today) mine.add(`${r.course_id}|${d}`); });
+        (picked.length ? picked : all).forEach(d => {
+            if (d <= today && !(noShows && noShows.has(`${r.id}|${d}`))) mine.add(`${r.course_id}|${d}`);
+        });
     }
     if (!mine.size) return { attended: 0, held: 0, pct: null, since: null };
     const since = [...mine].map(k => k.split('|')[1]).sort()[0];
@@ -3441,8 +3447,9 @@ async function studentProgress(studentId) {
     const goumoStart = parseDateList([gRow?.setting_value])[0] || DEFAULT_GOUMO_START;
     const byCourse = await allClassDates(start, goumoStart);
     const notCanceled = dbConfig.isProduction ? "r.payment_status IS DISTINCT FROM 'canceled'" : "(r.payment_status IS NULL OR r.payment_status != 'canceled')";
-    const regs = await dbConfig.all(`SELECT r.student_id, r.course_id, r.selected_dates, r.is_test, s.student_type, s.is_tester, s.archived_at, s.teaches_as
+    const regs = await dbConfig.all(`SELECT r.id, r.student_id, r.course_id, r.selected_dates, r.is_test, s.student_type, s.is_tester, s.archived_at, s.teaches_as
         FROM registrations r JOIN students s ON s.id = r.student_id WHERE r.course_id IS NOT NULL AND ${notCanceled}`);
+    const noShows = await noShowSet();
     // A class nobody (real) registered for didn't really happen (e.g. a "Test class"): leave it out
     const used = new Set(regs.filter(r => !isTrue(r.is_test) && !isTrue(r.is_tester)).map(r => String(r.course_id)));
     for (const id of Object.keys(byCourse)) if (!used.has(String(id))) delete byCourse[id];
@@ -3451,13 +3458,13 @@ async function studentProgress(studentId) {
     const me = await dbConfig.get('SELECT student_type, teaches_as FROM students WHERE id = $1', [studentId]);
     const myRegs = (byStudent[studentId] || { regs: [] }).regs;
     const counted = Object.entries(byStudent).filter(([, v]) => !v.info.archived_at && !isTrue(v.info.is_tester));
-    const goumo = { ...kindStats(myRegs, byCourse, false, today, me?.teaches_as),
-        ...rankOf(counted.map(([id, v]) => ({ id: Number(id), ...kindStats(v.regs, byCourse, false, today, v.info.teaches_as) })), studentId) };
+    const goumo = { ...kindStats(myRegs, byCourse, false, today, me?.teaches_as, noShows),
+        ...rankOf(counted.map(([id, v]) => ({ id: Number(id), ...kindStats(v.regs, byCourse, false, today, v.info.teaches_as, noShows) })), studentId) };
     let crew = null;
     if (me && me.student_type === 'crew_member') {
-        crew = { ...kindStats(myRegs, byCourse, true, today, me.teaches_as),
+        crew = { ...kindStats(myRegs, byCourse, true, today, me.teaches_as, noShows),
             ...rankOf(counted.filter(([, v]) => v.info.student_type === 'crew_member')
-                .map(([id, v]) => ({ id: Number(id), ...kindStats(v.regs, byCourse, true, today, v.info.teaches_as) })), studentId) };
+                .map(([id, v]) => ({ id: Number(id), ...kindStats(v.regs, byCourse, true, today, v.info.teaches_as, noShows) })), studentId) };
     }
     return { crew, goumo, min_for_rank: MIN_FOR_RANK, start: start || null, goumo_start: goumoStart };
 }
@@ -3474,7 +3481,7 @@ const STUDENT_PUBLIC_FIELDS = 'id, first_name, last_name, email, instagram_handl
 app.get('/api/admin/students/:id', requireAuth, asyncHandler(async (req, res) => {
     const student = await dbConfig.get(`SELECT ${STUDENT_PUBLIC_FIELDS}, admin_notes, teaches_as FROM students WHERE id = $1`, [req.params.id]);
     if (!student) return res.status(404).json({ error: 'Student not found' });
-    res.json({ student, ...(await studentHistory(student.id)) });
+    res.json({ student, ...(await studentHistory(student.id)), attendance: await studentAttendance(student.id) });
 }));
 
 app.put('/api/admin/students/:id/notes', requireAuth, asyncHandler(async (req, res) => {
@@ -3552,6 +3559,177 @@ app.get('/api/admin/students', requireAuth, asyncHandler(async (req, res) => {
         pending_classes: Number(st.pending_classes) || 0
     })));
 }));
+
+// ===================== Attendance (Nov 2026) =====================
+// Everyone registered for a class date counts as attended unless someone marks them "No show".
+// The admin and helpers (lite admin) mark it; helpers only for the last 7 days. "Done" records
+// that a class date was checked. Numbers (no shows, turnout) are for the main admin only.
+const NOT_CANCELED_SQL = dbConfig.isProduction ? "r.payment_status IS DISTINCT FROM 'canceled'" : "(r.payment_status IS NULL OR r.payment_status != 'canceled')";
+const NOT_TESTER_SQL = dbConfig.isProduction ? '(s.is_tester IS NOT TRUE)' : '(s.is_tester IS NULL OR s.is_tester = 0)';
+const HELPER_DAYS = 7;
+const dayMinus = (day, n) => new Date(new Date(day + 'T12:00:00Z').getTime() - n * 86400000).toISOString().slice(0, 10);
+
+async function noShowSet() {
+    const rows = await dbConfig.all('SELECT registration_id, class_date FROM attendance_no_shows');
+    return new Set(rows.map(r => `${r.registration_id}|${r.class_date}`));
+}
+// The class dates one registration covers (dates picked, else every date of the class)
+function regClassDates(reg, classDates) {
+    const picked = parseDateList(reg.selected_dates).filter(d => classDates.includes(d));
+    return picked.length ? picked : classDates;
+}
+// Every class with its past dates and who is registered for each date (no test accounts, no cancelled)
+async function attendanceBook() {
+    const today = todaySeattle();
+    const byCourse = await allClassDates('', '0000-00-00');
+    const courses = await dbConfig.all('SELECT id, name, course_type, song_name, instructor FROM courses');
+    const slots = await dbConfig.all('SELECT course_id, start_time, end_time, location FROM course_slots ORDER BY id');
+    const regs = await dbConfig.all(`SELECT r.id, r.course_id, r.selected_dates, s.first_name, s.last_name, s.email
+        FROM registrations r JOIN students s ON s.id = r.student_id
+        WHERE r.course_id IS NOT NULL AND ${NOT_CANCELED_SQL} AND ${NOT_TEST} AND ${NOT_TESTER_SQL}`);
+    const noShows = await dbConfig.all('SELECT registration_id, course_id, class_date FROM attendance_no_shows');
+    const checks = await dbConfig.all('SELECT course_id, class_date, checked_by, checked_at FROM attendance_checks');
+    const missed = new Set(noShows.map(n => `${n.registration_id}|${n.class_date}`));
+    const book = {};
+    for (const c of courses) {
+        const all = (byCourse[c.id] || {}).dates || [];
+        const slot = slots.find(s => Number(s.course_id) === Number(c.id)) || {};
+        const sessions = {};
+        for (const r of regs.filter(x => Number(x.course_id) === Number(c.id))) {
+            for (const d of regClassDates(r, all)) {
+                if (d > today) continue;
+                (sessions[d] = sessions[d] || []).push({
+                    registration_id: r.id,
+                    name: [r.first_name, r.last_name].filter(Boolean).join(' ').trim() || r.email,
+                    no_show: missed.has(`${r.id}|${d}`)
+                });
+            }
+        }
+        const dates = Object.keys(sessions).sort();
+        if (!dates.length) continue;
+        dates.forEach(d => sessions[d].sort((a, b) => a.name.localeCompare(b.name)));
+        const checked = {};
+        checks.filter(k => Number(k.course_id) === Number(c.id)).forEach(k => { checked[k.class_date] = { by: k.checked_by, at: k.checked_at }; });
+        book[c.id] = { id: c.id, name: c.name, course_type: c.course_type, song_name: c.song_name, instructor: c.instructor,
+            start_time: slot.start_time || null, all_dates: all, dates, sessions, checked };
+    }
+    return { today, book };
+}
+// Admin may mark any past date; helpers only the last 7 days. Never a future date.
+function attendanceDateAllowed(req, date, today) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || '')) || date > today) return false;
+    return !req.teamEmail || date >= dayMinus(today, HELPER_DAYS);
+}
+const sessionSummary = (course, d) => {
+    const people = course.sessions[d] || [];
+    const noShows = people.filter(p => p.no_show).length;
+    return { date: d, registered: people.length, no_shows: noShows, checked: course.checked[d] || null };
+};
+
+// Classes to mark: each with its latest past class date. Helpers: last 7 days; admin: last 30 (all=1: everything).
+app.get('/api/attendance/classes', requireAdminOrTeam, asyncHandler(async (req, res) => {
+    const { today, book } = await attendanceBook();
+    const from = req.teamEmail ? dayMinus(today, HELPER_DAYS) : (req.query.all ? '0000-00-00' : dayMinus(today, 30));
+    const list = Object.values(book)
+        .map(c => {
+            const dates = c.dates.filter(d => d >= from);
+            if (!dates.length) return null;
+            const latest = dates[dates.length - 1];
+            return { course_id: c.id, name: c.name, course_type: c.course_type, song_name: c.song_name, start_time: c.start_time,
+                session_number: c.all_dates.indexOf(latest) + 1, session_count: c.all_dates.length,
+                ...sessionSummary(c, latest), no_shows: req.teamEmail ? undefined : sessionSummary(c, latest).no_shows };
+        })
+        .filter(Boolean)
+        .sort((a, b) => b.date.localeCompare(a.date) || String(b.start_time || '').localeCompare(String(a.start_time || '')));
+    res.json({ today, classes: list, helper: !!req.teamEmail });
+}));
+
+// One class: its dates (with checked status) and the list for one date (default: latest)
+app.get('/api/attendance/course/:courseId', requireAdminOrTeam, asyncHandler(async (req, res) => {
+    const { today, book } = await attendanceBook();
+    const c = book[req.params.courseId];
+    if (!c) return res.status(404).json({ error: 'No past class dates with registrations for this class' });
+    const dates = c.dates.filter(d => attendanceDateAllowed(req, d, today));
+    if (!dates.length) return res.status(403).json({ error: 'This class is not available here' });
+    const date = dates.includes(req.query.date) ? req.query.date : dates[dates.length - 1];
+    res.json({
+        course: { id: c.id, name: c.name, course_type: c.course_type, song_name: c.song_name, start_time: c.start_time, session_count: c.all_dates.length },
+        date,
+        session_number: c.all_dates.indexOf(date) + 1,
+        dates: dates.map(d => ({ date: d, checked: !!c.checked[d] })),
+        future_dates: c.all_dates.filter(d => d > today),
+        people: c.sessions[date] || [],
+        checked: c.checked[date] || null
+    });
+}));
+
+// Mark / unmark one person as "No show" for one date (saves straight away)
+app.put('/api/attendance/course/:courseId/mark', requireAdminOrTeam, asyncHandler(async (req, res) => {
+    const { date, registration_id, no_show } = req.body || {};
+    const today = todaySeattle();
+    if (!attendanceDateAllowed(req, date, today)) return res.status(403).json({ error: 'This date cannot be marked here' });
+    const { book } = await attendanceBook();
+    const c = book[req.params.courseId];
+    const person = c && (c.sessions[date] || []).find(p => Number(p.registration_id) === Number(registration_id));
+    if (!person) return res.status(404).json({ error: 'That person is not registered for this date' });
+    await dbConfig.run('DELETE FROM attendance_no_shows WHERE registration_id = $1 AND class_date = $2', [registration_id, date]);
+    if (no_show) {
+        await dbConfig.run('INSERT INTO attendance_no_shows (registration_id, course_id, class_date, marked_by) VALUES ($1, $2, $3, $4)',
+            [registration_id, c.id, date, handledBy(req)]);
+    }
+    res.json({ success: true, no_show: !!no_show });
+}));
+
+// "Done": this class date has been checked
+app.post('/api/attendance/course/:courseId/check', requireAdminOrTeam, asyncHandler(async (req, res) => {
+    const { date } = req.body || {};
+    const today = todaySeattle();
+    if (!attendanceDateAllowed(req, date, today)) return res.status(403).json({ error: 'This date cannot be marked here' });
+    const { book } = await attendanceBook();
+    const c = book[req.params.courseId];
+    if (!c || !c.sessions[date]) return res.status(404).json({ error: 'No class on that date' });
+    await dbConfig.run('DELETE FROM attendance_checks WHERE course_id = $1 AND class_date = $2', [c.id, date]);
+    await dbConfig.run('INSERT INTO attendance_checks (course_id, class_date, checked_by) VALUES ($1, $2, $3)', [c.id, date, handledBy(req)]);
+    res.json({ success: true, checked: { by: handledBy(req) } });
+}));
+
+// Main admin only: turnout per class, and class dates in the last 14 days nobody has checked
+app.get('/api/attendance/summary', requireAuth, asyncHandler(async (req, res) => {
+    const { today, book } = await attendanceBook();
+    const recent = dayMinus(today, 14);
+    const courses = {};
+    let toCheck = 0;
+    for (const c of Object.values(book)) {
+        let registered = 0, noShows = 0, unchecked = 0;
+        for (const d of c.dates) {
+            const s = sessionSummary(c, d);
+            registered += s.registered; noShows += s.no_shows;
+            if (!s.checked && d >= recent) unchecked++;
+        }
+        toCheck += unchecked;
+        courses[c.id] = { dates: c.dates.length, registered, no_shows: noShows, unchecked,
+            turnout_pct: registered ? Math.round((registered - noShows) * 100 / registered) : null };
+    }
+    res.json({ today, to_check: toCheck, courses });
+}));
+
+// Main admin profile: classes attended, no shows and attendance % (class dates up to today)
+async function studentAttendance(studentId) {
+    const today = todaySeattle();
+    const byCourse = await allClassDates('', '0000-00-00');
+    const regs = await dbConfig.all(`SELECT r.id, r.course_id, r.selected_dates FROM registrations r
+        WHERE r.student_id = $1 AND r.course_id IS NOT NULL AND ${NOT_CANCELED_SQL} AND ${NOT_TEST}`, [studentId]);
+    const noShows = await noShowSet();
+    let registered = 0, missed = 0;
+    for (const r of regs) {
+        for (const d of regClassDates(r, (byCourse[r.course_id] || {}).dates || [])) {
+            if (d > today) continue;
+            registered++;
+            if (noShows.has(`${r.id}|${d}`)) missed++;
+        }
+    }
+    return { attended: registered - missed, no_shows: missed, pct: registered ? Math.round((registered - missed) * 100 / registered) : null };
+}
 
 // ===================== Combos =====================
 // A combo bundles 2+ classes at one price. Registering creates one pending

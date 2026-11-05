@@ -44,13 +44,18 @@
   const longDate = (d) => new Date(d + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   const shortDate = (d) => new Date(d + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
-  // One panel: ring with %, "x of y", rank
+  const ordinal = (n) => { const v = n % 100; return n + (v >= 11 && v <= 13 ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' }[n % 10] || 'th')); };
+
+  // One panel: ring with %, "Attended x of y", rank
   function panel(title, k, unit, min) {
     const pct = k.pct === null ? 0 : k.pct;
-    const rank = k.rank ? `<b>#${k.rank}</b><span>of ${k.ranked_count}</span>` : `<span>Ranked after ${min} ${unit}</span>`;
+    // "4th of 20 students" under a "Your rank" label, so it reads as a rank
+    const who = unit === 'practices' ? 'crew' : 'students';
+    const rank = k.rank ? `<em>Your rank</em><span class="rank-line"><b>${ordinal(k.rank)}</b><span>of ${k.ranked_count} ${who}</span></span>`
+      : `<em>Your rank</em><span>Shows after ${min} ${unit}</span>`;
     return `<div class="pnl"><strong>${esc(title)}</strong>
       <div class="ring" style="background:conic-gradient(var(--accent) 0 ${pct}%, #2B2B32 ${pct}% 100%)"><span>${k.pct === null ? '–' : k.pct + '%'}</span></div>
-      <small>${k.held ? `${k.attended} of ${k.held} ${unit}` : `Starts with your first ${unit === 'practices' ? 'practice' : 'class'}`}</small>
+      <small>${k.held ? `Attended ${k.attended} of ${k.held}` : `Starts with your first ${unit === 'practices' ? 'practice' : 'class'}`}</small>
       ${k.from ? `<span class="since">Since ${esc(k.from)}</span>` : ''}
       <div class="rank">${rank}</div></div>`;
   }
@@ -77,7 +82,7 @@
         ${crew ? panel('Crew practices', { ...crew, from: prog.start ? longDate(prog.start) : '' }, 'practices', prog.min_for_rank) : ''}
         ${panel('GouMo classes', { ...prog.goumo, from: prog.goumo_start ? longDate(prog.goumo_start) : '' }, 'classes', prog.min_for_rank)}
       </div>
-      <p class="note">${crew ? 'Rank: crew practices among the crew, GouMo classes among all students.' : 'Ranked among all GouMo students.'}</p>`;
+      <p class="note">Counts the classes you attended since your first one. ${crew ? 'Rank: crew practices among the crew, GouMo classes among all students.' : 'Ranked among all GouMo students.'}</p>`;
     box.hidden = false;
     const btn = $('badgeBtn');
     if (btn) btn.addEventListener('click', () => {
@@ -116,7 +121,7 @@
     data.registrations.filter((r) => r.payment_status !== 'canceled').forEach((r) => {
       const ds = regDates(r);
       if (!ds.length) { items.push({ date: String(r.registration_date || '').slice(0, 10), reg: r, n: 1, of: 1, undated: true }); return; }
-      ds.forEach((d, k) => items.push({ date: d, reg: r, n: k + 1, of: ds.length }));
+      ds.forEach((d, k) => items.push({ date: d, reg: r, n: k + 1, of: ds.length, noShow: (r.no_show_dates || []).includes(d) }));
     });
     const upcoming = items.filter((x) => !x.undated && x.date >= now).sort((a, b) => a.date.localeCompare(b.date));
     const past = items.filter((x) => x.undated || x.date < now).sort((a, b) => b.date.localeCompare(a.date));
@@ -158,7 +163,7 @@
     // History: newest first, five at a time
     let shown = 5;
     const drawHistory = () => {
-      $('historyList').innerHTML = past.slice(0, shown).map((x) => `<div class="hist-row"><span>${esc(title(x))}</span><span>${x.undated ? '' : esc(shortDate(x.date))}</span></div>`).join('')
+      $('historyList').innerHTML = past.slice(0, shown).map((x) => `<div class="hist-row${x.noShow ? ' is-missed' : ''}"><span>${esc(title(x))}</span><span>${x.noShow ? '<i class="tag-missed">No show</i> ' : ''}${x.undated ? '' : esc(shortDate(x.date))}</span></div>`).join('')
         + (past.length > shown ? `<button type="button" class="more-btn" id="moreHistory">Show all ${past.length}</button>` : '');
       const m = $('moreHistory'); if (m) m.addEventListener('click', () => { shown = past.length; drawHistory(); });
     };

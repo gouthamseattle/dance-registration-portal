@@ -200,3 +200,42 @@ a:hover { color: #fff; }
 .cc-price small.cc-save { color: var(--accent); font-weight: 700; }
 .cc-grid .cc-wide { grid-column: 1 / -1; }
 .cc-desc { margin: 0; font-size: 13px; color: var(--muted); }
+
+/* ---------- Attendance (admin + lite admin), see js/attendance.js ---------- */
+.att-root { display: flex; flex-direction: column; gap: 14px; max-width: 640px; }
+.att-root > * { margin: 0; }
+.att-muted { color: var(--muted); font-size: 14px; }
+.att-faint { color: var(--faint); font-size: 12px; }
+.att-center { text-align: center; }
+.att-classes { display: flex; flex-direction: column; gap: 10px; }
+.att-class { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px; color: var(--text); font-family: inherit; cursor: pointer; }
+.att-class:hover { border-color: var(--accent); }
+.att-class-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.att-kicker { font-size: 11px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.6px; }
+.att-class-name { font-size: 16px; font-weight: 700; }
+.att-class-sub { font-size: 13px; color: var(--muted); }
+.att-pill { flex: 0 0 auto; font-size: 11px; font-weight: 700; padding: 4px 8px; border-radius: 999px; white-space: nowrap; }
+.att-pill-todo { background: #3A3210; color: var(--accent); }
+.att-pill-done { background: #12301F; color: #7CE0A6; }
+.att-link { align-self: flex-start; background: none; border: 0; padding: 4px 0; color: var(--accent); font-family: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+.att-title { margin: 4px 0 0; font-family: var(--font-display); font-weight: 400; font-size: 26px; text-transform: uppercase; line-height: 1.1; }
+.att-dates { display: flex; gap: 8px; flex-wrap: wrap; }
+.att-date { padding: 8px 12px; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: var(--muted); font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.att-date.is-on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 700; }
+.att-date.is-future { border-style: dashed; color: #5C5C66; cursor: default; font-weight: 400; }
+.att-help { background: #17150A; border: 1px solid var(--accent); border-radius: 12px; padding: 12px 14px; font-size: 14px; line-height: 1.5; }
+.att-yes { color: #7CE0A6; }
+.att-no { color: #FF8A8A; }
+.att-people { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; }
+.att-person { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 56px; padding: 0 12px 0 14px; border-bottom: 1px solid var(--line-soft); }
+.att-person:last-child { border-bottom: 0; }
+.att-name { font-size: 15px; min-width: 0; overflow-wrap: anywhere; }
+.att-name.is-missed { color: var(--muted); }
+.att-toggle { flex: 0 0 auto; display: flex; gap: 3px; padding: 3px; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; }
+.att-opt { height: 38px; padding: 0 12px; border: 0; border-radius: 8px; background: transparent; color: var(--faint); font-family: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+.att-opt.is-yes { background: #12301F; color: #7CE0A6; }
+.att-opt.is-no { background: #3A1414; color: #FF8A8A; }
+.att-summary { text-align: center; color: var(--muted); font-size: 14px; }
+.att-done { height: 50px; border: 0; border-radius: 10px; background: var(--accent); color: var(--on-accent); font-family: inherit; font-weight: 700; font-size: 15px; cursor: pointer; }
+.att-done:disabled { opacity: 0.6; }
+.att-tag { display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; vertical-align: middle; }

@@ -1065,6 +1065,78 @@ test('home page uses the same class cards', async () => {
     assert.ok(js.includes('cc-combo'), 'combos use it too');
 });
 
+test('attendance: mark No show, progress counts attended only, helpers limited to 7 days', async () => {
+    const day = (n) => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
+    const created = await api('POST', '/api/courses', {
+        name: `Attendance Class ${unique}`, course_type: 'multi-week', session_dates: [day(-12), day(-4), day(-2), day(7)],
+        slots: [{ slot_name: 'Main', difficulty_level: 'All Levels', capacity: 10, start_time: '18:00', end_time: '19:00', location: 'Att Studio', pricing: { full_package: 40 } }]
+    }, { admin: true });
+    assert.equal(created.status, 200, JSON.stringify(created.body));
+    const cid = created.body.courseId || created.body.id;
+    const email = `att.${unique}@example.com`;
+    const reg = await api('POST', '/api/register', { first_name: 'Atte', last_name: 'Ndance', email, course_id: cid, payment_amount: 40 });
+    assert.equal(reg.status, 200, JSON.stringify(reg.body));
+    const regId = reg.body.registrationId;
+
+    // Needs a sign-in
+    assert.equal((await api('GET', '/api/attendance/classes')).status, 401);
+    const list = await api('GET', '/api/attendance/classes', null, { admin: true });
+    const row = list.body.classes.find(c => Number(c.course_id) === Number(cid));
+    assert.ok(row, 'class listed');
+    assert.equal(row.date, day(-2), 'latest past date');
+    assert.equal(row.registered, 1);
+    assert.equal(row.checked, null);
+
+    const sess = await api('GET', `/api/attendance/course/${cid}?date=${day(-4)}`, null, { admin: true });
+    assert.equal(sess.status, 200, JSON.stringify(sess.body));
+    assert.deepEqual(sess.body.dates.map(d => d.date), [day(-12), day(-4), day(-2)], 'admin sees every past date');
+    assert.equal(sess.body.people.length, 1);
+    assert.equal(sess.body.people[0].no_show, false, 'everyone starts as attended');
+
+    const before = (await api('POST', '/api/my/profile', { email })).body.progress.goumo.attended;
+    const mark = await api('PUT', `/api/attendance/course/${cid}/mark`, { date: day(-4), registration_id: regId, no_show: true }, { admin: true });
+    assert.equal(mark.status, 200, JSON.stringify(mark.body));
+    const mine = (await api('POST', '/api/my/profile', { email })).body;
+    assert.equal(mine.progress.goumo.attended, before - 1, 'a No show does not count as attended');
+    assert.deepEqual(mine.registrations.find(r => Number(r.id) === Number(regId)).no_show_dates, [day(-4)], 'tagged on My classes');
+    assert.equal(mine.attendance, undefined, 'students never get the admin numbers');
+
+    const prof = await api('GET', `/api/admin/students/${mine.student.id}`, null, { admin: true });
+    assert.deepEqual(prof.body.attendance, { attended: 2, no_shows: 1, pct: 67 });
+    const sum = await api('GET', '/api/attendance/summary', null, { admin: true });
+    assert.equal(sum.body.courses[cid].no_shows, 1);
+
+    // Future dates can't be marked; "Done" records the check
+    assert.equal((await api('PUT', `/api/attendance/course/${cid}/mark`, { date: day(7), registration_id: regId, no_show: true }, { admin: true })).status, 403);
+    assert.equal((await api('POST', `/api/attendance/course/${cid}/check`, { date: day(-2) }, { admin: true })).status, 200);
+    const after = (await api('GET', '/api/attendance/classes', null, { admin: true })).body.classes.find(c => Number(c.course_id) === Number(cid));
+    assert.ok(after.checked && after.checked.by === 'admin', 'checked by admin');
+
+    // Helpers: last 7 days only, and no numbers
+    const helper = `att.helper.${unique}@example.com`;
+    let cookie = '';
+    const as = async (method, url, body) => {
+        const res = await fetch(BASE + url, { method, headers: { 'Content-Type': 'application/json', ...(cookie ? { Cookie: cookie } : {}) }, body: body ? JSON.stringify(body) : undefined });
+        const set = res.headers.get('set-cookie'); if (set) cookie = set.split(';')[0];
+        const text = await res.text(); let json; try { json = JSON.parse(text); } catch { json = text; }
+        return { status: res.status, body: json };
+    };
+    await api('POST', '/api/admin/team-members', { email: helper }, { admin: true });
+    await as('POST', '/api/lite/check-email', { email: helper });
+    assert.equal((await as('POST', '/api/lite/set-password', { email: helper, password: 'helper-pass-2' })).status, 200);
+    const hs = await as('GET', `/api/attendance/course/${cid}`);
+    assert.equal(hs.status, 200, JSON.stringify(hs.body));
+    assert.deepEqual(hs.body.dates.map(d => d.date), [day(-4), day(-2)], 'helper sees the last 7 days');
+    assert.equal((await as('PUT', `/api/attendance/course/${cid}/mark`, { date: day(-12), registration_id: regId, no_show: true })).status, 403, 'too old for helpers');
+    assert.equal((await as('PUT', `/api/attendance/course/${cid}/mark`, { date: day(-4), registration_id: regId, no_show: false })).status, 200, 'helper can undo');
+    assert.equal((await as('GET', '/api/attendance/summary')).status, 401, 'numbers are main admin only');
+    const back = (await api('POST', '/api/my/profile', { email })).body.progress.goumo.attended;
+    assert.equal(back, before, 'undo counts it again');
+
+    const page = await (await fetch(`${BASE}/js/attendance.js`)).text();
+    assert.ok(page.includes('>Attended</button>') && page.includes('>No show</button>'), 'Attended / No show buttons');
+});
+
 test('removed features are gone', async () => {
     for (const [method, url] of [
         ['POST', '/api/competition/register'],
