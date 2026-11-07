@@ -559,7 +559,19 @@ class EmailProfileRegistrationApp {
         const pics = this.instructorPics(course.instructor);
 
         let action;
-        if (isRegistered) action = '<div class="cc-state cc-done"><i class="fas fa-check-circle"></i> You\'re registered · Confirmed</div>';
+        if (isRegistered) {
+            action = '<div class="cc-state cc-done"><i class="fas fa-check-circle"></i> You\'re registered · Confirmed</div>';
+            // Free class: "Can't make it?" gives the spot to the next person on the waitlist (confirm inside the card)
+            if (C.isFree(course) && course.registration_id) {
+                action += `<button type="button" class="cc-cant" data-cant="${Number(course.registration_id)}">Can't make it?</button>
+                    <div class="cc-cant-box" hidden>
+                        <p>Give up your spot? It goes to the next person on the waitlist. You can't undo this.</p>
+                        <p class="cc-cant-msg" hidden></p>
+                        <button type="button" class="cc-btn" data-cant-yes="${Number(course.registration_id)}">Yes, give up my spot</button>
+                        <button type="button" class="cc-btn cc-btn-outline" data-cant-no>Keep my spot</button>
+                    </div>`;
+            }
+        }
         else if (isPending) action = '<div class="cc-state cc-pending"><i class="fas fa-clock"></i> Registered · checking payment</div>';
         else if (isClosed) action = '<div class="cc-state cc-closed">Registration closed</div>';
         else if (isFull && !tester) action = `<button type="button" class="cc-btn cc-btn-outline" onclick="app.selectCourse(${Number(course.id)})">Join waitlist</button>`;
@@ -751,6 +763,29 @@ class EmailProfileRegistrationApp {
         this.scrollToTop();
     }
 
+    // "Can't make it?" on a registered free class card
+    async cantMakeIt(button) {
+        const card = button.closest('.class-card-v2');
+        const msg = card.querySelector('.cc-cant-msg');
+        button.disabled = true;
+        try {
+            const res = await fetch('/api/my/cant-make-it', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: this.currentEmail, registration_id: Number(button.dataset.cantYes) })
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || 'Something went wrong');
+            card.querySelector('.cc-cant-box').outerHTML = '<p class="cc-gave-up">You\'ve given up your spot. We\'ve offered it to the next person on the waitlist. Thanks for letting us know!</p>';
+            const done = card.querySelector('.cc-done');
+            if (done) done.remove();
+            card.classList.remove('is-done');
+        } catch (e) {
+            msg.textContent = e.message || 'Could not reach GouMo. Try again.';
+            msg.hidden = false;
+            button.disabled = false;
+        }
+    }
+
     // Utility methods
     hideAllSections() {
         const sections = [
@@ -819,4 +854,13 @@ class EmailProfileRegistrationApp {
 // Initialize the app when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
     window.app = new EmailProfileRegistrationApp();
+    // "Can't make it?" on class cards: open the confirm box, keep, or give up the spot
+    document.addEventListener('click', (e) => {
+        const open = e.target.closest('[data-cant]');
+        if (open) { open.hidden = true; open.nextElementSibling.hidden = false; return; }
+        const no = e.target.closest('[data-cant-no]');
+        if (no) { const box = no.closest('.cc-cant-box'); box.hidden = true; box.previousElementSibling.hidden = false; return; }
+        const yes = e.target.closest('[data-cant-yes]');
+        if (yes) window.app.cantMakeIt(yes);
+    });
 });

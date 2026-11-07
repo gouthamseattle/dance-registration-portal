@@ -239,3 +239,11 @@ a:hover { color: #fff; }
 .att-done { height: 50px; border: 0; border-radius: 10px; background: var(--accent); color: var(--on-accent); font-family: inherit; font-weight: 700; font-size: 15px; cursor: pointer; }
 .att-done:disabled { opacity: 0.6; }
 .att-tag { display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; vertical-align: middle; }
+
+/* "Can't make it?" on a registered free class card (sign-in / crew class list) */
+.cc-cant { align-self: center; background: none; border: 0; padding: 4px 0 0; color: #FF8A8A; font-family: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+.cc-cant[hidden], .cc-cant-box[hidden], .cc-cant-msg[hidden] { display: none; }
+.cc-cant-box { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--line-soft); padding-top: 12px; }
+.cc-cant-box p { margin: 0; font-size: 14px; line-height: 1.5; color: var(--text-2); }
+.cc-cant-box .cc-cant-msg { color: #FF8A8A; }
+.cc-gave-up { margin: 0; font-size: 14px; line-height: 1.5; color: var(--muted); }

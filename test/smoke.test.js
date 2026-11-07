@@ -1207,6 +1207,8 @@ test("free class: Can't make it frees the spot; offers keep or lose place; late 
     }
     const js = await (await fetch(`${BASE}/js/my.js`)).text();
     assert.ok(js.includes("Can't make it?") && js.includes('/api/my/cant-make-it'), "Can't make it on My classes");
+    const list2 = await (await fetch(`${BASE}/js/email-profile-registration.js`)).text();
+    assert.ok(list2.includes('data-cant-yes') && list2.includes('/api/my/cant-make-it'), "Can't make it on the class list cards too");
 });
 
 test('removed features are gone', async () => {
