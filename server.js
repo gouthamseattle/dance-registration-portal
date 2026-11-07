@@ -12,7 +12,7 @@ const DatabaseConfig = require('./database-config');
 const { initializeDatabase } = require('./database/initialize');
 
 // Import utilities
-const { sendRegistrationConfirmationEmail, sendWaitlistNotificationEmail, sendWaitlistMissedEmail, sendEmailWithFallback, verifyEmailTransport, emailMethod } = require('./utils/mailer');
+const { sendRegistrationConfirmationEmail, sendWaitlistNotificationEmail, sendWaitlistMissedEmail, sendSimpleEmail, sendEmailWithFallback, verifyEmailTransport, emailMethod } = require('./utils/mailer');
 const { fetchCourseWithSlots } = require('./utils/schedule');
 const { getCourseAvailability, formatLocalDate, formatLocalDateShort } = require('./utils/courseAvailability');
 
@@ -3110,7 +3110,7 @@ async function heldSpots(courseId) {
     const row = await dbConfig.get(`
         SELECT COUNT(*) AS n FROM waitlist w
         WHERE w.course_id = $1 AND (
-            (w.status = 'notified' AND w.notification_expires_at > $2)
+            (w.status = 'notified' AND w.notification_expires_at > $2 AND w.spot_offer_id IS NULL)
             OR (w.status = 'registered' AND EXISTS (
                 SELECT 1 FROM registrations r WHERE r.id = w.registration_id AND r.payment_status = 'pending'))
         )
@@ -3125,7 +3125,7 @@ function siteUrl(req) {
 }
 
 // Email one waitlist entry a personal link and hold a spot for them
-async function offerSpot(entryId, req, hours) {
+async function offerSpot(entryId, req, hours, spotOffer) {
     const entry = await dbConfig.get(`
         SELECT w.*, s.first_name, s.last_name, s.email, c.name AS course_name
         FROM waitlist w JOIN students s ON s.id = w.student_id JOIN courses c ON c.id = w.course_id
@@ -3140,10 +3140,30 @@ async function offerSpot(entryId, req, hours) {
     const heldFor = Math.max(0.5, Math.round((expiresAt - Date.now()) / 1800000) / 2);
     await dbConfig.run(`
         UPDATE waitlist SET notification_sent = ${dbConfig.isProduction ? 'true' : '1'}, notification_sent_at = CURRENT_TIMESTAMP,
-               notification_expires_at = $1, payment_link_token = $2, status = 'notified', link_opened_at = NULL, updated_at = CURRENT_TIMESTAMP
+               notification_expires_at = $1, payment_link_token = $2, status = 'notified', link_opened_at = NULL,
+               spot_offer_id = $4, updated_at = CURRENT_TIMESTAMP
         WHERE id = $3
-    `, [expiresAt.toISOString(), token, entryId]);
+    `, [expiresAt.toISOString(), token, entryId, spotOffer ? spotOffer.id : null]);
     const registrationUrl = `${siteUrl(req)}/waitlist-register/${token}`;
+    if (spotOffer) {
+        // A student is offering their paid spot: the person pays them directly
+        try {
+            if (await emailsOn()) {
+                const until = expiresAt.toLocaleString('en-US', { timeZone: 'America/Los_Angeles', weekday: 'short', hour: 'numeric', minute: '2-digit' });
+                await sendSimpleEmail(entry.email, {
+                    subject: `A spot opened in ${entry.course_name}`,
+                    paragraphs: [
+                        `Hi ${escapeHtml(entry.first_name || 'there')},`,
+                        `Another student can't make <strong>${escapeHtml(entry.course_name)}</strong> (${escapeHtml(await classWhen(entry.course_id))}) and is offering their spot for <strong>$${Number(spotOffer.amount).toFixed(0)}</strong>, paid to them directly on Venmo.`,
+                        `It's held for you until <strong>${escapeHtml(until)}</strong> (about ${heldFor} hours).`
+                    ],
+                    button: { url: registrationUrl, label: 'Claim the spot' },
+                    footer: "If you don't claim it in time, it goes to the next person on the waitlist. If you never open this link, you move to the end of the waitlist."
+                });
+            }
+        } catch (err) { console.error('❌ Spot offer email failed:', err.message || err); }
+        return { id: entryId, email: entry.email, registration_url: registrationUrl, expires_at: expiresAt.toISOString() };
+    }
     try {
         const { schedule_info } = await fetchCourseWithSlots(dbConfig, entry.course_id);
         const price = await dbConfig.get(`
@@ -3194,14 +3214,16 @@ async function offerOpenSpots(courseId, req, skipIds) {
 // Offers whose time ran out: mark expired and move on to the next person
 async function expireWaitlistOffers() {
     const expired = await dbConfig.all(`
-        SELECT w.id, w.course_id, w.link_opened_at, s.email, s.first_name, s.last_name, c.name AS course_name
+        SELECT w.id, w.course_id, w.link_opened_at, w.spot_offer_id, s.email, s.first_name, s.last_name, c.name AS course_name
         FROM waitlist w JOIN students s ON s.id = w.student_id JOIN courses c ON c.id = w.course_id
         WHERE w.status = 'notified' AND w.notification_expires_at <= $1
     `, [new Date().toISOString()]);
     const courses = new Set();
+    const spotOffers = new Set();
     const justExpired = new Set();
     for (const e of expired) {
         justExpired.add(Number(e.id));
+        await dbConfig.run('UPDATE waitlist SET spot_offer_id = NULL WHERE id = $1', [e.id]);
         // Opened the link: keeps their place (first in line). Never opened it: end of the line.
         await placeInLine(e.id, e.course_id, !!e.link_opened_at);
         if (!e.link_opened_at) {
@@ -3212,21 +3234,23 @@ async function expireWaitlistOffers() {
                 }
             } catch (err) { console.error('❌ Missed-offer email failed:', err.message || err); }
         }
-        courses.add(e.course_id);
+        if (e.spot_offer_id) spotOffers.add(Number(e.spot_offer_id)); else courses.add(e.course_id);
     }
     for (const courseId of courses) await offerOpenSpots(courseId, null, justExpired);
+    for (const offerId of spotOffers) await offerNextForSpot(offerId, null, justExpired);
     return expired.length;
 }
 // Check every 10 minutes while the server is running
 setInterval(() => { expireWaitlistOffers().catch(err => console.error('waitlist expiry check failed:', err.message || err)); }, 10 * 60 * 1000).unref();
 
 // A valid, unexpired offer for this class (and this student, when an email is given)
-async function validWaitlistOffer(token, courseId, email) {
+async function validWaitlistOffer(token, courseId, email, allowSpot) {
     if (!token) return null;
     const offer = await dbConfig.get(`
-        SELECT w.id, w.course_id, w.notification_expires_at, s.email
+        SELECT w.id, w.course_id, w.notification_expires_at, w.spot_offer_id, w.student_id, s.email, s.first_name, s.last_name
         FROM waitlist w JOIN students s ON s.id = w.student_id
         WHERE w.payment_link_token = $1 AND w.status = 'notified'
+          ${allowSpot ? '' : 'AND w.spot_offer_id IS NULL'}
     `, [String(token)]);
     if (!offer || new Date(offer.notification_expires_at) <= new Date()) return null;
     if (courseId && Number(offer.course_id) !== Number(courseId)) return null;
@@ -3252,7 +3276,9 @@ app.get('/waitlist-register/:token', asyncHandler(async (req, res) => {
         SELECT w.id, w.course_id, w.status, c.name AS course_name FROM waitlist w JOIN courses c ON c.id = w.course_id
         WHERE w.payment_link_token = $1`, [token]) : null;
     if (entry) await dbConfig.run('UPDATE waitlist SET link_opened_at = CURRENT_TIMESTAMP WHERE id = $1', [entry.id]);
-    const offer = await validWaitlistOffer(token);
+    const offer = await validWaitlistOffer(token, null, null, true);
+    // Someone's paid spot on offer: the pay-the-student page
+    if (offer && offer.spot_offer_id) return res.redirect(`/spot.html?t=${encodeURIComponent(token)}`);
     // The link always signs in as the person the spot is held for (not whoever this phone remembers)
     if (offer) return res.redirect(`/email-profile.html?course=${encodeURIComponent(offer.course_id)}&waitlist=${encodeURIComponent(token)}&for=${encodeURIComponent(offer.email)}`);
 
@@ -3264,7 +3290,10 @@ app.get('/waitlist-register/:token', asyncHandler(async (req, res) => {
     }
     // Late tap: settle any offers that ran out (theirs counts as opened, so they keep their place)
     await expireWaitlistOffers();
-    const fresh = await dbConfig.get('SELECT w.status, w.payment_link_token, s.email FROM waitlist w JOIN students s ON s.id = w.student_id WHERE w.id = $1', [entry.id]);
+    const fresh = await dbConfig.get('SELECT w.status, w.payment_link_token, w.spot_offer_id, s.email FROM waitlist w JOIN students s ON s.id = w.student_id WHERE w.id = $1', [entry.id]);
+    if (fresh && fresh.status === 'notified' && fresh.spot_offer_id && await validWaitlistOffer(fresh.payment_link_token, null, null, true)) {
+        return res.redirect(`/spot.html?t=${encodeURIComponent(fresh.payment_link_token)}`);
+    }
     if (fresh && fresh.status === 'registered') return res.redirect('/my');
     // Already offered a new spot (they were first in line): send them straight to it
     if (fresh && fresh.status === 'notified' && await validWaitlistOffer(fresh.payment_link_token)) {
@@ -3311,6 +3340,287 @@ app.post('/api/my/cant-make-it', asyncHandler(async (req, res) => {
     console.log('🙋 Free spot given up', { registration_id: reg.id, course_id: reg.course_id, offered: offered.length });
     res.json({ success: true, offered: offered.length });
 }));
+
+// ===================== Offer my spot (paid classes) =====================
+// A student who paid for a class can offer their spot when someone is on that class's
+// waitlist. They confirm by email first (sign-in is email-only). The waitlist is offered
+// the spot one person at a time (same hold and 30-minute cutoff as other offers). The taker
+// pays the giver directly on Venmo and taps "I've paid": the spot moves straight away.
+// If the giver says the money didn't arrive, the admin is alerted and can undo the transfer.
+// Not for free classes ("Can't make it"), combos, crew practices, or series that have started.
+async function emailsOn() {
+    const row = await dbConfig.get('SELECT setting_value FROM system_settings WHERE setting_key = $1', ['email_notifications_enabled']);
+    return !!(row && row.setting_value === 'true');
+}
+async function classWhen(courseId) {
+    const start = await nextClassStart(courseId);
+    return start ? start.toLocaleString('en-US', { timeZone: 'America/Los_Angeles', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
+}
+const fullName = (r) => [r && r.first_name, r && r.last_name].filter(Boolean).join(' ').trim();
+const OPEN_OFFER = "('pending_confirm', 'live')";
+async function adminNotice(subject, paragraphs) {
+    const to = process.env.ADMIN_NOTIFY_EMAIL || process.env.GMAIL_USER;
+    if (!to) return;
+    try { await sendSimpleEmail(to, { subject, paragraphs }); } catch (err) { console.error('❌ Admin notice failed:', err.message || err); }
+}
+async function waitingCount(courseId) {
+    const row = await dbConfig.get("SELECT COUNT(*) AS n FROM waitlist WHERE course_id = $1 AND status = 'active'", [courseId]);
+    return Number(row?.n) || 0;
+}
+// Why this registration can't be offered (null = it can). byCourse: allClassDates() result, if already loaded
+async function spotOfferProblem(reg, byCourse) {
+    if (!reg || reg.payment_status !== 'completed') return 'Only paid, confirmed registrations can be offered';
+    if (reg.combo_group) return 'Combo registrations can\'t be offered';
+    const course = await dbConfig.get('SELECT course_type FROM courses WHERE id = $1', [reg.course_id]);
+    if (!course || course.course_type === 'crew_practice') return 'Crew practices can\'t be offered';
+    if (await isFreeCourse(reg.course_id)) return 'Free classes use "Can\'t make it"';
+    const dates = ((byCourse || await allClassDates('', '0000-00-00'))[reg.course_id] || {}).dates || [];
+    const slot = await dbConfig.get('SELECT start_time FROM course_slots WHERE course_id = $1 ORDER BY id LIMIT 1', [reg.course_id]);
+    const first = dates.length ? seattleTime(dates[0], slot && slot.start_time) : null;
+    if (!first || first.getTime() - OFFER_CUTOFF_MINUTES * 60000 <= Date.now()) return 'This class has started or starts within 30 minutes';
+    if (!(await waitingCount(reg.course_id))) return 'Nobody is on the waitlist for this class, so the spot can\'t be offered right now';
+    return null;
+}
+async function spotOffer(id) {
+    return dbConfig.get(`
+        SELECT so.*, r.payment_status AS reg_status, s.first_name, s.last_name, s.email, c.name AS course_name
+        FROM spot_offers so JOIN registrations r ON r.id = so.registration_id
+        JOIN students s ON s.id = so.student_id JOIN courses c ON c.id = so.course_id
+        WHERE so.id = $1`, [id]);
+}
+async function closeSpotOffer(offer, why) {
+    await dbConfig.run("UPDATE spot_offers SET status = 'closed', closed_at = CURRENT_TIMESTAMP WHERE id = $1", [offer.id]);
+    if (why && offer.reg_status === 'completed' && await emailsOn()) {
+        try {
+            await sendSimpleEmail(offer.email, {
+                subject: `Nobody took your spot in ${offer.course_name}`,
+                paragraphs: [`Hi ${escapeHtml(offer.first_name || 'there')},`,
+                    `${why === 'cutoff' ? "It's nearly class time" : 'Everyone on the waitlist has had their turn'}, so your offer for <strong>${escapeHtml(offer.course_name)}</strong> has closed. Your spot is still yours, so come if you can!`]
+            });
+        } catch (err) { console.error('❌ Offer-closed email failed:', err.message || err); }
+    }
+    return null;
+}
+// Offer a live spot offer to the next person on the waitlist (skipIds: whose turn just ran out)
+async function offerNextForSpot(offerId, req, skipIds) {
+    const offer = await spotOffer(offerId);
+    if (!offer || offer.status !== 'live') return null;
+    if (offer.reg_status !== 'completed') return closeSpotOffer(offer, null);
+    const cutoff = await offerCutoff(offer.course_id);
+    if (!cutoff || cutoff <= new Date()) return closeSpotOffer(offer, 'cutoff');
+    const skip = new Set([...(skipIds || [])].map(Number));
+    const line = await dbConfig.all("SELECT id FROM waitlist WHERE course_id = $1 AND status = 'active' ORDER BY waitlist_position ASC, created_at ASC", [offer.course_id]);
+    const next = line.find(e => !skip.has(Number(e.id)));
+    if (!next) return closeSpotOffer(offer, 'nobody');
+    return offerSpot(next.id, req, null, offer);
+}
+// The student's own registration (email-only sign-in, like My classes)
+async function ownRegistration(email, regId) {
+    return dbConfig.get(`
+        SELECT r.id, r.course_id, r.student_id, r.payment_status, r.payment_amount, r.combo_group, s.first_name, s.email, c.name AS course_name
+        FROM registrations r JOIN students s ON s.id = r.student_id JOIN courses c ON c.id = r.course_id
+        WHERE r.id = $1 AND LOWER(s.email) = $2`, [Number(regId) || 0, String(email || '').trim().toLowerCase()]);
+}
+
+// Student: offer my spot (sends a confirm link; nothing happens until it's tapped)
+app.post('/api/my/offer-spot', asyncHandler(async (req, res) => {
+    const { email, registration_id } = req.body || {};
+    const venmo = String((req.body || {}).venmo || '').trim().replace(/^@/, '');
+    const reg = await ownRegistration(email, registration_id);
+    if (!reg) return res.status(404).json({ error: 'Registration not found' });
+    if (!/^[A-Za-z0-9_-]{2,30}$/.test(venmo)) return res.status(400).json({ error: 'Enter your Venmo username (letters, numbers, - or _)' });
+    const problem = await spotOfferProblem(reg);
+    if (problem) return res.status(400).json({ error: problem });
+    if (await dbConfig.get(`SELECT id FROM spot_offers WHERE registration_id = $1 AND status = 'live'`, [reg.id])) {
+        return res.status(400).json({ error: 'Your spot is already on offer' });
+    }
+    await dbConfig.run(`UPDATE spot_offers SET status = 'withdrawn', closed_at = CURRENT_TIMESTAMP WHERE registration_id = $1 AND status = 'pending_confirm'`, [reg.id]);
+    const token = require('crypto').randomBytes(24).toString('hex');
+    await dbConfig.run(`INSERT INTO spot_offers (registration_id, course_id, student_id, venmo, amount, status, confirm_token)
+        VALUES ($1, $2, $3, $4, $5, 'pending_confirm', $6)`, [reg.id, reg.course_id, reg.student_id, venmo, Number(reg.payment_amount) || 0, token]);
+    const url = `${siteUrl(req)}/spot-offer/${token}`;
+    try {
+        await sendSimpleEmail(reg.email, {
+            subject: `Confirm: offer your spot in ${reg.course_name}`,
+            paragraphs: [`Hi ${escapeHtml(reg.first_name || 'there')},`,
+                `Tap below to offer your spot in <strong>${escapeHtml(reg.course_name)}</strong> to the waitlist for <strong>$${Number(reg.payment_amount).toFixed(0)}</strong>, paid to you on Venmo (@${escapeHtml(venmo)}).`,
+                'Your spot stays yours until someone pays you. Didn\'t ask for this? Just ignore this email.'],
+            button: { url, label: 'Offer my spot' }
+        });
+    } catch (err) {
+        console.error('❌ Offer confirm email failed:', err.message || err);
+        if (process.env.NODE_ENV === 'production') return res.status(500).json({ error: 'Could not send the confirm email. Please try again later.' });
+    }
+    res.json({ success: true });
+}));
+
+// The confirm link from that email: a page with a button (email apps may open links on their own, so GET changes nothing)
+app.get('/spot-offer/:token', asyncHandler(async (req, res) => {
+    res.set('Cache-Control', 'no-cache');
+    const o = await dbConfig.get(`SELECT so.id, so.status, so.amount, so.venmo, c.name AS course_name FROM spot_offers so JOIN courses c ON c.id = so.course_id WHERE so.confirm_token = $1`, [String(req.params.token)]);
+    if (!o) return res.status(404).send(offerPage('Link not found', 'This link is not valid. Open My classes to offer your spot again.', { href: '/my', label: 'My classes' }));
+    if (o.status === 'live') return res.send(offerPage('Your spot is on offer', `We've offered your spot in ${escapeHtml(o.course_name)} to the waitlist. It stays yours, and you can still come, until someone pays you $${Number(o.amount).toFixed(0)} on Venmo.`, { href: '/my', label: 'My classes' }));
+    if (o.status !== 'pending_confirm') return res.status(410).send(offerPage('This offer has ended', 'Open My classes to see your classes.', { href: '/my', label: 'My classes' }));
+    res.send(offerPage('Offer your spot?', `${escapeHtml(o.course_name)}: the next person on the waitlist pays you <strong>$${Number(o.amount).toFixed(0)}</strong> on Venmo (@${escapeHtml(o.venmo)}). Your spot stays yours until they pay.</p>
+        <form method="post" action="/spot-offer/${escapeHtml(req.params.token)}/confirm"><button class="btn btn-primary" type="submit">Yes, offer my spot</button></form><p>`));
+}));
+app.post('/spot-offer/:token/confirm', asyncHandler(async (req, res) => {
+    res.set('Cache-Control', 'no-cache');
+    const o = await dbConfig.get('SELECT id, registration_id, status FROM spot_offers WHERE confirm_token = $1', [String(req.params.token)]);
+    if (!o || o.status !== 'pending_confirm') return res.redirect(303, `/spot-offer/${encodeURIComponent(req.params.token)}`);
+    const reg = await dbConfig.get('SELECT id, course_id, payment_status, combo_group FROM registrations WHERE id = $1', [o.registration_id]);
+    const problem = await spotOfferProblem(reg);
+    if (problem) {
+        await dbConfig.run("UPDATE spot_offers SET status = 'closed', closed_at = CURRENT_TIMESTAMP WHERE id = $1", [o.id]);
+        return res.status(400).send(offerPage('Your spot can\'t be offered right now', escapeHtml(problem), { href: '/my', label: 'My classes' }));
+    }
+    await dbConfig.run("UPDATE spot_offers SET status = 'live', confirmed_at = CURRENT_TIMESTAMP WHERE id = $1", [o.id]);
+    await offerNextForSpot(o.id, req);
+    res.redirect(303, `/spot-offer/${encodeURIComponent(req.params.token)}`);
+}));
+
+// Student: take my offer back (before anyone has paid)
+app.post('/api/my/offer-spot/withdraw', asyncHandler(async (req, res) => {
+    const reg = await ownRegistration((req.body || {}).email, (req.body || {}).registration_id);
+    if (!reg) return res.status(404).json({ error: 'Registration not found' });
+    const o = await dbConfig.get(`SELECT id FROM spot_offers WHERE registration_id = $1 AND status IN ${OPEN_OFFER}`, [reg.id]);
+    if (!o) return res.status(400).json({ error: 'No open offer for this class' });
+    await dbConfig.run("UPDATE spot_offers SET status = 'withdrawn', closed_at = CURRENT_TIMESTAMP WHERE id = $1", [o.id]);
+    // Whoever was being offered it goes back to the front of the line
+    const held = await dbConfig.all("SELECT id, course_id FROM waitlist WHERE spot_offer_id = $1 AND status = 'notified'", [o.id]);
+    for (const w of held) {
+        await dbConfig.run('UPDATE waitlist SET spot_offer_id = NULL, payment_link_token = NULL WHERE id = $1', [w.id]);
+        await placeInLine(w.id, w.course_id, true);
+    }
+    res.json({ success: true });
+}));
+
+// The pay page (/spot.html?t=…) for the person on the waitlist
+async function spotForToken(token) {
+    const w = await validWaitlistOffer(token, null, null, true);
+    if (!w || !w.spot_offer_id) return null;
+    const offer = await spotOffer(w.spot_offer_id);
+    if (!offer || offer.status !== 'live' || offer.reg_status !== 'completed') return null;
+    return { w, offer };
+}
+app.get('/api/spot/:token', asyncHandler(async (req, res) => {
+    const found = await spotForToken(req.params.token);
+    if (!found) return res.status(410).json({ error: 'This offer has expired or is no longer available.' });
+    const { w, offer } = found;
+    const slot = await dbConfig.get('SELECT location FROM course_slots WHERE course_id = $1 ORDER BY id LIMIT 1', [offer.course_id]);
+    res.json({
+        course_name: offer.course_name, when: await classWhen(offer.course_id), location: (slot && slot.location) || '',
+        amount: Number(offer.amount), venmo: offer.venmo, giver: offer.first_name || 'the other student',
+        you: w.first_name || '', email: w.email, expires_at: w.notification_expires_at
+    });
+}));
+app.post('/api/spot/:token/paid', asyncHandler(async (req, res) => {
+    const found = await spotForToken(req.params.token);
+    if (!found) return res.status(410).json({ error: 'This offer has expired or is no longer available.' });
+    const { w, offer } = found;
+    // Move the spot. The taker's registration carries the amount (paid to the giver), the giver's is
+    // cancelled, so revenue still counts the class once.
+    const ins = await dbConfig.run(`
+        INSERT INTO registrations (student_id, course_id, payment_amount, payment_status, payment_method, registration_type, handled_by)
+        VALUES ($1, $2, $3, 'completed', 'Transfer', 'transfer', 'transfer')
+        ${dbConfig.isProduction ? 'RETURNING id' : ''}`, [w.student_id, offer.course_id, Number(offer.amount)]);
+    const newId = dbConfig.isProduction ? ins[0]?.id : ins.lastID;
+    await dbConfig.run(`UPDATE registrations SET payment_status = 'canceled', canceled_at = CURRENT_TIMESTAMP, cancellation_reason = $1,
+        handled_by = 'transfer', updated_at = CURRENT_TIMESTAMP WHERE id = $2`, [`Transferred to ${fullName(w) || w.email}`, offer.registration_id]);
+    await dbConfig.run("UPDATE waitlist SET status = 'registered', registration_id = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2", [newId, w.id]);
+    await dbConfig.run(`UPDATE spot_offers SET status = 'transferred', transferred_at = CURRENT_TIMESTAMP, taker_student_id = $1, taker_registration_id = $2 WHERE id = $3`,
+        [w.student_id, newId, offer.id]);
+    await renumberWaitlist(offer.course_id);
+    console.log('🔁 Spot transferred', { offer: offer.id, from: offer.registration_id, to: newId });
+    if (await emailsOn()) {
+        try {
+            const details = await registrationEmailDetails(newId);
+            if (details) await sendRegistrationConfirmationEmail(details.email, details);
+        } catch (err) { console.error('❌ Transfer confirmation email failed:', err.message || err); }
+        try {
+            await sendSimpleEmail(offer.email, {
+                subject: `Your spot went to ${w.first_name || 'someone on the waitlist'}: please check Venmo`,
+                paragraphs: [`Hi ${escapeHtml(offer.first_name || 'there')},`,
+                    `${escapeHtml(fullName(w) || 'The next person')} says they sent you <strong>$${Number(offer.amount).toFixed(0)}</strong> on Venmo, so your spot in <strong>${escapeHtml(offer.course_name)}</strong> is now theirs. Thanks for passing it on!`,
+                    "Please check Venmo. If the money didn't arrive, open My classes and tap \"I didn't get paid\", and Goutham will sort it out."],
+                button: { url: `${siteUrl(req)}/my`, label: 'My classes' }
+            });
+        } catch (err) { console.error('❌ Transfer email failed:', err.message || err); }
+        await adminNotice(`Spot transferred: ${fullName(offer) || offer.email} → ${fullName(w) || w.email}`, [
+            `${escapeHtml(offer.course_name)}: ${escapeHtml(fullName(w) || w.email)} says they paid ${escapeHtml(fullName(offer) || offer.email)} $${Number(offer.amount).toFixed(0)} directly on Venmo.`,
+            "Nothing to do unless the student reports the money didn't arrive (you'll get a separate alert)."]);
+    }
+    res.json({ success: true, registration_id: newId });
+}));
+
+// Student who gave the spot: "I didn't get paid" (alerts the admin)
+app.post('/api/my/offer-spot/dispute', asyncHandler(async (req, res) => {
+    const reg = await ownRegistration((req.body || {}).email, (req.body || {}).registration_id);
+    if (!reg) return res.status(404).json({ error: 'Registration not found' });
+    const o = await dbConfig.get(`SELECT so.id, so.amount, so.disputed_at, s.first_name, s.last_name, s.email FROM spot_offers so
+        LEFT JOIN students s ON s.id = so.taker_student_id WHERE so.registration_id = $1 AND so.status = 'transferred'`, [reg.id]);
+    if (!o) return res.status(400).json({ error: 'No transfer found for this class' });
+    if (!o.disputed_at) {
+        await dbConfig.run('UPDATE spot_offers SET disputed_at = CURRENT_TIMESTAMP WHERE id = $1', [o.id]);
+        await adminNotice(`Payment not received: ${reg.course_name}`, [
+            `${escapeHtml(reg.first_name || reg.email)} says ${escapeHtml(fullName(o) || o.email || 'the other student')}'s $${Number(o.amount).toFixed(0)} for their spot in ${escapeHtml(reg.course_name)} didn't arrive.`,
+            'Open Admin → Registrations: the registration is flagged "Payment not received". Check with them, then tap "Resolved, keep it" or "Undo transfer".']);
+    }
+    res.json({ success: true });
+}));
+
+// Admin: settle a reported transfer
+app.post('/api/admin/spot-offers/:id/resolve', requireAuth, asyncHandler(async (req, res) => {
+    await dbConfig.run('UPDATE spot_offers SET resolved_at = CURRENT_TIMESTAMP WHERE id = $1', [req.params.id]);
+    res.json({ success: true });
+}));
+app.post('/api/admin/spot-offers/:id/undo', requireAuth, asyncHandler(async (req, res) => {
+    const o = await dbConfig.get("SELECT * FROM spot_offers WHERE id = $1 AND status = 'transferred'", [req.params.id]);
+    if (!o) return res.status(404).json({ error: 'Transfer not found' });
+    await dbConfig.run(`UPDATE registrations SET payment_status = 'completed', canceled_at = NULL, cancellation_reason = NULL, handled_by = $1,
+        updated_at = CURRENT_TIMESTAMP WHERE id = $2`, [handledBy(req), o.registration_id]);
+    await dbConfig.run(`UPDATE registrations SET payment_status = 'canceled', canceled_at = CURRENT_TIMESTAMP, cancellation_reason = 'Transfer undone',
+        handled_by = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`, [handledBy(req), o.taker_registration_id]);
+    await dbConfig.run("UPDATE spot_offers SET status = 'undone', resolved_at = CURRENT_TIMESTAMP WHERE id = $1", [o.id]);
+    res.json({ success: true });
+}));
+
+// Transfer details for the admin registrations list
+async function transferInfo() {
+    const rows = await dbConfig.all(`
+        SELECT so.id, so.status, so.registration_id, so.taker_registration_id, so.disputed_at, so.resolved_at,
+               g.first_name AS g_first, g.last_name AS g_last, t.first_name AS t_first, t.last_name AS t_last
+        FROM spot_offers so JOIN students g ON g.id = so.student_id LEFT JOIN students t ON t.id = so.taker_student_id
+        WHERE so.status IN ('live', 'transferred')`);
+    const byReg = {};
+    for (const o of rows) {
+        const disputed = !!(o.disputed_at && !o.resolved_at);
+        if (o.status === 'live') { byReg[o.registration_id] = { offer_id: o.id, offering: true }; continue; }
+        byReg[o.registration_id] = { offer_id: o.id, transfer_to: fullName({ first_name: o.t_first, last_name: o.t_last }), disputed };
+        if (o.taker_registration_id) byReg[o.taker_registration_id] = { offer_id: o.id, transfer_from: fullName({ first_name: o.g_first, last_name: o.g_last }), disputed };
+    }
+    return byReg;
+}
+
+// My classes: offer state per registration (can offer, on offer, transferred)
+async function myOfferInfo(registrations) {
+    const ids = registrations.map(r => Number(r.id)).filter(Boolean);
+    if (!ids.length) return;
+    const offers = await dbConfig.all(`SELECT so.registration_id, so.status, so.amount, so.disputed_at, t.first_name AS t_first, t.last_name AS t_last
+        FROM spot_offers so LEFT JOIN students t ON t.id = so.taker_student_id
+        WHERE so.registration_id IN (${ids.map((_, i) => '$' + (i + 1)).join(',')}) AND so.status IN ('pending_confirm', 'live', 'transferred')
+        ORDER BY so.id`, ids);
+    const byCourse = await allClassDates('', '0000-00-00');
+    for (const r of registrations) {
+        const o = offers.filter(x => Number(x.registration_id) === Number(r.id)).pop();
+        if (o) {
+            r.spot_offer = { status: o.status, amount: Number(o.amount), to: fullName({ first_name: o.t_first, last_name: o.t_last }), reported: !!o.disputed_at };
+        } else if (r.payment_status === 'completed' && r.payment_method !== 'Free') {
+            r.can_offer = !(await spotOfferProblem(r, byCourse));
+        }
+    }
+}
+
 
 // ===================== Student cleanup & test accounts =====================
 const tableCache = {};
@@ -3635,6 +3945,7 @@ app.post('/api/my/profile', asyncHandler(async (req, res) => {
     const student = await dbConfig.get(`SELECT ${STUDENT_PUBLIC_FIELDS} FROM students WHERE LOWER(email) = LOWER($1)`, [email]);
     if (!student) return res.status(404).json({ error: "We couldn't find that email. Register for a class first, or try the email you used before." });
     const history = await studentHistory(student.id);
+    await myOfferInfo(history.registrations);
     history.registrations.forEach(r => { delete r.combo_group; });
     res.json({ student, ...history, progress: await studentProgress(student.id) });
 }));
@@ -4389,6 +4700,8 @@ app.get('/api/registrations', requireAuth, asyncHandler(async (req, res) => {
     query += ' ORDER BY r.registration_date DESC';
     
     const registrations = await dbConfig.all(query, params);
+    const transfers = await transferInfo();
+    registrations.forEach(r => { if (transfers[r.id]) r.transfer = transfers[r.id]; });
     res.json(registrations);
 }));
 
@@ -4507,6 +4820,8 @@ app.get('/api/admin/registrations', requireAdminOrTeam, liteCourseGuard, asyncHa
     query += ' ORDER BY r.registration_date DESC';
     
     const registrations = await dbConfig.all(query, params);
+    const transfers = await transferInfo();
+    registrations.forEach(r => { if (transfers[r.id]) r.transfer = transfers[r.id]; });
     res.json(registrations);
 }));
 

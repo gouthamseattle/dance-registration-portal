@@ -368,6 +368,24 @@ async function sendWaitlistMissedEmail(to, { studentName, courseName } = {}) {
   await deliver({ from, to, subject, html, text, replyTo: getReplyTo() });
 }
 
+// A short black/yellow GouMo email: a few paragraphs and an optional button
+async function sendSimpleEmail(to, { subject, paragraphs = [], button = null, footer = '' } = {}) {
+  ensureConfigured();
+  const from = getFromAddress();
+  const html = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${escapeHtml(subject)}</title></head>
+<body style="margin:0;padding:0;font-family:Arial,sans-serif;background:#f2f2f0;">
+<table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f2f2f0;padding:20px 0;"><tr><td align="center">
+<table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background:#fff;border-radius:10px;overflow:hidden;">
+<tr><td style="background:#0b0b0d;padding:24px 32px;text-align:center;font-family:Impact,'Arial Black',sans-serif;color:#ffd60a;font-size:24px;text-transform:uppercase;">GouMo</td></tr>
+<tr><td style="padding:28px 32px 8px;font-size:15px;line-height:1.6;color:#1a1a1a;">${paragraphs.map(p => `<p style="margin:0 0 14px;">${p}</p>`).join('')}</td></tr>
+${button ? `<tr><td style="padding:4px 32px 24px;text-align:center;"><a href="${escapeHtml(button.url)}" style="display:inline-block;background:#ffd60a;color:#0b0b0d;font-weight:bold;text-decoration:none;padding:14px 28px;border-radius:10px;">${escapeHtml(button.label)}</a></td></tr>` : ''}
+${footer ? `<tr><td style="padding:0 32px 24px;font-size:13px;color:#666;">${footer}</td></tr>` : ''}
+</table></td></tr></table></body></html>`;
+  const strip = (h) => String(h).replace(/<[^>]+>/g, '');
+  const text = [...paragraphs.map(strip), button ? `${button.label}: ${button.url}` : '', footer ? strip(footer) : ''].filter(Boolean).join('\n\n');
+  await deliver({ from, to, subject, html, text, replyTo: getReplyTo() });
+}
+
 // Invite for a helper approved in Admin → Settings → Other admins (lite admin at /admin-lite)
 async function sendAdminInviteEmail(to, { url } = {}) {
   ensureConfigured();
@@ -409,6 +427,8 @@ module.exports = {
   sendRegistrationCancellationEmail,
   sendWaitlistNotificationEmail,
   sendWaitlistMissedEmail,
+  sendSimpleEmail,
+  escapeHtml,
   sendEmailWithFallback,
   verifyEmailTransport,
   isEmailConfigured,

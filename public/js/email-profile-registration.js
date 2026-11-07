@@ -573,6 +573,9 @@ class EmailProfileRegistrationApp {
                         <button type="button" class="cc-btn" data-cant-yes="${Number(course.registration_id)}">Yes, give up my spot</button>
                         <button type="button" class="cc-btn cc-btn-outline" data-cant-no>Keep my spot</button>
                     </div>`;
+            } else if (isFull) {
+                // Paid and full: the spot can be offered to the waitlist from My classes
+                action += '<a class="cc-cant" href="/my" style="text-decoration:none">Can\'t make it? Offer your spot</a>';
             }
         }
         else if (isPending) action = '<div class="cc-state cc-pending"><i class="fas fa-clock"></i> Registered · checking payment</div>';

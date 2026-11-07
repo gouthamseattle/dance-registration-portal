@@ -1213,6 +1213,110 @@ test("free class: Can't make it frees the spot; offers keep or lose place; late 
     assert.ok(list2.includes('data-cant-yes') && list2.includes('/api/my/cant-make-it'), "Can't make it on the class list cards too");
 });
 
+test('paid class: Offer my spot → waitlist pays the student → instant transfer, report, undo, pass-on, withdraw', async () => {
+    const day = (n) => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
+    const cls = await api('POST', '/api/courses', {
+        name: `Offer Spot ${unique}`, course_type: 'drop_in', session_dates: [day(6)],
+        slots: [{ slot_name: 'Main', difficulty_level: 'All Levels', capacity: 1, start_time: '18:00', end_time: '19:00', location: 'Offer Studio',
+            practice_date: day(6), pricing: { drop_in: 40, full_package: 40 } }]
+    }, { admin: true });
+    assert.equal(cls.status, 200, JSON.stringify(cls.body));
+    const id = cls.body.courseId || cls.body.id;
+    const a = `os.a.${unique}@example.com`, b = `os.b.${unique}@example.com`, c = `os.c.${unique}@example.com`;
+    const ra = await api('POST', '/api/register', { first_name: 'Priya', email: a, course_id: id, payment_amount: 40 });
+    assert.equal(ra.status, 200, JSON.stringify(ra.body));
+    const regA = ra.body.registrationId;
+
+    // Not paid yet, or nobody waiting: can't offer
+    assert.equal((await api('POST', '/api/my/offer-spot', { email: a, registration_id: regA, venmo: 'priya-x' })).status, 400, 'pending can\'t be offered');
+    await api('PUT', `/api/admin/registrations/${regA}/confirm-payment`, {}, { admin: true });
+    const noWait = await api('POST', '/api/my/offer-spot', { email: a, registration_id: regA, venmo: 'priya-x' });
+    assert.equal(noWait.status, 400);
+    assert.ok(/waitlist/i.test(noWait.body.error), 'needs someone waiting');
+
+    assert.equal((await api('POST', '/api/waitlist', { first_name: 'Rahul', email: b, course_id: id, payment_amount: 40 })).status, 200);
+    assert.equal((await api('POST', '/api/waitlist', { first_name: 'Cara', email: c, course_id: id, payment_amount: 40 })).status, 200);
+    assert.equal((await api('POST', '/api/my/offer-spot', { email: b, registration_id: regA, venmo: 'priya-x' })).status, 404, 'only the owner');
+    assert.equal((await api('POST', '/api/my/offer-spot', { email: a, registration_id: regA, venmo: 'no spaces!' })).status, 400);
+    const me = (await api('POST', '/api/my/profile', { email: a })).body;
+    assert.equal(me.registrations.find(r => Number(r.id) === Number(regA)).can_offer, true, 'My classes shows Offer my spot');
+
+    const { Pool } = require('pg');
+    const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: process.env.DATABASE_SSL === 'false' ? false : { rejectUnauthorized: false } });
+    const q = async (sql, params) => (await pool.query(sql, params)).rows;
+    const tokenOf = async (email) => (await q('SELECT w.payment_link_token AS t FROM waitlist w JOIN students s ON s.id = w.student_id WHERE w.course_id = $1 AND s.email = $2', [id, email]))[0].t;
+    const expire = (email) => pool.query("UPDATE waitlist w SET notification_expires_at = NOW() - INTERVAL '1 minute' FROM students s WHERE s.id = w.student_id AND w.course_id = $1 AND s.email = $2", [id, email]);
+    const wl = async () => { const r = await api('GET', `/api/admin/waitlists?course_id=${id}`, null, { admin: true }); return Array.isArray(r.body) ? r.body : (r.body.waitlists || []); };
+    try {
+        // Offer → confirm link (a page; only the button's POST makes it live)
+        assert.equal((await api('POST', '/api/my/offer-spot', { email: a, registration_id: regA, venmo: '@priya-x' })).status, 200);
+        const confirmToken = (await q("SELECT confirm_token AS t FROM spot_offers WHERE registration_id = $1 AND status = 'pending_confirm'", [regA]))[0].t;
+        assert.equal((await fetch(`${BASE}/spot-offer/${confirmToken}`)).status, 200);
+        assert.equal((await wl()).find(e => e.email === b).status, 'active', 'opening the link alone changes nothing');
+        const conf = await fetch(`${BASE}/spot-offer/${confirmToken}/confirm`, { method: 'POST', redirect: 'manual' });
+        assert.equal(conf.status, 303);
+        assert.equal((await wl()).find(e => e.email === b).status, 'notified', 'Rahul is offered it');
+
+        // The class is still full for everyone else, and Rahul's link can't be used to register normally
+        const bTok = await tokenOf(b);
+        assert.equal((await api('POST', '/api/register', { first_name: 'Rahul', email: b, course_id: id, payment_amount: 40, waitlist_token: bTok })).status, 400);
+        const link = await fetch(`${BASE}/waitlist-register/${bTok}`, { redirect: 'manual' });
+        assert.ok(link.headers.get('location').includes('/spot.html?t='), 'link opens the pay page');
+        const info = await api('GET', `/api/spot/${bTok}`);
+        assert.equal(info.status, 200, JSON.stringify(info.body));
+        assert.equal(info.body.amount, 40);
+        assert.equal(info.body.venmo, 'priya-x');
+
+        // Rahul pays Priya: the spot moves straight away
+        const paid = await api('POST', `/api/spot/${bTok}/paid`);
+        assert.equal(paid.status, 200, JSON.stringify(paid.body));
+        let regs = (await api('GET', `/api/admin/registrations?course_id=${id}`, null, { admin: true })).body;
+        const rA = regs.find(r => Number(r.id) === Number(regA)), rB = regs.find(r => Number(r.id) === Number(paid.body.registration_id));
+        assert.equal(rA.payment_status, 'canceled');
+        assert.equal(rB.payment_status, 'completed');
+        assert.equal(rB.transfer.transfer_from, 'Priya');
+        assert.equal((await api('POST', `/api/spot/${bTok}/paid`)).status, 410, 'only once');
+
+        // Priya: "I didn't get paid" → flagged for the admin → undo
+        const mine = (await api('POST', '/api/my/profile', { email: a })).body.registrations.find(r => Number(r.id) === Number(regA));
+        assert.equal(mine.spot_offer.status, 'transferred');
+        assert.equal((await api('POST', '/api/my/offer-spot/dispute', { email: a, registration_id: regA })).status, 200);
+        regs = (await api('GET', `/api/admin/registrations?course_id=${id}`, null, { admin: true })).body;
+        const flagged = regs.find(r => Number(r.id) === Number(regA)).transfer;
+        assert.equal(flagged.disputed, true);
+        assert.equal((await api('POST', `/api/admin/spot-offers/${flagged.offer_id}/undo`)).status, 401, 'admin only');
+        assert.equal((await api('POST', `/api/admin/spot-offers/${flagged.offer_id}/undo`, null, { admin: true })).status, 200);
+        regs = (await api('GET', `/api/admin/registrations?course_id=${id}`, null, { admin: true })).body;
+        assert.equal(regs.find(r => Number(r.id) === Number(regA)).payment_status, 'completed', 'spot back with Priya');
+        assert.equal(regs.find(r => Number(r.id) === Number(paid.body.registration_id)).payment_status, 'canceled');
+
+        // Offer again: Cara is next. Her turn runs out unopened → she moves to the end, nobody else is waiting → offer closes
+        assert.equal((await api('POST', '/api/my/offer-spot', { email: a, registration_id: regA, venmo: 'priya-x' })).status, 200);
+        const t2 = (await q("SELECT confirm_token AS t FROM spot_offers WHERE registration_id = $1 AND status = 'pending_confirm'", [regA]))[0].t;
+        await fetch(`${BASE}/spot-offer/${t2}/confirm`, { method: 'POST', redirect: 'manual' });
+        assert.equal((await wl()).find(e => e.email === c).status, 'notified');
+        // Withdraw puts Cara back in line
+        assert.equal((await api('POST', '/api/my/offer-spot/withdraw', { email: a, registration_id: regA })).status, 200);
+        assert.equal((await wl()).find(e => e.email === c).status, 'active', 'withdrawn offer releases Cara');
+        assert.equal((await q("SELECT status FROM spot_offers WHERE registration_id = $1 ORDER BY id DESC LIMIT 1", [regA]))[0].status, 'withdrawn');
+
+        // Third offer: Cara's turn expires unopened (moved to end), then the offer closes with nobody left
+        assert.equal((await api('POST', '/api/my/offer-spot', { email: a, registration_id: regA, venmo: 'priya-x' })).status, 200);
+        const t3 = (await q("SELECT confirm_token AS t FROM spot_offers WHERE registration_id = $1 AND status = 'pending_confirm'", [regA]))[0].t;
+        await fetch(`${BASE}/spot-offer/${t3}/confirm`, { method: 'POST', redirect: 'manual' });
+        const cTok = await tokenOf(c);
+        await expire(c);
+        await fetch(`${BASE}/waitlist-register/${cTok}`, { redirect: 'manual' });
+        const after = (await q("SELECT status FROM spot_offers WHERE registration_id = $1 ORDER BY id DESC LIMIT 1", [regA]))[0].status;
+        assert.equal(after, 'closed', 'nobody else waiting: offer closes, Priya keeps her spot');
+        regs = (await api('GET', `/api/admin/registrations?course_id=${id}`, null, { admin: true })).body;
+        assert.equal(regs.find(r => Number(r.id) === Number(regA)).payment_status, 'completed');
+    } finally {
+        await pool.end();
+    }
+    assert.equal((await fetch(`${BASE}/spot.html`)).status, 200, 'pay page is served');
+});
+
 test('removed features are gone', async () => {
     for (const [method, url] of [
         ['POST', '/api/competition/register'],

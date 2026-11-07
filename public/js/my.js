@@ -130,7 +130,28 @@
 
     // Free classes: "Can't make it?" gives the spot to the next person on the waitlist
     const isFree = (r) => r.payment_method === 'Free' && r.payment_status === 'completed' && !r.combo_group;
-    const cantLink = (r) => (isFree(r) ? `<button type="button" class="cant-link" data-cant="${Number(r.id)}" data-name="${esc(r.course_name || 'this class')}">Can't make it?</button>` : '');
+    // Paid classes: "Offer my spot" (only when someone is on the waitlist; the server decides can_offer)
+    const cantLink = (r) => {
+      const name = esc(r.course_name || 'this class');
+      if (isFree(r)) return `<button type="button" class="cant-link" data-cant="${Number(r.id)}" data-name="${name}">Can't make it?</button>`;
+      const o = r.spot_offer;
+      if (o && o.status === 'pending_confirm') return '<p class="offer-note">Check your email and tap the link to put your spot on offer.</p>';
+      if (o && o.status === 'live') return `<div class="offer-live"><strong>Your spot is on offer</strong><span>We've offered it to the waitlist for $${Number(o.amount).toFixed(0)}, paid to you on Venmo. It's still yours, and you can still come, until someone pays you.</span><button type="button" class="btn btn-outline" data-withdraw="${Number(r.id)}">Take my offer back</button></div>`;
+      if (r.can_offer) return `<button type="button" class="cant-link" data-offer="${Number(r.id)}" data-name="${name}" data-amount="${Number(r.payment_amount) || 0}">Can't make it? Offer my spot</button>`;
+      return '';
+    };
+    const hasAction = (r) => isFree(r) || r.can_offer || (r.spot_offer && r.spot_offer.status !== 'transferred');
+
+    // Spots this student passed on to someone from the waitlist
+    const given = data.registrations.filter((r) => r.spot_offer && r.spot_offer.status === 'transferred');
+    $('transferBox').innerHTML = given.length ? `<p class="label">Spots you passed on</p>${given.map((r) => `
+      <div class="card offer-given">
+        <strong>${esc(r.course_name || 'Class')}</strong>
+        <span>Transferred to ${esc(r.spot_offer.to || 'someone on the waitlist')}. They say they paid you $${Number(r.spot_offer.amount).toFixed(0)} on Venmo.</span>
+        ${r.spot_offer.reported ? '<span class="meta">Reported. Goutham will sort it out with you both.</span>'
+          : `<button type="button" class="btn btn-outline danger" data-dispute="${Number(r.id)}">I didn't get paid</button>`}
+      </div>`).join('')}` : '';
+    $('transferBox').hidden = !given.length;
 
     // Next class
     const nx = upcoming[0];
@@ -159,7 +180,7 @@
         if (g !== last) { html += `<div class="week">${g}</div>`; last = g; }
         const dt = new Date(x.date + 'T12:00:00');
         html += `<div class="card date-row"><div class="day"><small>${dt.toLocaleDateString('en-US', { weekday: 'short' })}</small><b>${dt.getDate()}</b></div>
-          <div class="what"><strong>${esc(title(x))}</strong><span>${esc(who(x))}</span>${x !== nx && isFree(x.reg) && !upcoming.slice(0, upcoming.indexOf(x)).some((y) => y.reg.id === x.reg.id) ? cantLink(x.reg) : ''}</div>${chip(x.reg)}</div>`;
+          <div class="what"><strong>${esc(title(x))}</strong><span>${esc(who(x))}</span>${x !== nx && hasAction(x.reg) && !upcoming.slice(0, upcoming.indexOf(x)).some((y) => y.reg.id === x.reg.id) ? cantLink(x.reg) : ''}</div>${chip(x.reg)}</div>`;
       });
       $('upcomingList').innerHTML = html;
     }
@@ -210,6 +231,50 @@
       msg.className = 'msg err'; msg.textContent = 'Could not reach GouMo. Check your connection and try again.';
     }
   }
+
+  // Paid classes: "Offer my spot" sheet (Venmo username, then a confirm email)
+  let offerId = null;
+  const savedVenmo = () => { try { return localStorage.getItem('goumo_venmo') || ''; } catch (e) { return ''; } };
+  document.addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-offer]');
+    if (b) {
+      offerId = Number(b.dataset.offer);
+      $('offerClass').textContent = b.dataset.name;
+      $('offerAmount').textContent = `$${Number(b.dataset.amount).toFixed(0)}`;
+      $('offerVenmo').value = savedVenmo();
+      $('offerMsg').textContent = ''; $('offerYes').disabled = false;
+      $('offerSheet').hidden = false;
+      return;
+    }
+    const act = e.target.closest('[data-withdraw], [data-dispute]');
+    if (!act) return;
+    const dispute = !!act.dataset.dispute;
+    if (dispute && !window.confirm("Tell Goutham you didn't get paid? He'll check with you both.")) return;
+    act.disabled = true;
+    const url = dispute ? '/api/my/offer-spot/dispute' : '/api/my/offer-spot/withdraw';
+    const id = Number(act.dataset.dispute || act.dataset.withdraw);
+    const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, registration_id: id }) }).catch(() => null);
+    if (!res || !res.ok) { act.disabled = false; const d = res ? await res.json().catch(() => ({})) : {}; window.alert(d.error || 'Could not reach GouMo. Try again.'); return; }
+    await load(email);
+  });
+  $('offerNo').addEventListener('click', () => { $('offerSheet').hidden = true; });
+  $('offerSheet').addEventListener('click', (e) => { if (e.target === $('offerSheet')) $('offerSheet').hidden = true; });
+  $('offerYes').addEventListener('click', async () => {
+    const venmo = $('offerVenmo').value.trim();
+    $('offerYes').disabled = true;
+    const res = await fetch('/api/my/offer-spot', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, registration_id: offerId, venmo })
+    }).catch(() => null);
+    const data = res ? await res.json().catch(() => ({})) : {};
+    if (!res || !res.ok) {
+      $('offerMsg').className = 'msg err'; $('offerMsg').textContent = data.error || 'Could not reach GouMo. Try again.';
+      $('offerYes').disabled = false;
+      return;
+    }
+    try { localStorage.setItem('goumo_venmo', venmo); } catch (e) { /* private mode */ }
+    $('offerSheet').hidden = true;
+    await load(email);
+  });
 
   // "Can't make it?" (free classes): confirm in a sheet, then reload the page data
   let cantId = null;

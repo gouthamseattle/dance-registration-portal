@@ -116,8 +116,23 @@ PR as any change that adds a decision, a link or a to-do.
 - Tapping the link late counts as trying: they go to the front of the line and see "Sorry, this offer expired… still
   first in line", or "Register now" if the spot is still open and nobody else is waiting, or "Registration has closed"
   inside the 30-minute cutoff. Column `waitlist.link_opened_at`.
-- Next (designed, not built): paid "Offer my spot", where the taker pays the giver directly on Venmo, the giver
-  confirms (or it finishes after 1 hour), claim hold 3 hours, offers only when someone is on the waitlist.
+
+## Offer my spot (paid classes, Nov 2026)
+
+- Mockup (approved): https://claude.ai/artifact/Dx2rjVj4rRFBff6SdmjG3r
+- No refunds, and the owner doesn't want to be the middle man: the next waitlisted student pays the student
+  who can't come **directly on Venmo**. Only possible when someone is on that class's waitlist.
+- Flow: My classes → "Can't make it? Offer my spot" → Venmo username → **confirm email** (sign-in is email-only, so
+  the offer goes live only from that link; the link opens a page with a button, because email apps open links
+  on their own). The waitlist is offered it one person at a time (Waitlist hold, 30-minute cutoff, keep/lose place
+  rules as above). The taker sees `/spot.html` (amount, @venmo, Open Venmo) and taps **I've paid**: the spot
+  moves straight away (taker's registration "Transfer" with the amount, giver's cancelled "Transferred to …",
+  so revenue counts the class once). The giver can tap **I didn't get paid**, which emails the admin and flags
+  the registration "Payment not received"; the admin taps "Resolved, keep it" or "Undo transfer".
+- The giver keeps the spot until someone pays: if nobody claims it (waitlist runs out or 30 minutes to class)
+  the offer closes and they get "Nobody took your spot". They can take the offer back until someone pays.
+- Not for free classes ("Can't make it"), combos, crew practices, or series that have started.
+- Admin notices go to `ADMIN_NOTIFY_EMAIL` or, if unset, `GMAIL_USER`. Table `spot_offers`, column `waitlist.spot_offer_id`.
 
 ## Free classes (Nov 2026)
 
