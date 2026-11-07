@@ -1696,6 +1696,10 @@ class AdminDashboard {
 
     renderWaitlistCards(waitlistData) {
         const container = document.getElementById('waitlistsContainer');
+        this.lastWaitlistData = waitlistData;
+        this.waitlistExpanded = this.waitlistExpanded || new Set();
+        // Filtered to one class: show everyone; otherwise 5 per card until "View all" is tapped
+        const oneClass = !!(document.getElementById('waitlistCourseFilter') || {}).value;
         
         if (!waitlistData || !Array.isArray(waitlistData) || waitlistData.length === 0) {
             container.innerHTML = `
@@ -1726,6 +1730,8 @@ class AdminDashboard {
 
         const cards = Object.values(groupedByCourse).map(courseWaitlist => {
             const entries = courseWaitlist.entries.sort((a, b) => (a.position || 0) - (b.position || 0));
+            const showAll = oneClass || this.waitlistExpanded.has(String(courseWaitlist.course_id));
+            const shown = showAll ? entries : entries.slice(0, 5);
             
             return `
                 <div class="col-lg-6 col-xl-4 mb-4">
@@ -1739,7 +1745,7 @@ class AdminDashboard {
                         </div>
                         <div class="card-body">
                             <div class="waitlist-entries">
-                                ${entries.slice(0, 5).map(entry => `
+                                ${shown.map(entry => `
                                     <div class="waitlist-entry d-flex justify-content-between align-items-center py-2 border-bottom">
                                         <div class="d-flex align-items-center">
                                             <div class="form-check me-2">
@@ -1768,9 +1774,9 @@ class AdminDashboard {
                                         </div>
                                     </div>
                                 `).join('')}
-                                ${entries.length > 5 ? `
+                                ${entries.length > shown.length ? `
                                     <div class="text-center py-2">
-                                        <small class="text-muted">... and ${entries.length - 5} more</small>
+                                        <button type="button" class="btn btn-link btn-sm" onclick="admin.viewCourseWaitlist(${courseWaitlist.course_id})">+ ${entries.length - shown.length} more · View all</button>
                                     </div>
                                 ` : ''}
                             </div>
@@ -1796,9 +1802,9 @@ class AdminDashboard {
                                 <button class="btn btn-outline-primary btn-sm" onclick="admin.notifyWaitlistForCourse(${courseWaitlist.course_id})">
                                     <i class="fas fa-envelope"></i> Notify Next
                                 </button>
-                                <button class="btn btn-outline-info btn-sm" onclick="admin.viewCourseWaitlist(${courseWaitlist.course_id})">
-                                    <i class="fas fa-eye"></i> View All
-                                </button>
+                                ${entries.length > 5 && !oneClass ? `<button class="btn btn-outline-info btn-sm" onclick="admin.viewCourseWaitlist(${courseWaitlist.course_id})">
+                                    <i class="fas fa-eye"></i> ${showAll ? 'Show fewer' : `View all ${entries.length}`}
+                                </button>` : ''}
                             </div>
                         </div>
                     </div>
@@ -1928,14 +1934,12 @@ class AdminDashboard {
         }
     }
 
-    async viewCourseWaitlist(courseId) {
-        // This could open a modal with detailed waitlist view
-        // For now, just filter to show only this course's waitlist
-        const courseFilter = document.getElementById('waitlistCourseFilter');
-        if (courseFilter) {
-            courseFilter.value = courseId;
-            await this.refreshWaitlists();
-        }
+    // "View all" / "Show fewer" on one class's waitlist card (every name gets a checkbox)
+    viewCourseWaitlist(courseId) {
+        this.waitlistExpanded = this.waitlistExpanded || new Set();
+        const key = String(courseId);
+        if (this.waitlistExpanded.has(key)) this.waitlistExpanded.delete(key); else this.waitlistExpanded.add(key);
+        this.renderWaitlistCards(this.lastWaitlistData || []);
     }
 
     // =========================
