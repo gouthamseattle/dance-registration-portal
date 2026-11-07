@@ -1143,6 +1143,72 @@ test('waitlist cards: View all shows every name, a one-class filter shows everyo
     assert.ok(js.includes('this.waitlistExpanded.add(key)'), 'View all expands the card instead of re-filtering');
 });
 
+test("free class: Can't make it frees the spot; offers keep or lose place; late taps", async () => {
+    const day = (n) => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
+    const cls = await api('POST', '/api/courses', {
+        name: `Free Cant ${unique}`, course_type: 'drop_in', session_dates: [day(5)],
+        slots: [{ slot_name: 'Main', difficulty_level: 'All Levels', capacity: 1, start_time: '18:00', end_time: '19:00', location: 'Free Studio',
+            practice_date: day(5), pricing: { drop_in: 0, full_package: 0 } }]
+    }, { admin: true });
+    assert.equal(cls.status, 200, JSON.stringify(cls.body));
+    const id = cls.body.courseId || cls.body.id;
+    const a = `fc.a.${unique}@example.com`, b = `fc.b.${unique}@example.com`, c = `fc.c.${unique}@example.com`;
+    const ra = await api('POST', '/api/register', { first_name: 'Ana', email: a, course_id: id, payment_amount: 0 });
+    assert.equal(ra.status, 200, JSON.stringify(ra.body));
+    assert.equal((await api('POST', '/api/waitlist', { first_name: 'Bo', email: b, course_id: id, payment_amount: 0 })).status, 200);
+    assert.equal((await api('POST', '/api/waitlist', { first_name: 'Cy', email: c, course_id: id, payment_amount: 0 })).status, 200);
+
+    // Only the owner of the registration, and only for free classes
+    assert.equal((await api('POST', '/api/my/cant-make-it', { email: b, registration_id: ra.body.registrationId })).status, 404);
+    const paid = await api('POST', '/api/register', { first_name: 'Pay', email: `fc.p.${unique}@example.com`, course_id: courseId, payment_amount: 100 });
+    assert.equal((await api('POST', '/api/my/cant-make-it', { email: `fc.p.${unique}@example.com`, registration_id: paid.body.registrationId })).status, 400, 'paid classes cannot be given up');
+
+    // Ana can't make it: Bo (first in line) is offered the spot
+    const give = await api('POST', '/api/my/cant-make-it', { email: a, registration_id: ra.body.registrationId });
+    assert.equal(give.status, 200, JSON.stringify(give.body));
+    assert.equal(give.body.offered, 1);
+    const list = async () => {
+        const r = await api('GET', `/api/admin/waitlists?course_id=${id}`, null, { admin: true });
+        return (Array.isArray(r.body) ? r.body : r.body.waitlists || []);
+    };
+    let w = await list();
+    assert.equal(w.find(e => e.email === b).status, 'notified');
+
+    const { Pool } = require('pg');
+    const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: process.env.DATABASE_SSL === 'false' ? false : { rejectUnauthorized: false } });
+    const tokenOf = async (email) => (await pool.query('SELECT w.payment_link_token AS t FROM waitlist w JOIN students s ON s.id = w.student_id WHERE w.course_id = $1 AND s.email = $2', [id, email])).rows[0].t;
+    const expire = (email) => pool.query("UPDATE waitlist w SET notification_expires_at = NOW() - INTERVAL '1 minute' FROM students s WHERE s.id = w.student_id AND w.course_id = $1 AND s.email = $2", [id, email]);
+    try {
+        // The hold is 3 hours by default, never past 30 minutes before class
+        const holdRow = (await pool.query("SELECT w.notification_expires_at - w.notification_sent_at AS h FROM waitlist w JOIN students s ON s.id = w.student_id WHERE w.course_id = $1 AND s.email = $2", [id, b])).rows[0];
+        assert.ok(holdRow.h.hours === 3 || (holdRow.h.hours === 2 && holdRow.h.minutes >= 59), 'held 3 hours: ' + JSON.stringify(holdRow.h));
+
+        // Bo taps his link after it ran out: he tried, so he stays first in line; Cy is offered the spot
+        const bTok = await tokenOf(b);
+        await expire(b);
+        const late = await fetch(`${BASE}/waitlist-register/${bTok}`, { redirect: 'manual' });
+        assert.equal(late.status, 410);
+        assert.ok((await late.text()).includes('first in line'));
+        w = await list();
+        assert.equal(w.find(e => e.email === b).status, 'active');
+        assert.equal(w.find(e => e.email === b).position, 1, 'Bo keeps his place');
+        assert.equal(w.find(e => e.email === c).status, 'notified', 'next person offered');
+
+        // Cy never opens hers: when it runs out she moves to the back, and Bo (tapping again) gets the spot
+        await expire(c);
+        const again = await fetch(`${BASE}/waitlist-register/${bTok}`, { redirect: 'manual' });
+        assert.equal(again.status, 302, 'Bo is sent straight to his new offer');
+        w = await list();
+        assert.equal(w.find(e => e.email === c).status, 'active');
+        assert.equal(w.find(e => e.email === c).position, 2, 'Cy moved to the end');
+        assert.equal(w.find(e => e.email === b).status, 'notified');
+    } finally {
+        await pool.end();
+    }
+    const js = await (await fetch(`${BASE}/js/my.js`)).text();
+    assert.ok(js.includes("Can't make it?") && js.includes('/api/my/cant-make-it'), "Can't make it on My classes");
+});
+
 test('removed features are gone', async () => {
     for (const [method, url] of [
         ['POST', '/api/competition/register'],

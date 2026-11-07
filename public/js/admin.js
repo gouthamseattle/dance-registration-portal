@@ -648,7 +648,7 @@ class AdminDashboard {
         document.getElementById('zelleRecipientName').value = this.settings.zelle_recipient_name || '';
         document.getElementById('zellePhone').value = this.settings.zelle_phone || '';
         document.getElementById('emailNotifications').checked = this.settings.email_notifications_enabled === 'true';
-        document.getElementById('waitlistHoldHours').value = this.settings.waitlist_hold_hours || '24';
+        document.getElementById('waitlistHoldHours').value = this.settings.waitlist_hold_hours || '3';
         document.getElementById('crewProgressStart').value = this.settings.crew_progress_start || '';
         document.getElementById('goumoProgressStart').value = this.settings.goumo_progress_start || '2026-01-01';
         const zelleOn = this.settings.zelle_enabled === 'true';
@@ -690,7 +690,7 @@ class AdminDashboard {
             zelle_phone: (formData.get('zelle_phone') || '').replace(/\D/g, ''),
             email_notifications_enabled: formData.has('email_notifications_enabled').toString(),
             zelle_enabled: formData.has('zelle_enabled').toString(),
-            waitlist_hold_hours: formData.get('waitlist_hold_hours') || '24',
+            waitlist_hold_hours: formData.get('waitlist_hold_hours') || '3',
             crew_progress_start: formData.get('crew_progress_start') || '',
             goumo_progress_start: formData.get('goumo_progress_start') || ''
         };

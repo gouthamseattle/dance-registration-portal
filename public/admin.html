@@ -301,12 +301,14 @@
                 <div class="mb-4">
                     <label for="waitlistHoldHours" class="form-label">When a spot opens, hold it for the next student for</label>
                     <select class="form-select" id="waitlistHoldHours" name="waitlist_hold_hours" style="max-width:240px">
+                        <option value="1">1 hour</option>
+                        <option value="2">2 hours</option>
+                        <option value="3">3 hours</option>
                         <option value="6">6 hours</option>
                         <option value="12">12 hours</option>
                         <option value="24">24 hours</option>
-                        <option value="48">48 hours</option>
                     </select>
-                    <div class="form-text">When you cancel a paid registration, the next student on that class's waitlist gets an email with a link to register. If they don't register in this time, the next student is emailed, in order.</div>
+                    <div class="form-text">When a spot opens (you cancel a paid registration, or a student taps "Can't make it" on a free class), the next student on that class's waitlist gets an email with a link. The spot is held for them for this time, but never later than 30 minutes before class. If they opened the link they keep their place in line; if they never opened it they move to the end. Then the next student is emailed.</div>
                 </div>
                 <h2>Progress on My classes</h2>
                 <div class="mb-4">
@@ -578,6 +580,6 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="/js/class-info.js?v=8"></script>
     <script src="/js/attendance.js?v=1"></script>
-    <script src="/js/admin.js?v=45"></script>
+    <script src="/js/admin.js?v=46"></script>
 </body>
 </html>

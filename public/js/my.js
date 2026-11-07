@@ -128,6 +128,10 @@
     const title = (x) => `${x.reg.course_name || 'Class'}${x.of > 1 && x.reg.course_type !== 'crew_practice' ? ` · ${x.n} of ${x.of}` : ''}`;
     const who = (x) => [C.timeRange(x.reg), x.reg.instructor ? `with ${x.reg.instructor}` : ''].filter(Boolean).join(' · ');
 
+    // Free classes: "Can't make it?" gives the spot to the next person on the waitlist
+    const isFree = (r) => r.payment_method === 'Free' && r.payment_status === 'completed' && !r.combo_group;
+    const cantLink = (r) => (isFree(r) ? `<button type="button" class="cant-link" data-cant="${Number(r.id)}" data-name="${esc(r.course_name || 'this class')}">Can't make it?</button>` : '');
+
     // Next class
     const nx = upcoming[0];
     if (nx) {
@@ -141,7 +145,8 @@
         <div class="actions">
           <a class="btn btn-primary" href="${icsFor(nx)}" download="goumo-class.ics">Add to calendar</a>
           ${loc ? `<a class="btn btn-outline" href="https://maps.google.com/?q=${encodeURIComponent(loc)}" target="_blank" rel="noopener">Directions</a>` : ''}
-        </div>`;
+        </div>
+        ${cantLink(nx.reg)}`;
     }
     $('nextBox').hidden = !nx;
 
@@ -154,7 +159,7 @@
         if (g !== last) { html += `<div class="week">${g}</div>`; last = g; }
         const dt = new Date(x.date + 'T12:00:00');
         html += `<div class="card date-row"><div class="day"><small>${dt.toLocaleDateString('en-US', { weekday: 'short' })}</small><b>${dt.getDate()}</b></div>
-          <div class="what"><strong>${esc(title(x))}</strong><span>${esc(who(x))}</span></div>${chip(x.reg)}</div>`;
+          <div class="what"><strong>${esc(title(x))}</strong><span>${esc(who(x))}</span>${x !== nx && isFree(x.reg) && !upcoming.slice(0, upcoming.indexOf(x)).some((y) => y.reg.id === x.reg.id) ? cantLink(x.reg) : ''}</div>${chip(x.reg)}</div>`;
       });
       $('upcomingList').innerHTML = html;
     }
@@ -205,6 +210,39 @@
       msg.className = 'msg err'; msg.textContent = 'Could not reach GouMo. Check your connection and try again.';
     }
   }
+
+  // "Can't make it?" (free classes): confirm in a sheet, then reload the page data
+  let cantId = null;
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-cant]');
+    if (!b) return;
+    cantId = Number(b.dataset.cant);
+    $('cantClass').textContent = b.dataset.name;
+    $('cantMsg').textContent = '';
+    $('cantYes').disabled = false;
+    $('cantSheet').hidden = false;
+  });
+  $('cantNo').addEventListener('click', () => { $('cantSheet').hidden = true; });
+  $('cantSheet').addEventListener('click', (e) => { if (e.target === $('cantSheet')) $('cantSheet').hidden = true; });
+  $('cantYes').addEventListener('click', async () => {
+    $('cantYes').disabled = true;
+    const res = await fetch('/api/my/cant-make-it', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, registration_id: cantId })
+    }).catch(() => null);
+    const data = res ? await res.json().catch(() => ({})) : {};
+    if (!res || !res.ok) {
+      $('cantMsg').className = 'msg err'; $('cantMsg').textContent = data.error || 'Could not reach GouMo. Try again.';
+      $('cantYes').disabled = false;
+      return;
+    }
+    $('cantSheet').hidden = true;
+    await load(email);
+    const box = $('nextBox');
+    const note = document.createElement('p');
+    note.className = 'gave-up';
+    note.textContent = "You've given up your spot. We've offered it to the next person on the waitlist. Thanks for letting us know!";
+    box.parentNode.insertBefore(note, box);
+  });
 
   $('testerBox').addEventListener('click', async (e) => {
     const b = e.target.closest('[data-as]');

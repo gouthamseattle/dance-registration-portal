@@ -277,7 +277,7 @@ async function sendWaitlistNotificationEmail(to, data = {}) {
   const safeAmount = isFreeAmount ? 'Free' : typeof amount === 'number' ? amount.toFixed(2) : amount;
   const priceText = isFreeAmount ? 'Free' : `$${safeAmount}`;
   const expirationDate = new Date(expiresAt);
-  const expirationDisplay = expirationDate.toLocaleDateString('en-US', { weekday:'long', year:'numeric', month:'long', day:'numeric', hour:'numeric', minute:'2-digit', timeZoneName:'short' });
+  const expirationDisplay = expirationDate.toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles', weekday:'long', month:'long', day:'numeric', hour:'numeric', minute:'2-digit', timeZoneName:'short' });
 
   const html = `<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -351,6 +351,23 @@ function getTransporter() {
   };
 }
 
+// Waitlist offer ran out and the student never opened the link: they moved to the end of the waitlist
+async function sendWaitlistMissedEmail(to, { studentName, courseName } = {}) {
+  ensureConfigured();
+  const from = getFromAddress();
+  const subject = `You missed a spot in ${courseName || 'a GouMo class'}`;
+  const body = `the spot we held for you in ${courseName || 'the class'} has gone to the next person, and you've moved to the end of the waitlist. We'll email you if another spot opens. Reply to this email if you'd like to be taken off the waitlist.`;
+  const html = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${escapeHtml(subject)}</title></head>
+<body style="margin:0;padding:0;font-family:Arial,sans-serif;background:#f2f2f0;">
+<table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f2f2f0;padding:20px 0;"><tr><td align="center">
+<table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background:#fff;border-radius:10px;overflow:hidden;">
+<tr><td style="background:#0b0b0d;padding:24px 32px;text-align:center;font-family:Impact,'Arial Black',sans-serif;color:#ffd60a;font-size:24px;text-transform:uppercase;">GouMo</td></tr>
+<tr><td style="padding:28px 32px;font-size:15px;line-height:1.6;color:#1a1a1a;"><p style="margin:0 0 14px;">Hi ${escapeHtml(studentName || 'there')},</p><p style="margin:0;">${escapeHtml(body.charAt(0).toUpperCase() + body.slice(1))}</p></td></tr>
+</table></td></tr></table></body></html>`;
+  const text = `Hi ${studentName || 'there'},\n\n${body.charAt(0).toUpperCase() + body.slice(1)}`;
+  await deliver({ from, to, subject, html, text, replyTo: getReplyTo() });
+}
+
 // Invite for a helper approved in Admin → Settings → Other admins (lite admin at /admin-lite)
 async function sendAdminInviteEmail(to, { url } = {}) {
   ensureConfigured();
@@ -391,6 +408,7 @@ module.exports = {
   sendRegistrationConfirmationEmail,
   sendRegistrationCancellationEmail,
   sendWaitlistNotificationEmail,
+  sendWaitlistMissedEmail,
   sendEmailWithFallback,
   verifyEmailTransport,
   isEmailConfigured,
