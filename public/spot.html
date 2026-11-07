@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Claim the spot · GouMo</title>
+  <meta name="robots" content="noindex">
+  <link href="/css/site.css?v=5" rel="stylesheet">
+  <style>
+    /* Pay-the-student page for "Offer my spot" (paid classes). See server.js, Offer my spot. */
+    body { background: var(--bg); color: var(--text); }
+    main { max-width: 480px; margin: 0 auto; padding: 24px 16px 40px; display: flex; flex-direction: column; gap: 16px; }
+    .brand { text-align: center; padding-bottom: 12px; border-bottom: 1px solid var(--line-soft); }
+    .brand img { height: 48px; display: block; margin: 0 auto; }
+    .kicker { font-size: 12px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: .6px; }
+    h1 { margin: 6px 0 0; font-family: var(--font-display); font-weight: 400; font-size: 28px; text-transform: uppercase; line-height: 1.1; }
+    .when { font-size: 14px; color: var(--muted); margin-top: 6px; }
+    .pay { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 6px; align-items: center; text-align: center; }
+    .pay .amt { font-family: var(--font-display); font-size: 44px; line-height: 1; }
+    .pay .who { font-size: 15px; font-weight: 600; }
+    .pay small { color: var(--faint); font-size: 12px; }
+    .btn-venmo { display: flex; align-items: center; justify-content: center; height: 50px; border-radius: 10px; background: #3D95CE; color: #fff; font-weight: 700; text-decoration: none; }
+    .btn-venmo:hover { color: #fff; }
+    .btn-paid { height: 50px; border: 0; border-radius: 10px; background: var(--accent); color: var(--on-accent); font: inherit; font-weight: 700; font-size: 15px; cursor: pointer; }
+    .btn-paid:disabled { opacity: .6; }
+    .note { font-size: 13px; color: var(--muted); line-height: 1.5; text-align: center; margin: 0; }
+    .done { background: #12301F; border-radius: 14px; padding: 16px; }
+    .done strong { color: #7CE0A6; font-size: 17px; }
+    .done p, .gone p { margin: 6px 0 0; color: var(--text-2); line-height: 1.5; }
+    .gone { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
+    .err { color: #FF8A8A; text-align: center; margin: 0; }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="brand"><img src="/images/goumo-logo.png" alt="GouMo Dance Chronicles"></div>
+    <div id="box"><p class="note">Loading…</p></div>
+  </main>
+  <script>
+  (function () {
+    const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const token = new URLSearchParams(location.search).get('t') || '';
+    const box = document.getElementById('box');
+    const gone = (msg) => { box.innerHTML = `<div class="gone"><strong>This offer isn't available</strong><p>${esc(msg)}</p><p><a href="/my">My classes</a></p></div>`; };
+    fetch('/api/spot/' + encodeURIComponent(token)).then(async (r) => {
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) return gone(d.error || 'This offer has expired.');
+      const until = new Date(d.expires_at).toLocaleString('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit' });
+      const note = `GouMo spot: ${d.course_name}`;
+      const venmoUrl = `https://venmo.com/${encodeURIComponent(d.venmo)}?txn=pay&amount=${encodeURIComponent(d.amount)}&note=${encodeURIComponent(note)}`;
+      box.innerHTML = `
+        <div style="display:flex;flex-direction:column;gap:16px">
+          <div><div class="kicker">A spot is being offered to you</div><h1>${esc(d.course_name)}</h1>
+            <div class="when">${esc([d.when, d.location].filter(Boolean).join(' · '))}</div></div>
+          <div class="pay"><span style="color:var(--muted);font-size:14px">Pay ${esc(d.giver)} directly on Venmo</span>
+            <span class="amt">$${Number(d.amount).toFixed(0)}</span><span class="who">@${esc(d.venmo)}</span><small>Note: ${esc(note)}</small></div>
+          <a class="btn-venmo" href="${esc(venmoUrl)}" target="_blank" rel="noopener">Open Venmo</a>
+          <button type="button" class="btn-paid" id="paid">I've paid ${esc(d.giver)}</button>
+          <p class="err" id="err" hidden></p>
+          <p class="note">Held for you until <strong>${esc(until)}</strong>. You pay ${esc(d.giver)}, not GouMo. Tap "I've paid" only after sending: the spot moves to you straight away, and ${esc(d.giver)} can report it if the money didn't arrive.</p>
+          <p class="note" style="font-size:12px">Signed in as ${esc(d.email)}</p>
+        </div>`;
+      document.getElementById('paid').addEventListener('click', async (e) => {
+        if (!window.confirm(`Have you sent $${Number(d.amount).toFixed(0)} to @${d.venmo} on Venmo?`)) return;
+        e.target.disabled = true;
+        const res = await fetch('/api/spot/' + encodeURIComponent(token) + '/paid', { method: 'POST' }).catch(() => null);
+        const out = res ? await res.json().catch(() => ({})) : {};
+        if (!res || !res.ok) {
+          const err = document.getElementById('err'); err.hidden = false; err.textContent = out.error || 'Could not reach GouMo. Try again.';
+          e.target.disabled = false; return;
+        }
+        box.innerHTML = `<div class="done"><strong>You're in!</strong><p>Your spot in ${esc(d.course_name)} is confirmed. We've emailed you the details and let ${esc(d.giver)} know you paid.</p><p><a href="/my">My classes</a></p></div>`;
+      });
+    }).catch(() => gone('Could not reach GouMo. Check your connection and try again.'));
+  })();
+  </script>
+</body>
+</html>
