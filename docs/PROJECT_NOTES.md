@@ -103,6 +103,22 @@ PR as any change that adds a decision, a link or a to-do.
 - Main admin only (no refunds, so these are just for the owner): student profile Attended / No shows / Attendance %,
   dashboard turnout per class and "Attendance to check: N class dates" (last 14 days, not checked).
 
+## Waitlist offers and "Can't make it" (Nov 2026)
+
+- Mockup (approved): https://claude.ai/artifact/AwBPYvAm9LLT2UKJHRGpCC
+- **Free classes:** students tap "Can't make it?" on My classes (confirm sheet, no undo). The spot frees up straight
+  away and the next person on the waitlist is emailed. Students can't give up paid classes (no refunds).
+- **Every waitlist offer** (free give-up, or the admin cancelling a paid spot) is held for the "Waitlist hold" time
+  (Settings, default 3 hours) but never past **30 minutes before class**; no new offers inside those 30 minutes.
+- When an offer runs out: if they **opened the link** they keep their place (first in line); if they **never opened it**
+  they move to the end of the waitlist and get a short "you missed it" email. Then the next person is offered it.
+  The server checks every 10 minutes (Railway; no laptop needed) and also the moment a link is tapped.
+- Tapping the link late counts as trying: they go to the front of the line and see "Sorry, this offer expired… still
+  first in line", or "Register now" if the spot is still open and nobody else is waiting, or "Registration has closed"
+  inside the 30-minute cutoff. Column `waitlist.link_opened_at`.
+- Next (designed, not built): paid "Offer my spot", where the taker pays the giver directly on Venmo, the giver
+  confirms (or it finishes after 1 hour), claim hold 3 hours, offers only when someone is on the waitlist.
+
 ## Free classes (Nov 2026)
 
 - A class is free when its fee is set to $0 in the class form (every saved price is $0). The fee box can't be

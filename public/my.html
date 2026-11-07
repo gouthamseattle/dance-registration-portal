@@ -104,6 +104,9 @@
     .sheet-bg[hidden] { display: none; }
     .sheet { background: var(--surface); border-top: 1px solid var(--line); border-radius: 20px 20px 0 0; width: 100%; max-width: 560px; box-sizing: border-box; padding: 16px 20px calc(28px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 10px; }
     .sheet h2 { margin: 4px 0 0; font-size: 20px; }
+    .cant-title { font-family: var(--font-display); font-weight: 400; text-transform: uppercase; font-size: 24px !important; }
+    .cant-link { background: none; border: 0; padding: 10px 0 0; color: #FF8A8A; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; align-self: center; }
+    .gave-up { font-size: 14px; color: var(--muted); line-height: 1.5; }
     .lvl { display: flex; align-items: center; gap: 12px; border-radius: 12px; padding: 10px 12px; border: 1px solid var(--line); background: var(--surface-2); }
     .lvl.me { border-color: var(--accent); background: #2A2510; }
     .lvl div { flex: 1 1 auto; }
@@ -196,6 +199,17 @@
     </div>
   </footer>
 
+  <div class="sheet-bg" id="cantSheet" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="cantTitle">
+      <h2 id="cantTitle" class="cant-title">Can't make it?</h2>
+      <p style="margin:0;line-height:1.5">Give up your spot in <strong id="cantClass"></strong>. It goes to the next person on the waitlist.</p>
+      <p class="meta" style="margin:0">You can't undo this. To come later, you'd need to register again if a spot is open.</p>
+      <p class="msg" id="cantMsg" style="margin:0"></p>
+      <button type="button" class="btn btn-primary" id="cantYes">Yes, give up my spot</button>
+      <button type="button" class="btn btn-outline" id="cantNo">Keep my spot</button>
+    </div>
+  </div>
+
   <div class="sheet-bg" id="levelsSheet" hidden>
     <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="levelsTitle">
       <h2 id="levelsTitle">Consistency badge</h2>
@@ -206,6 +220,6 @@
   </div>
 
   <script src="/js/class-info.js?v=8"></script>
-  <script src="/js/my.js?v=10"></script>
+  <script src="/js/my.js?v=11"></script>
 </body>
 </html>

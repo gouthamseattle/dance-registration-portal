@@ -12,7 +12,7 @@ const DatabaseConfig = require('./database-config');
 const { initializeDatabase } = require('./database/initialize');
 
 // Import utilities
-const { sendRegistrationConfirmationEmail, sendWaitlistNotificationEmail, sendEmailWithFallback, verifyEmailTransport, emailMethod } = require('./utils/mailer');
+const { sendRegistrationConfirmationEmail, sendWaitlistNotificationEmail, sendWaitlistMissedEmail, sendEmailWithFallback, verifyEmailTransport, emailMethod } = require('./utils/mailer');
 const { fetchCourseWithSlots } = require('./utils/schedule');
 const { getCourseAvailability, formatLocalDate, formatLocalDateShort } = require('./utils/courseAvailability');
 
@@ -3041,14 +3041,63 @@ function paymentMethodLabel(value) {
 }
 
 // ===================== Waitlist offers =====================
-// When a spot opens (the admin cancels a paid registration), the next person on
-// that class's waitlist is emailed a personal link and the spot is held for them
-// for the "waitlist hold" time (Settings, default 24 hours). If they don't
-// register in time, the offer expires and the next person is emailed, in order.
+// When a spot opens (the admin cancels a paid registration, or a student gives up a
+// free class spot with "Can't make it"), the next person on that class's waitlist is
+// emailed a personal link and the spot is held for them for the "waitlist hold" time
+// (Settings, default 3 hours), but never later than 30 minutes before class.
+// When an offer runs out: if they opened the link they keep their place (first in line);
+// if they never opened it they move to the end of the waitlist and get a short email.
+// Then the next person is offered the spot. No offers within 30 minutes of class.
+const OFFER_CUTOFF_MINUTES = 30;
 async function waitlistHoldHours() {
     const row = await dbConfig.get('SELECT setting_value FROM system_settings WHERE setting_key = $1', ['waitlist_hold_hours']);
     const h = Number(row?.setting_value);
-    return h > 0 && h <= 168 ? h : 24;
+    return h > 0 && h <= 168 ? h : 3;
+}
+
+// A class date and start time ("2026-11-08", "10:00") in Seattle time, as a Date
+function seattleTime(date, time) {
+    const [h, m] = String(time || '00:00').split(':').map(Number);
+    const guess = new Date(Date.UTC(+date.slice(0, 4), +date.slice(5, 7) - 1, +date.slice(8, 10), h || 0, m || 0));
+    const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).formatToParts(guess);
+    const g = (k) => Number(parts.find(p => p.type === k).value);
+    const shownAs = Date.UTC(g('year'), g('month') - 1, g('day'), g('hour'), g('minute'));
+    return new Date(guess.getTime() + (guess.getTime() - shownAs));
+}
+// When the class next starts (null when it has no dates left)
+async function nextClassStart(courseId) {
+    const byCourse = await allClassDates('', '0000-00-00');
+    const dates = (byCourse[courseId] || {}).dates || [];
+    const slot = await dbConfig.get('SELECT start_time FROM course_slots WHERE course_id = $1 ORDER BY id LIMIT 1', [courseId]);
+    const now = Date.now();
+    for (const d of dates) {
+        const t = seattleTime(d, slot && slot.start_time);
+        if (t.getTime() > now) return t;
+    }
+    return null;
+}
+// Last moment a waitlist offer can run (30 minutes before class); null = no dated class
+async function offerCutoff(courseId) {
+    const start = await nextClassStart(courseId);
+    return start ? new Date(start.getTime() - OFFER_CUTOFF_MINUTES * 60000) : null;
+}
+// Close the gaps in a class's waitlist numbers (1, 2, 3 …) in the current order
+async function renumberWaitlist(courseId) {
+    const rows = await dbConfig.all(
+        "SELECT id FROM waitlist WHERE course_id = $1 AND status IN ('active', 'notified') ORDER BY waitlist_position ASC, created_at ASC",
+        [courseId]);
+    for (let i = 0; i < rows.length; i++) {
+        await dbConfig.run('UPDATE waitlist SET waitlist_position = $1 WHERE id = $2', [i + 1, rows[i].id]);
+    }
+}
+// Put one waitlist entry back in line, first or last
+async function placeInLine(entryId, courseId, front) {
+    const row = await dbConfig.get(
+        `SELECT ${front ? 'MIN' : 'MAX'}(waitlist_position) AS p FROM waitlist WHERE course_id = $1 AND status IN ('active', 'notified') AND id != $2`,
+        [courseId, entryId]);
+    const p = row && row.p != null ? Number(row.p) + (front ? -1 : 1) : 1;
+    await dbConfig.run("UPDATE waitlist SET status = 'active', waitlist_position = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2", [p, entryId]);
+    await renumberWaitlist(courseId);
 }
 
 // Spots held for students who were offered one (still within their time, or
@@ -3081,10 +3130,13 @@ async function offerSpot(entryId, req, hours) {
     if (!entry) return null;
     const holdHours = hours || await waitlistHoldHours();
     const token = require('crypto').randomBytes(32).toString('hex');
-    const expiresAt = new Date(Date.now() + holdHours * 60 * 60 * 1000);
+    let expiresAt = new Date(Date.now() + holdHours * 60 * 60 * 1000);
+    const cutoff = await offerCutoff(entry.course_id);
+    if (cutoff && cutoff < expiresAt) expiresAt = cutoff;
+    const heldFor = Math.max(0.5, Math.round((expiresAt - Date.now()) / 1800000) / 2);
     await dbConfig.run(`
         UPDATE waitlist SET notification_sent = ${dbConfig.isProduction ? 'true' : '1'}, notification_sent_at = CURRENT_TIMESTAMP,
-               notification_expires_at = $1, payment_link_token = $2, status = 'notified', updated_at = CURRENT_TIMESTAMP
+               notification_expires_at = $1, payment_link_token = $2, status = 'notified', link_opened_at = NULL, updated_at = CURRENT_TIMESTAMP
         WHERE id = $3
     `, [expiresAt.toISOString(), token, entryId]);
     const registrationUrl = `${siteUrl(req)}/waitlist-register/${token}`;
@@ -3102,7 +3154,7 @@ async function offerSpot(entryId, req, hours) {
             position: entry.waitlist_position,
             registrationUrl,
             expiresAt: expiresAt.toISOString(),
-            expiresHours: holdHours
+            expiresHours: heldFor
         });
     } catch (err) {
         console.error('❌ Waitlist offer email failed:', err.message || err);
@@ -3111,15 +3163,22 @@ async function offerSpot(entryId, req, hours) {
 }
 
 // Offer every open spot in a class to the next people waiting, in order
-async function offerOpenSpots(courseId, req) {
+// skipIds: people whose offer for this spot just ran out (they keep their place for the NEXT spot)
+async function offerOpenSpots(courseId, req, skipIds) {
+    const skip = new Set([...(skipIds || [])].map(Number));
     const offered = [];
+    // Too close to class (or no dates left): no new offers, the spot just stays open
+    const cutoff = await offerCutoff(courseId);
+    const hasDates = ((await allClassDates('', '0000-00-00'))[courseId] || {}).dates;
+    if ((cutoff && cutoff <= new Date()) || (!cutoff && hasDates && hasDates.length)) return offered;
     const { available } = await getCourseAvailability(dbConfig, courseId);
     let free = available - await heldSpots(courseId);
     while (free > 0) {
-        const next = await dbConfig.get(
-            "SELECT id FROM waitlist WHERE course_id = $1 AND status = 'active' ORDER BY waitlist_position ASC, created_at ASC LIMIT 1",
+        const line = await dbConfig.all(
+            "SELECT id FROM waitlist WHERE course_id = $1 AND status = 'active' ORDER BY waitlist_position ASC, created_at ASC",
             [courseId]
         );
+        const next = line.find(e => !skip.has(Number(e.id)));
         if (!next) break;
         const offer = await offerSpot(next.id, req);
         if (offer) offered.push(offer);
@@ -3130,16 +3189,28 @@ async function offerOpenSpots(courseId, req) {
 
 // Offers whose time ran out: mark expired and move on to the next person
 async function expireWaitlistOffers() {
-    const expired = await dbConfig.all(
-        "SELECT id, course_id FROM waitlist WHERE status = 'notified' AND notification_expires_at <= $1",
-        [new Date().toISOString()]
-    );
+    const expired = await dbConfig.all(`
+        SELECT w.id, w.course_id, w.link_opened_at, s.email, s.first_name, s.last_name, c.name AS course_name
+        FROM waitlist w JOIN students s ON s.id = w.student_id JOIN courses c ON c.id = w.course_id
+        WHERE w.status = 'notified' AND w.notification_expires_at <= $1
+    `, [new Date().toISOString()]);
     const courses = new Set();
+    const justExpired = new Set();
     for (const e of expired) {
-        await dbConfig.run("UPDATE waitlist SET status = 'expired', payment_link_token = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = $1", [e.id]);
+        justExpired.add(Number(e.id));
+        // Opened the link: keeps their place (first in line). Never opened it: end of the line.
+        await placeInLine(e.id, e.course_id, !!e.link_opened_at);
+        if (!e.link_opened_at) {
+            try {
+                const setting = await dbConfig.get('SELECT setting_value FROM system_settings WHERE setting_key = $1', ['email_notifications_enabled']);
+                if (setting && setting.setting_value === 'true') {
+                    await sendWaitlistMissedEmail(e.email, { studentName: [e.first_name, e.last_name].filter(Boolean).join(' '), courseName: e.course_name });
+                }
+            } catch (err) { console.error('❌ Missed-offer email failed:', err.message || err); }
+        }
         courses.add(e.course_id);
     }
-    for (const courseId of courses) await offerOpenSpots(courseId, null);
+    for (const courseId of courses) await offerOpenSpots(courseId, null, justExpired);
     return expired.length;
 }
 // Check every 10 minutes while the server is running
@@ -3159,20 +3230,81 @@ async function validWaitlistOffer(token, courseId, email) {
     return offer;
 }
 
-// The link in the "spot available" email
-app.get('/waitlist-register/:token', asyncHandler(async (req, res) => {
-    const offer = await validWaitlistOffer(req.params.token);
-    if (!offer) {
-        res.set('Cache-Control', 'no-cache');
-        return res.status(410).send(`<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Offer expired · GouMo</title><link href="/css/site.css?v=2" rel="stylesheet"></head>
+// The link in the "spot available" email. Tapping it (even late) counts as trying:
+// a late tap keeps the person first in line.
+const escapeHtml = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+function offerPage(title, text, button) {
+    return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${escapeHtml(title)} · GouMo</title><link href="/css/site.css?v=4" rel="stylesheet"></head>
 <body><main style="max-width:560px;margin:0 auto;padding:48px 16px;text-align:center">
 <img src="/images/goumo-logo.png" alt="GouMo" style="height:56px">
-<h1 style="font-family:var(--font-display);text-transform:uppercase;font-weight:400">This link has expired</h1>
-<p style="color:var(--muted)">The spot was held for a limited time and has been offered to the next person on the waitlist. If you think this is a mistake, message us on Instagram <a class="accent" href="https://instagram.com/goumo_dancechronicles">@goumo_dancechronicles</a>.</p>
-<p><a class="btn btn-primary" href="/#classes">See classes</a></p></main></body></html>`);
+<h1 style="font-family:var(--font-display);text-transform:uppercase;font-weight:400">${escapeHtml(title)}</h1>
+<p style="color:var(--muted)">${text}</p>
+${button ? `<p><a class="btn btn-primary" href="${escapeHtml(button.href)}">${escapeHtml(button.label)}</a></p>` : ''}</main></body></html>`;
+}
+app.get('/waitlist-register/:token', asyncHandler(async (req, res) => {
+    const token = String(req.params.token || '');
+    const entry = token ? await dbConfig.get(`
+        SELECT w.id, w.course_id, w.status, c.name AS course_name FROM waitlist w JOIN courses c ON c.id = w.course_id
+        WHERE w.payment_link_token = $1`, [token]) : null;
+    if (entry) await dbConfig.run('UPDATE waitlist SET link_opened_at = CURRENT_TIMESTAMP WHERE id = $1', [entry.id]);
+    const offer = await validWaitlistOffer(token);
+    if (offer) return res.redirect(`/email-profile.html?course=${encodeURIComponent(offer.course_id)}&waitlist=${encodeURIComponent(token)}`);
+
+    res.set('Cache-Control', 'no-cache');
+    if (!entry) {
+        return res.status(410).send(offerPage('This link has expired',
+            'The spot was held for a limited time and has been offered to the next person on the waitlist. If you think this is a mistake, message us on Instagram <a class="accent" href="https://instagram.com/goumo_dancechronicles">@goumo_dancechronicles</a>.',
+            { href: '/#classes', label: 'See classes' }));
     }
-    res.redirect(`/email-profile.html?course=${encodeURIComponent(offer.course_id)}&waitlist=${encodeURIComponent(req.params.token)}`);
+    // Late tap: settle any offers that ran out (theirs counts as opened, so they keep their place)
+    await expireWaitlistOffers();
+    const fresh = await dbConfig.get('SELECT status, payment_link_token FROM waitlist WHERE id = $1', [entry.id]);
+    if (fresh && fresh.status === 'registered') return res.redirect('/my');
+    // Already offered a new spot (they were first in line): send them straight to it
+    if (fresh && fresh.status === 'notified' && await validWaitlistOffer(fresh.payment_link_token)) {
+        return res.redirect(`/email-profile.html?course=${encodeURIComponent(entry.course_id)}&waitlist=${encodeURIComponent(fresh.payment_link_token)}`);
+    }
+    // They tried, so they go (back) to the front of the line
+    if (fresh && fresh.status === 'active') await placeInLine(entry.id, entry.course_id, true);
+    const name = escapeHtml(entry.course_name || 'this class');
+    const cutoff = await offerCutoff(entry.course_id);
+    if (!cutoff || cutoff <= new Date()) {
+        return res.status(410).send(offerPage('Registration for this class has closed',
+            `${name} starts soon. You're still first in line for any future spot in this class.`));
+    }
+    const { available } = await getCourseAvailability(dbConfig, entry.course_id);
+    const waiting = await dbConfig.get("SELECT COUNT(*) AS n FROM waitlist WHERE course_id = $1 AND status = 'notified'", [entry.course_id]);
+    if (available - await heldSpots(entry.course_id) > 0 && !Number(waiting?.n)) {
+        return res.status(410).send(offerPage('Your hold expired, but the spot is still open',
+            'Anyone can take it now, so be quick.', { href: `/email-profile.html?course=${encodeURIComponent(entry.course_id)}`, label: 'Register now' }));
+    }
+    return res.status(410).send(offerPage('Sorry, this offer expired',
+        `The spot in ${name} was offered to the next person. You tried, so you're still <strong>first in line</strong> for the next spot. We'll email you.`));
+}));
+
+// Student: "Can't make it" for a FREE class (paid classes can't be cancelled by students).
+// The spot frees up straight away and is offered to the next person on the waitlist.
+app.post('/api/my/cant-make-it', asyncHandler(async (req, res) => {
+    const email = String((req.body || {}).email || '').trim().toLowerCase();
+    const regId = Number((req.body || {}).registration_id);
+    if (!email || !regId) return res.status(400).json({ error: 'Email and registration are required' });
+    const reg = await dbConfig.get(`
+        SELECT r.id, r.course_id, r.payment_status, r.combo_group FROM registrations r JOIN students s ON s.id = r.student_id
+        WHERE r.id = $1 AND LOWER(s.email) = $2`, [regId, email]);
+    if (!reg || reg.payment_status === 'canceled') return res.status(404).json({ error: 'Registration not found' });
+    if (reg.combo_group || !(await isFreeCourse(reg.course_id))) {
+        return res.status(400).json({ error: 'Only free classes can be given up here' });
+    }
+    const start = await nextClassStart(reg.course_id);
+    if (!start) return res.status(400).json({ error: 'This class has already happened' });
+    await dbConfig.run(`
+        UPDATE registrations SET payment_status = 'canceled', canceled_at = CURRENT_TIMESTAMP,
+            cancellation_reason = $1, handled_by = $2, updated_at = CURRENT_TIMESTAMP
+        WHERE id = $3`, ["Student: can't make it", 'student', reg.id]);
+    const offered = await offerOpenSpots(reg.course_id, req);
+    console.log('🙋 Free spot given up', { registration_id: reg.id, course_id: reg.course_id, offered: offered.length });
+    res.json({ success: true, offered: offered.length });
 }));
 
 // ===================== Student cleanup & test accounts =====================
