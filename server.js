@@ -3569,7 +3569,8 @@ function kindStats(regs, byCourse, crew, today, teachesAs, noShows) {
     return { attended: mine.size, held, pct: Math.round(mine.size * 100 / held), since };
 }
 function rankOf(list, id) {
-    const ranked = list.filter(x => x.held >= MIN_FOR_RANK).sort((a, b) => (b.pct - a.pct) || (b.attended - a.attended));
+    // Most classes attended first; % breaks ties (owner, Nov 2026: reward regulars)
+    const ranked = list.filter(x => x.held >= MIN_FOR_RANK).sort((a, b) => (b.attended - a.attended) || (b.pct - a.pct));
     const pos = ranked.findIndex(x => x.id === Number(id));
     // Ties share a rank
     const rank = pos < 0 ? null : ranked.findIndex(x => x.pct === ranked[pos].pct && x.attended === ranked[pos].attended) + 1;
