@@ -467,6 +467,8 @@ app.get('/api/courses', asyncHandler(async (req, res) => {
                 `, [student.id]);
                 
                 registrations.forEach(reg => {
+                    // A cancelled registration never hides an active one for the same class
+                    if (studentRegistrations[reg.course_id] && reg.payment_status === 'canceled') return;
                     studentRegistrations[reg.course_id] = {
                         registration_id: reg.registration_id,
                         payment_status: reg.payment_status,
@@ -1679,6 +1681,8 @@ app.post('/api/check-student-profile', asyncHandler(async (req, res) => {
         `, [student.id]);
         
         registrations.forEach(reg => {
+            // A cancelled registration never hides an active one for the same class
+            if (studentRegistrations[reg.course_id] && reg.payment_status === 'canceled') return;
             studentRegistrations[reg.course_id] = {
                 registration_id: reg.registration_id,
                 payment_status: reg.payment_status,
@@ -3235,7 +3239,7 @@ async function validWaitlistOffer(token, courseId, email) {
 const escapeHtml = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 function offerPage(title, text, button) {
     return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${escapeHtml(title)} · GouMo</title><link href="/css/site.css?v=4" rel="stylesheet"></head>
+<title>${escapeHtml(title)} · GouMo</title><link href="/css/site.css?v=5" rel="stylesheet"></head>
 <body><main style="max-width:560px;margin:0 auto;padding:48px 16px;text-align:center">
 <img src="/images/goumo-logo.png" alt="GouMo" style="height:56px">
 <h1 style="font-family:var(--font-display);text-transform:uppercase;font-weight:400">${escapeHtml(title)}</h1>
