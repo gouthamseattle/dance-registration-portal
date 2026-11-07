@@ -1082,12 +1082,12 @@ class DanceRegistrationApp {
     showWaitlistSuccess() {
         this.currentStep = 'waitlist-success';
         
-        // Hide all sections
-        document.getElementById('courseSelection').style.display = 'none';
-        document.getElementById('registrationForm').style.display = 'none';
-        document.getElementById('paymentSection').style.display = 'none';
-        document.getElementById('confirmationSection').style.display = 'none';
-        
+        // Hide all sections (some aren't on every page)
+        ['courseSelection', 'registrationForm', 'paymentSection', 'confirmationSection'].forEach((id) => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = 'none';
+        });
+
         // Create and show waitlist success section
         this.createWaitlistSuccessSection();
         this.scrollToTop();
@@ -1745,9 +1745,10 @@ class DanceRegistrationApp {
 
     showConfirmation() {
         this.currentStep = 'confirmation';
-        document.getElementById('courseSelection').style.display = 'none';
-        document.getElementById('registrationForm').style.display = 'none';
-        document.getElementById('paymentSection').style.display = 'none';
+        ['courseSelection', 'registrationForm', 'paymentSection'].forEach((id) => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = 'none';
+        });
         document.getElementById('confirmationSection').style.display = 'block';
 
         this.populateConfirmationDetails();

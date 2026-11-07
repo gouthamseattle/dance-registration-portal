@@ -816,6 +816,7 @@ test('waitlist: admin cancels a paid spot, next student is offered it and can cl
     const link = await fetch(`${BASE}/waitlist-register/${token}`, { redirect: 'manual' });
     assert.equal(link.status, 302);
     assert.ok(link.headers.get('location').includes(`course=${id}`));
+    assert.ok(link.headers.get('location').includes(`for=${encodeURIComponent(b)}`), 'link signs in as the person the spot is held for');
     assert.equal((await fetch(`${BASE}/waitlist-register/not-a-real-token`)).status, 410, 'bad or expired links get a friendly page');
 
     // Ben claims it with the link; someone else can't use his link
@@ -1208,6 +1209,7 @@ test("free class: Can't make it frees the spot; offers keep or lose place; late 
     const js = await (await fetch(`${BASE}/js/my.js`)).text();
     assert.ok(js.includes("Can't make it?") && js.includes('/api/my/cant-make-it'), "Can't make it on My classes");
     const list2 = await (await fetch(`${BASE}/js/email-profile-registration.js`)).text();
+    assert.ok(list2.includes("get('for')"), 'waitlist link overrides the email this phone remembers');
     assert.ok(list2.includes('data-cant-yes') && list2.includes('/api/my/cant-make-it'), "Can't make it on the class list cards too");
 });
 
