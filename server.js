@@ -3163,7 +3163,9 @@ async function offerSpot(entryId, req, hours) {
 }
 
 // Offer every open spot in a class to the next people waiting, in order
-async function offerOpenSpots(courseId, req) {
+// skipIds: people whose offer for this spot just ran out (they keep their place for the NEXT spot)
+async function offerOpenSpots(courseId, req, skipIds) {
+    const skip = new Set([...(skipIds || [])].map(Number));
     const offered = [];
     // Too close to class (or no dates left): no new offers, the spot just stays open
     const cutoff = await offerCutoff(courseId);
@@ -3172,10 +3174,11 @@ async function offerOpenSpots(courseId, req) {
     const { available } = await getCourseAvailability(dbConfig, courseId);
     let free = available - await heldSpots(courseId);
     while (free > 0) {
-        const next = await dbConfig.get(
-            "SELECT id FROM waitlist WHERE course_id = $1 AND status = 'active' ORDER BY waitlist_position ASC, created_at ASC LIMIT 1",
+        const line = await dbConfig.all(
+            "SELECT id FROM waitlist WHERE course_id = $1 AND status = 'active' ORDER BY waitlist_position ASC, created_at ASC",
             [courseId]
         );
+        const next = line.find(e => !skip.has(Number(e.id)));
         if (!next) break;
         const offer = await offerSpot(next.id, req);
         if (offer) offered.push(offer);
@@ -3192,7 +3195,9 @@ async function expireWaitlistOffers() {
         WHERE w.status = 'notified' AND w.notification_expires_at <= $1
     `, [new Date().toISOString()]);
     const courses = new Set();
+    const justExpired = new Set();
     for (const e of expired) {
+        justExpired.add(Number(e.id));
         // Opened the link: keeps their place (first in line). Never opened it: end of the line.
         await placeInLine(e.id, e.course_id, !!e.link_opened_at);
         if (!e.link_opened_at) {
@@ -3205,7 +3210,7 @@ async function expireWaitlistOffers() {
         }
         courses.add(e.course_id);
     }
-    for (const courseId of courses) await offerOpenSpots(courseId, null);
+    for (const courseId of courses) await offerOpenSpots(courseId, null, justExpired);
     return expired.length;
 }
 // Check every 10 minutes while the server is running
