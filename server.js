@@ -3253,7 +3253,8 @@ app.get('/waitlist-register/:token', asyncHandler(async (req, res) => {
         WHERE w.payment_link_token = $1`, [token]) : null;
     if (entry) await dbConfig.run('UPDATE waitlist SET link_opened_at = CURRENT_TIMESTAMP WHERE id = $1', [entry.id]);
     const offer = await validWaitlistOffer(token);
-    if (offer) return res.redirect(`/email-profile.html?course=${encodeURIComponent(offer.course_id)}&waitlist=${encodeURIComponent(token)}`);
+    // The link always signs in as the person the spot is held for (not whoever this phone remembers)
+    if (offer) return res.redirect(`/email-profile.html?course=${encodeURIComponent(offer.course_id)}&waitlist=${encodeURIComponent(token)}&for=${encodeURIComponent(offer.email)}`);
 
     res.set('Cache-Control', 'no-cache');
     if (!entry) {
@@ -3263,11 +3264,11 @@ app.get('/waitlist-register/:token', asyncHandler(async (req, res) => {
     }
     // Late tap: settle any offers that ran out (theirs counts as opened, so they keep their place)
     await expireWaitlistOffers();
-    const fresh = await dbConfig.get('SELECT status, payment_link_token FROM waitlist WHERE id = $1', [entry.id]);
+    const fresh = await dbConfig.get('SELECT w.status, w.payment_link_token, s.email FROM waitlist w JOIN students s ON s.id = w.student_id WHERE w.id = $1', [entry.id]);
     if (fresh && fresh.status === 'registered') return res.redirect('/my');
     // Already offered a new spot (they were first in line): send them straight to it
     if (fresh && fresh.status === 'notified' && await validWaitlistOffer(fresh.payment_link_token)) {
-        return res.redirect(`/email-profile.html?course=${encodeURIComponent(entry.course_id)}&waitlist=${encodeURIComponent(fresh.payment_link_token)}`);
+        return res.redirect(`/email-profile.html?course=${encodeURIComponent(entry.course_id)}&waitlist=${encodeURIComponent(fresh.payment_link_token)}&for=${encodeURIComponent(fresh.email)}`);
     }
     // They tried, so they go (back) to the front of the line
     if (fresh && fresh.status === 'active') await placeInLine(entry.id, entry.course_id, true);

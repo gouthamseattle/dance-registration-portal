@@ -166,6 +166,9 @@ class EmailProfileRegistrationApp {
     }
 
     savedEmail() {
+        // From a waitlist email link: sign in as the person the spot is held for
+        const offerFor = this.waitlistToken && new URLSearchParams(window.location.search).get('for');
+        if (offerFor) return offerFor;
         try { return localStorage.getItem('goumo_email') || ''; } catch (e) { return ''; }
     }
 
