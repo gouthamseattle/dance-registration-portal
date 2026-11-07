@@ -140,7 +140,7 @@ PR as any change that adds a decision, a link or a to-do.
 - "Teaches as" on a student's admin profile (e.g. Rudie for Rudhresh, Supriya): classes whose
   instructor matches are left out of that person's counts and totals.
 - Rank: crew practices among current crew members, GouMo classes among all students (not hidden,
-  not test accounts); 5+ held; by % then count; ties share a rank.
+  not test accounts); 5+ held; by number of classes attended, then % (changed Nov 2026 so regulars rank above short perfect records); ties share a rank.
 - Badges are switched OFF (owner: too early for new members); `SHOW_BADGES` in my.js.
 - Calculated in `studentProgress()` in server.js, returned as `progress` by `/api/my/profile`.
 - Mockup (approved): https://claude.ai/artifact/JBEr2UNNxFhLxjMz8VRcV9
