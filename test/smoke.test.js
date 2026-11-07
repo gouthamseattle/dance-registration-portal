@@ -1137,6 +1137,12 @@ test('attendance: mark No show, progress counts attended only, helpers limited t
     assert.ok(page.includes('>Attended</button>') && page.includes('>No show</button>'), 'Attended / No show buttons');
 });
 
+test('waitlist cards: View all shows every name, a one-class filter shows everyone', async () => {
+    const js = await (await fetch(`${BASE}/js/admin.js`)).text();
+    assert.ok(js.includes('const shown = showAll ? entries : entries.slice(0, 5);'), 'cards expand');
+    assert.ok(js.includes('this.waitlistExpanded.add(key)'), 'View all expands the card instead of re-filtering');
+});
+
 test('removed features are gone', async () => {
     for (const [method, url] of [
         ['POST', '/api/competition/register'],
