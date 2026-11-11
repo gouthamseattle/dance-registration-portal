@@ -76,6 +76,7 @@ async function ensureSchema(dbConfig) {
         await ensureSessionTable(dbConfig);
         await ensureTeamTable(dbConfig);
         await ensureAttendanceTables(dbConfig);
+        await ensureSpotOffers(dbConfig);
 
         // Ensure student profile and access control columns exist
         await ensureStudentProfileColumns(dbConfig);
@@ -332,6 +333,43 @@ async function ensureAttendanceTables(dbConfig) {
         console.log('✅ Ensured attendance tables exist');
     } catch (e) {
         console.log('ℹ️ attendance table check skipped:', e.message || e);
+    }
+}
+
+/**
+ * "Offer my spot" (Nov 2026): a student who paid for a class that is full offers their spot
+ * to the waitlist; the taker pays them directly on Venmo and the spot moves straight away.
+ * waitlist.spot_offer_id marks a waitlist offer that belongs to one of these.
+ */
+async function ensureSpotOffers(dbConfig) {
+    try {
+        const pk = dbConfig.isProduction ? 'SERIAL PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT';
+        await dbConfig.run(`CREATE TABLE IF NOT EXISTS spot_offers (
+            id ${pk},
+            registration_id INTEGER NOT NULL,
+            course_id INTEGER NOT NULL,
+            student_id INTEGER NOT NULL,
+            venmo VARCHAR(100) NOT NULL,
+            amount NUMERIC(10,2) NOT NULL,
+            status VARCHAR(20) NOT NULL DEFAULT 'pending_confirm',
+            confirm_token VARCHAR(80),
+            taker_student_id INTEGER,
+            taker_registration_id INTEGER,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            confirmed_at TIMESTAMP,
+            transferred_at TIMESTAMP,
+            disputed_at TIMESTAMP,
+            resolved_at TIMESTAMP,
+            closed_at TIMESTAMP
+        )`);
+        if (dbConfig.isProduction) {
+            await dbConfig.run('ALTER TABLE waitlist ADD COLUMN IF NOT EXISTS spot_offer_id INTEGER');
+        } else {
+            await dbConfig.run('ALTER TABLE waitlist ADD COLUMN spot_offer_id INTEGER').catch(() => {});
+        }
+        console.log('✅ Ensured spot_offers table exists');
+    } catch (e) {
+        console.log('ℹ️ spot offer table check skipped:', e.message || e);
     }
 }
 

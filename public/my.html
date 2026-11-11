@@ -107,6 +107,13 @@
     .cant-title { font-family: var(--font-display); font-weight: 400; text-transform: uppercase; font-size: 24px !important; }
     .cant-link { background: none; border: 0; padding: 10px 0 0; color: #FF8A8A; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; align-self: center; }
     .gave-up { font-size: 14px; color: var(--muted); line-height: 1.5; }
+    .offer-note { margin: 10px 0 0; font-size: 13px; color: var(--accent); text-align: center; }
+    .offer-live { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; background: #17150A; border: 1px solid var(--accent); border-radius: 12px; padding: 12px 14px; font-size: 14px; line-height: 1.5; }
+    .offer-live span { color: var(--text-2); }
+    .offer-amount { display: flex; justify-content: space-between; background: var(--bg); border-radius: 10px; padding: 12px 14px; font-size: 14px; }
+    .offer-given { display: flex; flex-direction: column; gap: 6px; padding: 14px; font-size: 14px; line-height: 1.5; margin-bottom: 8px; }
+    .offer-given span { color: var(--text-2); }
+    .btn.danger { border-color: #FF8A8A; color: #FF8A8A; }
     .lvl { display: flex; align-items: center; gap: 12px; border-radius: 12px; padding: 10px 12px; border: 1px solid var(--line); background: var(--surface-2); }
     .lvl.me { border-color: var(--accent); background: #2A2510; }
     .lvl div { flex: 1 1 auto; }
@@ -160,6 +167,7 @@
 
       <section id="crewBox" class="crew" style="margin-top:16px" hidden></section>
       <section id="nextBox" class="card next" style="margin-top:16px" hidden></section>
+      <section id="transferBox" style="margin-top:20px" hidden></section>
       <section id="upcomingBox" style="margin-top:20px" hidden><p class="label">Coming up</p><div id="upcomingList"></div></section>
       <section id="historyBox" style="margin-top:20px" hidden><p class="label">History</p><div id="historyList" class="card class-list"></div></section>
       <p id="noClasses" class="empty" style="margin-top:16px" hidden>No classes yet. <a class="accent" href="/#classes">See what's on</a>.</p>
@@ -199,6 +207,20 @@
     </div>
   </footer>
 
+  <div class="sheet-bg" id="offerSheet" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="offerTitle">
+      <h2 id="offerTitle" class="cant-title">Offer my spot</h2>
+      <p style="margin:0;line-height:1.5">We'll offer your spot in <strong id="offerClass"></strong> to the next person on the waitlist. They pay you directly on Venmo, and the spot moves to them when they do.</p>
+      <div class="offer-amount"><span>They pay you</span><strong id="offerAmount"></strong></div>
+      <label for="offerVenmo" style="font-size:13px;font-weight:600">Your Venmo username</label>
+      <input id="offerVenmo" class="input" style="box-sizing:border-box" type="text" autocomplete="off" autocapitalize="off" placeholder="@your-venmo">
+      <p class="meta" style="margin:0">Nothing is cancelled. If nobody takes it, you keep your spot. No refunds from GouMo.</p>
+      <p class="msg" id="offerMsg" style="margin:0"></p>
+      <button type="button" class="btn btn-primary" id="offerYes">Email me a confirm link</button>
+      <button type="button" class="btn btn-outline" id="offerNo">Cancel</button>
+    </div>
+  </div>
+
   <div class="sheet-bg" id="cantSheet" hidden>
     <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="cantTitle">
       <h2 id="cantTitle" class="cant-title">Can't make it?</h2>
@@ -220,6 +242,6 @@
   </div>
 
   <script src="/js/class-info.js?v=8"></script>
-  <script src="/js/my.js?v=11"></script>
+  <script src="/js/my.js?v=12"></script>
 </body>
 </html>

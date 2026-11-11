@@ -590,6 +590,7 @@ class AdminDashboard {
                     <div>${C.esc(r.course_name || 'Class')}${this.isTestReg(r) ? ' <span class="pill pill-muted">Test</span>' : ''}</div>
                     ${r.combo_name ? `<div class="cell-sub">Combo: ${C.esc(r.combo_name)} · actions apply to the whole combo</div>` : ''}
                     ${picked ? `<div class="cell-sub">${C.esc(picked)}</div>` : ''}
+                    ${this.transferLine(r)}
                 </div>
                 <div class="reg-pay">
                     <div class="fw-semibold">${this.money(r.payment_amount)}</div>
@@ -606,6 +607,28 @@ class AdminDashboard {
                 </div>
             </div>`;
         }).join('')}</div>`;
+    }
+
+    // "Offer my spot" transfers: who it came from / went to, and the "Payment not received" flag
+    transferLine(r) {
+        const t = r.transfer;
+        if (!t) return '';
+        const C = window.ClassInfo;
+        let line = '';
+        if (t.offering) line = '<span class="pill pill-warn">Offering</span> <span class="cell-sub">Spot on offer to the waitlist</span>';
+        else if (t.transfer_from) line = `<span class="cell-sub">From ${C.esc(t.transfer_from)} · paid them directly</span>`;
+        else if (t.transfer_to) line = `<span class="cell-sub">Transferred → ${C.esc(t.transfer_to)}</span>`;
+        const flag = t.disputed ? `<div class="mt-1"><span class="pill pill-bad">Payment not received</span>
+            <button class="btn btn-outline-secondary btn-sm ms-1" onclick="admin.settleTransfer(${Number(t.offer_id)}, 'resolve')">Resolved, keep it</button>
+            <button class="btn btn-outline-danger btn-sm ms-1" onclick="admin.settleTransfer(${Number(t.offer_id)}, 'undo')">Undo transfer</button></div>` : '';
+        return `<div>${line}</div>${flag}`;
+    }
+
+    async settleTransfer(offerId, action) {
+        if (action === 'undo' && !window.confirm('Undo this transfer? The spot goes back to the student who offered it, and the other registration is cancelled.')) return;
+        const r = await this.apiFetch(`/api/admin/spot-offers/${offerId}/${action}`, { method: 'POST' });
+        if (r.ok) { this.showSuccess(action === 'undo' ? 'Transfer undone' : 'Marked as resolved'); this.loadRegistrations(); }
+        else this.showError('Could not update the transfer');
     }
 
     // Settings → Test email: shows which method is active and the exact error if sending fails
