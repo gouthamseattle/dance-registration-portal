@@ -3845,6 +3845,21 @@ app.post('/api/attendance/course/:courseId/check', requireAdminOrTeam, asyncHand
     res.json({ success: true, checked: { by: handledBy(req) } });
 }));
 
+// Dashboard tiles (main admin): unique students with at least one paid (confirmed) registration,
+// all time and registered in the last 6 months. Test accounts and hidden students are left out;
+// free classes count (confirmed at $0).
+app.get('/api/admin/student-metrics', requireAuth, asyncHandler(async (req, res) => {
+    const since = new Date();
+    since.setMonth(since.getMonth() - 6);
+    const row = await dbConfig.get(`
+        SELECT COUNT(DISTINCT r.student_id) AS students,
+               COUNT(DISTINCT CASE WHEN r.registration_date >= $1 THEN r.student_id END) AS active_students
+        FROM registrations r JOIN students s ON s.id = r.student_id
+        WHERE r.payment_status = 'completed' AND ${NOT_TEST} AND ${NOT_TESTER_SQL} AND s.archived_at IS NULL
+    `, [since.toISOString()]);
+    res.json({ students: Number(row?.students) || 0, active_students: Number(row?.active_students) || 0, since: since.toISOString().slice(0, 10) });
+}));
+
 // Main admin only: turnout per class, and class dates in the last 14 days nobody has checked
 app.get('/api/attendance/summary', requireAuth, asyncHandler(async (req, res) => {
     const { today, book } = await attendanceBook();

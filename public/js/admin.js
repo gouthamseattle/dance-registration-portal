@@ -298,8 +298,7 @@ class AdminDashboard {
 
         document.getElementById('pendingPayments').textContent = pending.length;
         document.getElementById('pendingAmount').textContent = pending.length ? `${this.money(pendingTotal)} to confirm →` : 'Nothing to confirm';
-        document.getElementById('totalRegistrations').textContent = live.length;
-        document.getElementById('classCount').textContent = `across ${active.length} active class${active.length === 1 ? '' : 'es'}`;
+        this.loadStudentMetrics();
         document.getElementById('totalRevenue').textContent = this.money(revenue);
         // Still waiting (or offered a spot) for a class that isn't over
         document.getElementById('waitlistCount').textContent = Array.isArray(this.waitlists)
@@ -353,6 +352,17 @@ class AdminDashboard {
                     </tbody>
                 </table>
             </div>`;
+    }
+
+    // Dashboard: unique students with a confirmed registration (all time / last 6 months)
+    async loadStudentMetrics() {
+        try {
+            const res = await this.apiFetch('/api/admin/student-metrics');
+            if (!res.ok) return;
+            const m = await res.json();
+            document.getElementById('studentsTotal').textContent = m.students;
+            document.getElementById('studentsActive').textContent = m.active_students;
+        } catch (e) { /* tiles keep "–" */ }
     }
 
     // Attendance (main admin only): turnout per class and class dates nobody has checked yet
@@ -446,7 +456,8 @@ class AdminDashboard {
         this._statsWired = true;
         document.getElementById('statPending').onclick = () => this.showRegistrationsFor('', 'pending');
         document.getElementById('seeAllPending').onclick = (e) => { e.preventDefault(); this.showRegistrationsFor('', 'pending'); };
-        document.getElementById('statRegistered').onclick = () => this.showRegistrationsFor('', '');
+        document.getElementById('statStudents').onclick = () => this.showSection('students');
+        document.getElementById('statActiveStudents').onclick = () => this.showSection('students');
         document.getElementById('statWaitlist').onclick = () => this.showSection('waitlist');
     }
 
