@@ -2622,8 +2622,16 @@ app.get('/api/admin/waitlists', requireAuth, asyncHandler(async (req, res) => {
     query += ' ORDER BY c.name ASC, w.waitlist_position ASC';
     
     const waitlistEntries = await dbConfig.all(query, params);
+    // A class is over once its last date has passed (Seattle time); its waitlist can be cleared
+    const today = todaySeattle();
+    const byCourse = await allClassDates('', '0000-00-00');
+    const isOver = (id) => { const d = (byCourse[id] || {}).dates || []; return d.length > 0 && d[d.length - 1] < today; };
+    const now = Date.now();
     
     const formatted = waitlistEntries.map(entry => ({
+        class_over: isOver(entry.course_id),
+        // An offer whose time ran out counts as waiting again (the 10-minute check moves it on)
+        offer_live: entry.status === 'notified' && entry.notification_expires_at && new Date(entry.notification_expires_at).getTime() > now,
         id: entry.id,
         student_id: entry.student_id,
         course_id: entry.course_id,
@@ -2785,16 +2793,9 @@ app.post('/api/admin/waitlists/remove', requireAuth, asyncHandler(async (req, re
                 continue;
             }
             
-            // Delete waitlist entry
+            // Delete waitlist entry, then renumber everyone still in line (1, 2, 3 …)
             await dbConfig.run('DELETE FROM waitlist WHERE id = $1', [id]);
-            
-            // Adjust positions for remaining students (move everyone up)
-            await dbConfig.run(`
-                UPDATE waitlist 
-                SET waitlist_position = waitlist_position - 1,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE course_id = $1 AND waitlist_position > $2 AND status = 'active'
-            `, [waitlistEntry.course_id, waitlistEntry.waitlist_position]);
+            await renumberWaitlist(waitlistEntry.course_id);
             
             console.log('🗑️ Removed from waitlist', { id, course_id: waitlistEntry.course_id });
             removedCount++;
@@ -2808,6 +2809,19 @@ app.post('/api/admin/waitlists/remove', requireAuth, asyncHandler(async (req, re
         removed_count: removedCount,
         message: `Removed ${removedCount} students from waitlists`
     });
+}));
+
+// Clear one class's whole waitlist (e.g. after the class is over). Any student's spot offer
+// for that class closes too (the student keeps their spot).
+app.post('/api/admin/waitlists/clear', requireAuth, asyncHandler(async (req, res) => {
+    const courseId = Number((req.body || {}).course_id);
+    if (!courseId) return res.status(400).json({ error: 'course_id is required' });
+    const row = await dbConfig.get('SELECT COUNT(*) AS n FROM waitlist WHERE course_id = $1', [courseId]);
+    await dbConfig.run('DELETE FROM waitlist WHERE course_id = $1', [courseId]);
+    await dbConfig.run("UPDATE spot_offers SET status = 'closed', closed_at = CURRENT_TIMESTAMP WHERE course_id = $1 AND status IN ('pending_confirm', 'live')", [courseId])
+        .catch(() => {}); // only once "Offer my spot" is installed
+    console.log('🧹 Waitlist cleared', { course_id: courseId, removed: Number(row?.n) || 0 });
+    res.json({ success: true, removed_count: Number(row?.n) || 0 });
 }));
 
 /**

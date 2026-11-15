@@ -1213,6 +1213,43 @@ test("free class: Can't make it frees the spot; offers keep or lose place; late 
     assert.ok(list2.includes('data-cant-yes') && list2.includes('/api/my/cant-make-it'), "Can't make it on the class list cards too");
 });
 
+test('waitlists: honest counts, renumbering after removal, Class is over, Clear waitlist', async () => {
+    const day = (n) => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
+    const cls = await api('POST', '/api/courses', {
+        name: `Clear WL ${unique}`, course_type: 'drop_in', session_dates: [day(4)],
+        slots: [{ slot_name: 'Main', difficulty_level: 'All Levels', capacity: 1, start_time: '18:00', end_time: '19:00', location: 'WL Studio',
+            practice_date: day(4), pricing: { drop_in: 30, full_package: 30 } }]
+    }, { admin: true });
+    const id = cls.body.courseId || cls.body.id;
+    assert.equal((await api('POST', '/api/register', { first_name: 'Full', email: `wl.a.${unique}@example.com`, course_id: id, payment_amount: 30 })).status, 200);
+    for (const n of ['b', 'c', 'd']) {
+        assert.equal((await api('POST', '/api/waitlist', { first_name: n.toUpperCase(), email: `wl.${n}.${unique}@example.com`, course_id: id, payment_amount: 30 })).status, 200);
+    }
+    const list = async () => (await api('GET', `/api/admin/waitlists?course_id=${id}`, null, { admin: true })).body;
+    let w = await list();
+    assert.equal(w.length, 3);
+    assert.ok(w.every(e => e.class_over === false && e.offer_live === false));
+
+    // Remove #2: the rest renumber 1, 2 and the count is real
+    const second = w.find(e => e.position === 2);
+    const rm = await api('POST', '/api/admin/waitlists/remove', { waitlist_ids: [second.id, 999999] }, { admin: true });
+    assert.equal(rm.body.removed_count, 1, 'only real removals are counted');
+    w = await list();
+    assert.deepEqual(w.map(e => e.position).sort(), [1, 2]);
+
+    // Once the class date has passed it shows as over; Clear waitlist empties it
+    const { Pool } = require('pg');
+    const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: process.env.DATABASE_SSL === 'false' ? false : { rejectUnauthorized: false } });
+    try { await pool.query('UPDATE courses SET session_dates = $1 WHERE id = $2', [JSON.stringify([day(-2)]), id]); } finally { await pool.end(); }
+    w = await list();
+    assert.ok(w.every(e => e.class_over === true), 'Class is over');
+    assert.equal((await api('POST', '/api/admin/waitlists/clear', { course_id: id })).status, 401, 'admin only');
+    const cl = await api('POST', '/api/admin/waitlists/clear', { course_id: id }, { admin: true });
+    assert.equal(cl.status, 200, JSON.stringify(cl.body));
+    assert.equal(cl.body.removed_count, 2);
+    assert.equal((await list()).length, 0);
+});
+
 test('removed features are gone', async () => {
     for (const [method, url] of [
         ['POST', '/api/competition/register'],
