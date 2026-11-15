@@ -301,8 +301,9 @@ class AdminDashboard {
         document.getElementById('totalRegistrations').textContent = live.length;
         document.getElementById('classCount').textContent = `across ${active.length} active class${active.length === 1 ? '' : 'es'}`;
         document.getElementById('totalRevenue').textContent = this.money(revenue);
+        // Still waiting (or offered a spot) for a class that isn't over
         document.getElementById('waitlistCount').textContent = Array.isArray(this.waitlists)
-            ? this.waitlists.filter(w => !w.status || w.status === 'active' || w.status === 'notified').length : 0;
+            ? this.waitlists.filter(w => (!w.status || w.status === 'active' || w.status === 'notified') && !w.class_over).length : 0;
 
         const navCount = document.getElementById('navPendingCount');
         navCount.textContent = pending.length;
@@ -1722,14 +1723,19 @@ class AdminDashboard {
                 groupedByCourse[courseKey] = {
                     course_name: entry.course_name || 'Unknown Course',
                     course_id: entry.course_id,
-                    entries: []
+                    class_over: !!entry.class_over,
+                    entries: [],
+                    got_spot: 0
                 };
             }
-            groupedByCourse[courseKey].entries.push(entry);
+            // The list shows people still in line; people who got a spot are only counted
+            if (entry.status === 'active' || entry.status === 'notified') groupedByCourse[courseKey].entries.push(entry);
+            else if (entry.status === 'registered') groupedByCourse[courseKey].got_spot++;
         });
 
-        const cards = Object.values(groupedByCourse).map(courseWaitlist => {
+        const cards = Object.values(groupedByCourse).filter(c => c.entries.length || oneClass).map(courseWaitlist => {
             const entries = courseWaitlist.entries.sort((a, b) => (a.position || 0) - (b.position || 0));
+            const offered = entries.filter(e => e.status === 'notified' && e.offer_live).length;
             const showAll = oneClass || this.waitlistExpanded.has(String(courseWaitlist.course_id));
             const shown = showAll ? entries : entries.slice(0, 5);
             
@@ -1741,7 +1747,7 @@ class AdminDashboard {
                                 <i class="fas fa-graduation-cap text-primary me-2"></i>
                                 ${courseWaitlist.course_name}
                             </h6>
-                            <span class="badge bg-warning">${entries.length} waiting</span>
+                            <span>${courseWaitlist.class_over ? '<span class="badge bg-secondary me-1">Class is over</span>' : ''}<span class="badge bg-warning">${entries.length} waiting</span></span>
                         </div>
                         <div class="card-body">
                             <div class="waitlist-entries">
@@ -1766,11 +1772,10 @@ class AdminDashboard {
                                             </div>
                                         </div>
                                         <div class="waitlist-actions">
-                                            <span class="badge bg-${entry.status === 'active' ? 'success' : 
-                                                entry.status === 'notified' ? 'warning' : 'secondary'}">
-                                                ${({ active: 'Waiting', notified: 'Spot offered', registered: 'Registered', expired: 'Offer expired' })[entry.status] || 'Waiting'}
+                                            <span class="badge bg-${entry.offer_live ? 'warning' : 'success'}">
+                                                ${entry.offer_live ? 'Spot offered' : 'Waiting'}
                                             </span>
-                                            ${entry.status === 'notified' && entry.notification_expires_at ? `<div class="cell-sub">until ${new Date(entry.notification_expires_at).toLocaleString('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit' })}</div>` : ''}
+                                            ${entry.offer_live ? `<div class="cell-sub">until ${new Date(entry.notification_expires_at).toLocaleString('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit' })}</div>` : ''}
                                         </div>
                                     </div>
                                 `).join('')}
@@ -1783,16 +1788,16 @@ class AdminDashboard {
                             <div class="waitlist-stats mt-3">
                                 <div class="row text-center">
                                     <div class="col-4">
-                                        <div class="stat-number text-success">${entries.filter(e => e.status === 'active').length}</div>
-                                        <div class="stat-label">Active</div>
+                                        <div class="stat-number text-success">${entries.length - offered}</div>
+                                        <div class="stat-label">Waiting</div>
                                     </div>
                                     <div class="col-4">
-                                        <div class="stat-number text-warning">${entries.filter(e => e.status === 'notified').length}</div>
-                                        <div class="stat-label">Notified</div>
+                                        <div class="stat-number text-warning">${offered}</div>
+                                        <div class="stat-label">Spot offered</div>
                                     </div>
                                     <div class="col-4">
-                                        <div class="stat-number text-muted">${entries.filter(e => e.status === 'expired').length}</div>
-                                        <div class="stat-label">Expired</div>
+                                        <div class="stat-number text-muted">${courseWaitlist.got_spot}</div>
+                                        <div class="stat-label">Got a spot</div>
                                     </div>
                                 </div>
                             </div>
@@ -1805,6 +1810,9 @@ class AdminDashboard {
                                 ${entries.length > 5 && !oneClass ? `<button class="btn btn-outline-info btn-sm" onclick="admin.viewCourseWaitlist(${courseWaitlist.course_id})">
                                     <i class="fas fa-eye"></i> ${showAll ? 'Show fewer' : `View all ${entries.length}`}
                                 </button>` : ''}
+                                <button class="btn btn-outline-danger btn-sm" onclick="admin.clearWaitlist(${courseWaitlist.course_id}, ${entries.length})">
+                                    <i class="fas fa-trash"></i> Clear waitlist
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -1868,6 +1876,17 @@ class AdminDashboard {
         }
     }
 
+    // Clear one class's whole waitlist (e.g. once the class is over)
+    async clearWaitlist(courseId, count) {
+        if (!confirm(`Clear this class's waitlist? ${count} ${count === 1 ? 'person' : 'people'} will be removed. This can't be undone.`)) return;
+        const response = await this.apiFetch('/api/admin/waitlists/clear', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ course_id: courseId })
+        });
+        const result = await response.json().catch(() => ({}));
+        if (response.ok) { this.showSuccess(`Waitlist cleared (${result.removed_count || 0} removed)`); await this.refreshWaitlists(); }
+        else this.showError(result.error || 'Could not clear the waitlist');
+    }
+
     async removeSelectedFromWaitlist() {
         const selectedCheckboxes = document.querySelectorAll('.waitlist-checkbox:checked');
         const selectedIds = Array.from(selectedCheckboxes).map(cb => parseInt(cb.value));
@@ -1895,7 +1914,9 @@ class AdminDashboard {
             const result = await response.json();
 
             if (response.ok) {
-                this.showSuccess(`Removed ${result.removed_count || selectedIds.length} students from waitlists`);
+                const n = Number(result.removed_count) || 0;
+                if (n < selectedIds.length) this.showError(`Removed ${n} of ${selectedIds.length} selected. Refresh and try again for the rest.`);
+                else this.showSuccess(`Removed ${n} student${n === 1 ? '' : 's'} from waitlists`);
                 await this.refreshWaitlists();
             } else {
                 this.showError(result.error || 'Failed to remove students');

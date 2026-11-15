@@ -113,6 +113,9 @@ PR as any change that adds a decision, a link or a to-do.
 - When an offer runs out: if they **opened the link** they keep their place (first in line); if they **never opened it**
   they move to the end of the waitlist and get a short "you missed it" email. Then the next person is offered it.
   The server checks every 10 minutes (Railway; no laptop needed) and also the moment a link is tapped.
+- Admin → Waitlists: each card counts only people still in line (**Waiting**, **Spot offered** = offer still running,
+  **Got a spot** = registered from the waitlist). Finished classes show **Class is over**; **Clear waitlist** removes
+  everyone left on a class's list. The dashboard "On waitlists" counts only classes that aren't over.
 - Tapping the link late counts as trying: they go to the front of the line and see "Sorry, this offer expired… still
   first in line", or "Register now" if the spot is still open and nobody else is waiting, or "Registration has closed"
   inside the 30-minute cutoff. Column `waitlist.link_opened_at`.
