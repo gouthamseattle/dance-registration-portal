@@ -1250,6 +1250,24 @@ test('waitlists: honest counts, renumbering after removal, Class is over, Clear 
     assert.equal((await list()).length, 0);
 });
 
+test('dashboard student metrics: unique students with a confirmed registration', async () => {
+    const m = async () => (await api('GET', '/api/admin/student-metrics', null, { admin: true })).body;
+    assert.equal((await api('GET', '/api/admin/student-metrics')).status, 401);
+    const before = await m();
+    const cls = await api('POST', '/api/courses', {
+        name: `Metrics ${unique}`, course_type: 'drop_in', session_dates: [new Date(Date.now() + 9 * 86400000).toISOString().slice(0, 10)],
+        slots: [{ slot_name: 'Main', difficulty_level: 'All Levels', capacity: 10, start_time: '18:00', end_time: '19:00', location: 'M', pricing: { drop_in: 20, full_package: 20 } }]
+    }, { admin: true });
+    const id = cls.body.courseId || cls.body.id;
+    const paid = await api('POST', '/api/register', { first_name: 'Paid', email: `met.p.${unique}@example.com`, course_id: id, payment_amount: 20 });
+    await api('POST', '/api/register', { first_name: 'Pend', email: `met.q.${unique}@example.com`, course_id: id, payment_amount: 20 });
+    assert.deepEqual([(await m()).students, (await m()).active_students], [before.students, before.active_students], 'pending does not count');
+    await api('PUT', `/api/admin/registrations/${paid.body.registrationId}/confirm-payment`, {}, { admin: true });
+    const after = await m();
+    assert.equal(after.students, before.students + 1);
+    assert.equal(after.active_students, before.active_students + 1);
+});
+
 test('removed features are gone', async () => {
     for (const [method, url] of [
         ['POST', '/api/competition/register'],

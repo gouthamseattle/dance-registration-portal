@@ -159,6 +159,12 @@ PR as any change that adds a decision, a link or a to-do.
   of the lockers she trained with. No "teaching vibe" lines.
 - Mockup (approved): https://claude.ai/artifact/S3QjJsmgqdAtbmThGS39b4
 
+## Dashboard student tiles (Nov 2026)
+
+- **Students** = unique people with at least one paid (confirmed) registration, ever. **Active students** = unique
+  people with a paid registration made in the last 6 months (by registration date). Test accounts and hidden students
+  are left out; free classes count (confirmed at $0). They replaced the "Registered" tile. `/api/admin/student-metrics`.
+
 ## Lite admin for helpers (`/admin-lite`)
 
 - Replaces the parked payment checker. The owner approves emails in Admin → Settings →
