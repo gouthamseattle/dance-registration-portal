@@ -181,3 +181,11 @@ button.stat:hover { border-color: var(--muted); }
 /* Home-screen app on iPhone: keep the top bar clear of the notch / status bar */
 .admin-top { padding-top: env(safe-area-inset-top); }
 .admin-main { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
+
+/* Students table: sortable headers, rank, attendance bar, no shows */
+.th-sort { border: 0; background: none; padding: 0; font: inherit; color: inherit; text-transform: inherit; letter-spacing: inherit; cursor: pointer; white-space: nowrap; }
+.th-sort.is-on { color: var(--accent); }
+.rank-cell { color: var(--accent); }
+.miss-cell { color: #FF8A8A; font-weight: 600; }
+.pct-bar { display: inline-block; vertical-align: middle; width: 44px; height: 6px; border-radius: 999px; background: var(--line); overflow: hidden; margin-right: 6px; }
+.pct-bar span { display: block; height: 100%; background: var(--accent); }

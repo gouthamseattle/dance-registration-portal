@@ -3621,6 +3621,56 @@ async function studentProgress(studentId) {
     return { crew, goumo, min_for_rank: MIN_FOR_RANK, start: start || null, goumo_start: goumoStart };
 }
 
+// Admin → Students table: the same progress numbers and ranks students see on My classes, for
+// everyone at once, plus admin-only No shows, Joined (first class) and Last class.
+// kind = 'goumo' (all students) or 'crew' (crew members only). Keyed by student id.
+app.get('/api/admin/students-progress', requireAuth, asyncHandler(async (req, res) => {
+    const crew = req.query.kind === 'crew';
+    const today = todaySeattle();
+    const startRow = await dbConfig.get('SELECT setting_value FROM system_settings WHERE setting_key = $1', ['crew_progress_start']);
+    const start = parseDateList([startRow?.setting_value])[0] || '';
+    const gRow = await dbConfig.get('SELECT setting_value FROM system_settings WHERE setting_key = $1', ['goumo_progress_start']);
+    const goumoStart = parseDateList([gRow?.setting_value])[0] || DEFAULT_GOUMO_START;
+    const byCourse = await allClassDates(start, goumoStart);
+    const notCanceled = dbConfig.isProduction ? "r.payment_status IS DISTINCT FROM 'canceled'" : "(r.payment_status IS NULL OR r.payment_status != 'canceled')";
+    const regs = await dbConfig.all(`SELECT r.id, r.student_id, r.course_id, r.selected_dates, r.is_test, s.student_type, s.is_tester, s.archived_at, s.teaches_as
+        FROM registrations r JOIN students s ON s.id = r.student_id WHERE r.course_id IS NOT NULL AND ${notCanceled}`);
+    const noShows = await noShowSet();
+    const used = new Set(regs.filter(r => !isTrue(r.is_test) && !isTrue(r.is_tester)).map(r => String(r.course_id)));
+    for (const id of Object.keys(byCourse)) if (!used.has(String(id))) delete byCourse[id];
+    const byStudent = {};
+    for (const r of regs) (byStudent[r.student_id] = byStudent[r.student_id] || { regs: [], info: r }).regs.push(r);
+    const out = {};
+    for (const [id, v] of Object.entries(byStudent)) {
+        if (crew && v.info.student_type !== 'crew_member') continue;
+        const stats = kindStats(v.regs, byCourse, crew, today, v.info.teaches_as, noShows);
+        // Every class date of this kind they were registered for (No shows included), up to today
+        const dates = [];
+        let missed = 0;
+        for (const r of v.regs) {
+            const c = byCourse[r.course_id];
+            if (!c || c.crew !== crew || teaches(v.info.teaches_as, c.instructor)) continue;
+            const picked = parseDateList(r.selected_dates).filter(d => c.dates.includes(d));
+            for (const d of (picked.length ? picked : c.dates)) {
+                if (d > today) continue;
+                dates.push(d);
+                if (noShows.has(`${r.id}|${d}`)) missed++;
+            }
+        }
+        dates.sort();
+        if (!dates.length) continue;
+        const counted = !v.info.archived_at && !isTrue(v.info.is_tester);
+        out[id] = { ...stats, no_shows: missed, joined: dates[0], last_class: dates[dates.length - 1], counted };
+    }
+    // Ranks exactly as on My classes (rankOf): 5+ held, most attended, then %; ties share
+    const ranked = Object.entries(out).filter(([, x]) => x.counted && x.held >= MIN_FOR_RANK)
+        .sort(([, a], [, b]) => (b.attended - a.attended) || (b.pct - a.pct));
+    ranked.forEach(([id, x]) => {
+        x.rank = ranked.findIndex(([, y]) => y.attended === x.attended && y.pct === x.pct) + 1;
+    });
+    res.json({ kind: crew ? 'crew' : 'goumo', ranked_count: ranked.length, min_for_rank: MIN_FOR_RANK, students: out });
+}));
+
 app.put('/api/admin/students/:id/teaches-as', requireAuth, asyncHandler(async (req, res) => {
     const name = String((req.body || {}).teaches_as || '').trim().slice(0, 100);
     await dbConfig.run('UPDATE students SET teaches_as = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2', [name || null, req.params.id]);

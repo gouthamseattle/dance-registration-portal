@@ -2115,7 +2115,15 @@ class AdminDashboard {
                 document.querySelectorAll('#studentTypeChips .chip').forEach(c => c.setAttribute('aria-pressed', String(c === chip)));
                 this.renderStudents();
             });
+            document.getElementById('studentKindChips').addEventListener('click', (e) => {
+                const chip = e.target.closest('.chip');
+                if (!chip) return;
+                this.studentKind = chip.dataset.kind;
+                document.querySelectorAll('#studentKindChips .chip').forEach(c => c.setAttribute('aria-pressed', String(c === chip)));
+                this.renderStudents();
+            });
         }
+        this.studentProgressData = {};   // fresh numbers each time the tab opens
         try {
             const response = await this.apiFetch('/api/admin/students');
             this.students = response.ok ? await response.json() : [];
@@ -2220,15 +2228,34 @@ class AdminDashboard {
         this.openDataCheck();
     }
 
-    renderStudents() {
+    // Students table: the same progress and ranks students see on My classes (GouMo classes or
+    // Crew practices), plus admin-only No shows, Joined and Last class. Tap a header to sort.
+    async loadStudentProgress(kind) {
+        this.studentProgressData = this.studentProgressData || {};
+        if (this.studentProgressData[kind]) return this.studentProgressData[kind];
+        try {
+            const r = await this.apiFetch(`/api/admin/students-progress?kind=${kind}`);
+            this.studentProgressData[kind] = r.ok ? await r.json() : { students: {}, ranked_count: 0 };
+        } catch (e) { this.studentProgressData[kind] = { students: {}, ranked_count: 0 }; }
+        return this.studentProgressData[kind];
+    }
+
+    sortStudents(key) {
+        const cur = this.studentSort || { key: 'rank', dir: 1 };
+        this.studentSort = { key, dir: cur.key === key ? -cur.dir : 1 };
+        this.renderStudents();
+    }
+
+    async renderStudents() {
         const C = window.ClassInfo;
         const all = Array.isArray(this.students) ? this.students : [];
         const type = this.studentType || '';
+        const kind = this.studentKind || 'goumo';
         const q = (document.getElementById('studentSearch').value || '').trim().toLowerCase();
         const isCrew = s => s.student_type === 'crew_member';
         const hidden = s => !!s.archived_at;
         let shown = type === 'archived' ? all.filter(hidden) : all.filter(s => !hidden(s));
-        if (type === 'crew_member') shown = shown.filter(isCrew);
+        if (type === 'crew_member' || kind === 'crew') shown = shown.filter(isCrew);
         if (type === 'general') shown = shown.filter(s => !isCrew(s));
         this.studentSelection = this.studentSelection || new Set();
         document.getElementById('bulkArchiveBtn').hidden = type === 'archived';
@@ -2246,28 +2273,52 @@ class AdminDashboard {
             el.innerHTML = '<div class="empty-state"><h4>No students found</h4><p>Nothing matches this search.</p></div>';
             return;
         }
+        const prog = await this.loadStudentProgress(kind);
+        const P = (s) => (prog.students || {})[s.id] || {};
+        const sort = this.studentSort || { key: 'rank', dir: 1 };
+        const num = (v) => (v == null || v === '' ? null : v);
+        const valueOf = (s) => {
+            const p = P(s);
+            return { rank: num(p.rank), attended: num(p.attended), held: num(p.held), pct: num(p.pct), no_shows: num(p.no_shows),
+                joined: p.joined || null, last_class: p.last_class || null }[sort.key];
+        };
+        // Rank: best first; everything else: biggest/newest first. Blanks always last.
+        shown = [...shown].sort((a, b) => {
+            const va = valueOf(a), vb = valueOf(b);
+            if (va == null && vb == null) return 0;
+            if (va == null) return 1;
+            if (vb == null) return -1;
+            const d = typeof va === 'string' ? va.localeCompare(vb) : va - vb;
+            return (sort.key === 'rank' ? d : -d) * sort.dir;
+        });
+        const ord = (n) => { const v = n % 100; return n + (v >= 11 && v <= 13 ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' }[n % 10] || 'th')); };
+        const day = (d) => (d ? C.esc(new Date(d + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' })) : '<span class="cell-sub">—</span>');
+        const head = (key, label, cls = '') => `<th class="${cls}"><button type="button" class="th-sort${sort.key === key ? ' is-on' : ''}" onclick="admin.sortStudents('${key}')">${label}${sort.key === key ? (sort.dir === 1 ? ' ▼' : ' ▲') : ''}</button></th>`;
         el.innerHTML = `
             <div class="panel p-0">
                 <div class="table-responsive">
                     <table class="table admin-table students-table mb-0">
-                        <thead><tr><th class="sel"><input type="checkbox" class="form-check-input" aria-label="Select all" onchange="admin.selectAllStudents(this.checked)"></th><th>Student</th><th>Instagram</th><th>Experience</th><th class="text-end">Classes paid</th><th>Type</th><th></th></tr></thead>
+                        <thead><tr><th class="sel"><input type="checkbox" class="form-check-input" aria-label="Select all" onchange="admin.selectAllStudents(this.checked)"></th><th>Student</th><th>Type</th>
+                            ${head('rank', 'Rank')}${head('attended', 'Attended', 'text-end')}${head('held', 'Held', 'text-end')}${head('pct', 'Attendance')}${head('no_shows', 'No shows', 'text-end')}${head('joined', 'Joined')}${head('last_class', 'Last class')}</tr></thead>
                         <tbody>
-                            ${shown.map(s => `
+                            ${shown.map(s => { const p = P(s); return `
                             <tr>
                                 <td class="sel"><input type="checkbox" class="form-check-input student-check" value="${s.id}" ${this.studentSelection.has(s.id) ? 'checked' : ''} onchange="admin.toggleStudentSelection(${s.id}, this.checked)" aria-label="Select student"></td>
                                 <td><a href="#" class="row-link" onclick="admin.openStudent(${s.id});return false">${C.esc([s.first_name, s.last_name].filter(Boolean).join(' ') || '(No name)')}</a><div class="cell-sub">${C.esc(s.email || '')}</div></td>
-                                <td>${s.instagram_handle ? `<a href="https://instagram.com/${encodeURIComponent(String(s.instagram_handle).replace(/^@/, ''))}" target="_blank" rel="noopener">@${C.esc(String(s.instagram_handle).replace(/^@/, ''))}</a>` : '<span class="cell-sub">—</span>'}</td>
-                                <td>${C.esc(this.formatExperience(s.dance_experience))}</td>
-                                <td class="text-end">${s.paid_classes}${s.pending_classes ? ` <span class="cell-sub">+${s.pending_classes} pending</span>` : ''}</td>
                                 <td><span class="pill ${isCrew(s) ? 'pill-accent' : 'pill-muted'}">${isCrew(s) ? 'Crew member' : 'GouMo student'}</span>${s.is_tester ? ' <span class="pill pill-bad">Test account</span>' : ''}</td>
-                                <td class="text-end">
-                                    <button class="btn btn-outline-secondary btn-sm text-nowrap" onclick="admin.classifyStudent(${s.id}, '${isCrew(s) ? 'general' : 'crew_member'}')">${isCrew(s) ? 'Make GouMo student' : 'Make crew member'}</button>
-                                </td>
-                            </tr>`).join('')}
+                                <td>${p.rank ? `<strong class="rank-cell">${ord(p.rank)}</strong> <span class="cell-sub">of ${prog.ranked_count}</span>` : `<span class="cell-sub">${p.held ? 'Not ranked yet' : '—'}</span>`}</td>
+                                <td class="text-end">${p.held ? p.attended : '<span class="cell-sub">—</span>'}</td>
+                                <td class="text-end">${p.held ? p.held : '<span class="cell-sub">—</span>'}</td>
+                                <td>${p.held ? `<span class="pct-bar"><span style="width:${Number(p.pct) || 0}%"></span></span> ${p.pct}%` : '<span class="cell-sub">—</span>'}</td>
+                                <td class="text-end">${p.held ? (p.no_shows ? `<span class="miss-cell">${p.no_shows}</span>` : '<span class="cell-sub">0</span>') : '<span class="cell-sub">—</span>'}</td>
+                                <td class="text-nowrap">${day(p.joined)}</td>
+                                <td class="text-nowrap">${day(p.last_class)}</td>
+                            </tr>`; }).join('')}
                         </tbody>
                     </table>
                 </div>
-            </div>`;
+            </div>
+            <p class="empty-line">Same numbers and ranks students see on My classes. Students need ${prog.min_for_rank || 5} classes held to be ranked. No shows are admin only. Instagram, experience and classes paid are in each profile.</p>`;
     }
 
     async classifyStudent(studentId, studentType) {

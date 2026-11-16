@@ -165,6 +165,14 @@ PR as any change that adds a decision, a link or a to-do.
   people with a paid registration made in the last 6 months (by registration date). Test accounts and hidden students
   are left out; free classes count (confirmed at $0). They replaced the "Registered" tile. `/api/admin/student-metrics`.
 
+## Admin Students table (Nov 2026)
+
+- Mockup (approved): https://claude.ai/artifact/WR39A7dwhYV3zxBhJfF5zR
+- Columns: Student, Type, Rank ("3rd of 42" / "Not ranked yet"), Attended, Held, Attendance %, No shows, Joined (first class),
+  Last class. Switch **GouMo classes | Crew practices** (crew = crew members only). Tap a header to sort (default Rank).
+- Same calculation as My classes (`/api/admin/students-progress`, mirrors `studentProgress`). Main admin only.
+  Instagram, experience and classes paid moved to the profile; type changes via the bulk bar.
+
 ## Lite admin for helpers (`/admin-lite`)
 
 - Replaces the parked payment checker. The owner approves emails in Admin → Settings →

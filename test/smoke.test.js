@@ -1268,6 +1268,36 @@ test('dashboard student metrics: unique students with a confirmed registration',
     assert.equal(after.active_students, before.active_students + 1);
 });
 
+test('admin Students table: same ranks as My classes, no shows, joined, last class', async () => {
+    const day = (n) => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
+    const dates = [day(-12), day(-10), day(-8), day(-6), day(-4)];
+    const cls = await api('POST', '/api/courses', {
+        name: `Progress Table ${unique}`, course_type: 'multi-week', session_dates: dates,
+        slots: [{ slot_name: 'Main', difficulty_level: 'All Levels', capacity: 20, start_time: '18:00', end_time: '19:00', location: 'P', pricing: { full_package: 50 } }]
+    }, { admin: true });
+    const id = cls.body.courseId || cls.body.id;
+    const x = `pt.x.${unique}@example.com`, y = `pt.y.${unique}@example.com`;
+    const rx = await api('POST', '/api/register', { first_name: 'Xena', email: x, course_id: id, payment_amount: 50 });
+    const ry = await api('POST', '/api/register', { first_name: 'Yuri', email: y, course_id: id, payment_amount: 50 });
+    assert.equal((await api('PUT', `/api/attendance/course/${id}/mark`, { date: dates[1], registration_id: ry.body.registrationId, no_show: true }, { admin: true })).status, 200);
+
+    assert.equal((await api('GET', '/api/admin/students-progress?kind=goumo')).status, 401);
+    const t = (await api('GET', '/api/admin/students-progress?kind=goumo', null, { admin: true })).body;
+    const px = (await api('POST', '/api/my/profile', { email: x })).body;
+    const py = (await api('POST', '/api/my/profile', { email: y })).body;
+    const tx = t.students[px.student.id], ty = t.students[py.student.id];
+    assert.equal(tx.rank, px.progress.goumo.rank, 'same rank as My classes');
+    assert.equal(ty.rank, py.progress.goumo.rank);
+    assert.equal(tx.attended, px.progress.goumo.attended);
+    assert.ok(tx.rank < ty.rank, 'more classes attended ranks higher');
+    assert.equal(ty.no_shows, 1);
+    assert.equal(tx.no_shows, 0);
+    assert.equal(tx.joined, dates[0]);
+    assert.equal(tx.last_class, dates[4]);
+    const crew = (await api('GET', '/api/admin/students-progress?kind=crew', null, { admin: true })).body;
+    assert.equal(crew.students[px.student.id], undefined, 'crew view lists crew members only');
+});
+
 test('removed features are gone', async () => {
     for (const [method, url] of [
         ['POST', '/api/competition/register'],
