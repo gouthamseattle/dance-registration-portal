@@ -1439,10 +1439,7 @@ class DanceRegistrationApp {
                     `}
                     <div class="pay-hint">Or in the Venmo app: search <strong>@${user}</strong>, send <strong>$${amount}</strong> and paste the note.</div>
                 </div>
-                <div class="pay-actions">
-                    <button type="button" class="btn btn-primary btn-lg w-100" onclick="app.askPaymentSent(this)">I've sent the payment</button>
-                    <div class="pay-footnote">Your spot is confirmed once we receive your payment.</div>
-                </div>
+                ${this.paySentBlock(amount, '@' + user, 'Venmo')}
             `;
 
             // Generate QR code for desktop users
@@ -1487,91 +1484,29 @@ class DanceRegistrationApp {
                 throw new Error(zelleData.error || 'Failed to generate Zelle payment details');
             }
 
+            const esc = window.ClassInfo ? window.ClassInfo.esc : (v) => v;
+            const amount = esc(String(this.registrationData.payment_amount));
+            const name = esc(zelleData.zelleRecipientName || '');
+            const phone = esc(zelleData.zellePhone || '');
+            const note = esc(zelleData.paymentNote || '');
             container.innerHTML = `
-                <div class="zelle-payment-container">
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h6><i class="fas fa-university text-success me-2"></i>Pay with Zelle</h6>
-                        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="app.initializePaymentOptions()">
-                            <i class="fas fa-arrow-left me-1"></i>Back
-                        </button>
+                <div class="pay-card">
+                    <div class="pay-card-head">
+                        <h2 class="pay-title">Pay with Zelle</h2>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="app.selectedPaymentMethod=null;app.initializePaymentOptions()">Change</button>
                     </div>
-                    
-                    <div class="alert alert-success mb-4">
-                        <div class="d-flex align-items-center">
-                            <i class="fas fa-university fa-2x text-success me-3"></i>
-                            <div>
-                                <h6 class="mb-1">Send Zelle payment to:</h6>
-                                <strong>${zelleData.zelleRecipientName}</strong>
-                                <div class="copy-row"><span class="copy-value">${zelleData.zellePhone}</span><button type="button" class="btn-copy">Copy</button></div>
-                            </div>
-                        </div>
+                    <div class="pay-field">
+                        <span class="pay-label">Send payment to</span>
+                        <div class="copy-row"><span class="copy-value">${phone}</span><button type="button" class="btn-copy">Copy</button></div>
+                        ${name ? `<div class="pay-hint">Name shown in your bank: <strong>${name}</strong></div>` : ''}
                     </div>
-
-                    <div class="payment-details mb-4">
-                        <div class="row g-3">
-                            <div class="col-12">
-                                <strong>Amount:</strong><br>
-                                <span class="h4 text-success">$${zelleData.amount}</span>
-                            </div>
-                            <div class="col-12">
-                                <strong>Payment note:</strong>
-                                <div class="copy-row"><span class="copy-value">${zelleData.paymentNote}</span><button type="button" class="btn-copy">Copy</button></div>
-                            </div>
-                        </div>
+                    <div class="pay-field">
+                        <span class="pay-label">Payment note</span>
+                        <div class="copy-row"><span class="copy-value">${note}</span><button type="button" class="btn-copy">Copy</button></div>
                     </div>
-
-                    <div class="zelle-instructions">
-                        <div class="alert alert-light">
-                            <h6><i class="fas fa-list-ol me-2"></i>Payment Instructions:</h6>
-                            <ol class="mb-2 small">
-                                <li>Open your banking app or online banking</li>
-                                <li>Find "Zelle" or "Send Money" option</li>
-                                <li>Enter recipient: <strong>${zelleData.zellePhone}</strong></li>
-                                <li>Enter amount: <strong>$${zelleData.amount}</strong></li>
-                                <li>Add memo/note: <strong>${zelleData.paymentNote}</strong></li>
-                                <li>Review and send payment</li>
-                            </ol>
-                            <div class="text-center">
-                                <small class="text-muted">
-                                    <i class="fas fa-info-circle me-1"></i>
-                                    Zelle transfers are typically instant between enrolled accounts
-                                </small>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="recipient-details mb-4">
-                        <div class="text-center">
-                            <div class="card">
-                                <div class="card-body">
-                                    <i class="fas fa-phone fa-3x text-success mb-3"></i>
-                                    <h5>${zelleData.zelleRecipientName}</h5>
-                                    <h6 class="text-success">${zelleData.zellePhone}</h6>
-                                    <button type="button" class="btn btn-success mt-3" onclick="navigator.clipboard.writeText('${zelleData.zellePhone}'); app.showSuccess('Phone number copied to clipboard!')">
-                                        <i class="fas fa-copy me-2"></i>Copy Phone Number
-                                    </button>
-                                    <div class="mt-2">
-                                        <small class="text-muted">Copy this number to send your Zelle payment</small>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="payment-confirmation">
-                        <div class="alert alert-warning">
-                            <h6><i class="fas fa-clock me-2"></i>After Payment</h6>
-                            <p class="mb-0 small">We'll verify your payment shortly and send you a confirmation email.</p>
-                        </div>
-                        
-                        <div class="d-grid">
-                            <button class="btn btn-success" onclick="app.askPaymentSent(this)">
-                                <i class="fas fa-check me-2"></i>
-                                I've Sent the Payment
-                            </button>
-                        </div>
-                    </div>
+                    <div class="pay-hint">In your bank app, open <strong>Zelle</strong>, send <strong>$${amount}</strong> to the number above and paste the note.</div>
                 </div>
+                ${this.paySentBlock(amount, name || phone, 'Zelle')}
             `;
 
         } catch (error) {
@@ -1602,36 +1537,17 @@ class DanceRegistrationApp {
         }
     }
 
-    // "I've sent the payment": this is when the registration is saved.
-    // "I've sent the payment": ask once before saving the registration
-    askPaymentSent(button) {
-        const esc = window.ClassInfo ? window.ClassInfo.esc : (v) => v;
-        const amount = esc(String(this.registrationData.payment_amount));
-        const zelle = this.selectedPaymentMethod === 'zelle';
-        const to = zelle ? esc(this.settings.zelle_recipient_name || 'GouMo') : '@' + esc(this.settings.venmo_username || '');
-        const old = document.getElementById('paySentSheet'); if (old) old.remove();
-        const sheet = document.createElement('div');
-        sheet.id = 'paySentSheet';
-        sheet.className = 'pay-sheet-backdrop';
-        sheet.innerHTML = `
-            <div class="pay-sheet" role="dialog" aria-modal="true" aria-labelledby="paySentTitle">
-                <div class="pay-sheet-grip"></div>
-                <h2 id="paySentTitle">Did you send the payment?</h2>
-                <div class="pay-sheet-box">Sent <strong>$${amount}</strong> to <strong>${to}</strong> on ${zelle ? 'Zelle' : 'Venmo'}</div>
-                <p>We'll match your payment and then email your confirmation. If we can't find a payment, your registration won't be accepted.</p>
-                <button type="button" class="btn btn-primary btn-lg w-100" id="paySentYes">Yes, I've paid</button>
-                <button type="button" class="btn btn-outline-secondary btn-lg w-100" id="paySentNo">Not yet, take me back</button>
-            </div>`;
-        document.body.appendChild(sheet);
-        const close = () => sheet.remove();
-        sheet.addEventListener('click', (e) => { if (e.target === sheet) close(); });
-        sheet.querySelector('#paySentNo').addEventListener('click', close);
-        sheet.querySelector('#paySentYes').addEventListener('click', async (e) => {
-            e.target.disabled = true; e.target.textContent = 'Saving your registration…';
-            close();
-            await this.showPaymentSentConfirmation(button);
-        });
-        sheet.querySelector('#paySentYes').focus();
+    // "I've sent the payment": the student ticks a box first, then one tap saves the registration
+    paySentBlock(amount, to, method) {
+        return `
+                <div class="pay-actions">
+                    <label class="pay-check">
+                        <input type="checkbox" id="paySentCheck" onchange="document.getElementById('paySentBtn').disabled = !this.checked">
+                        <span>I've sent <strong>$${amount}</strong> to <strong>${to}</strong> on ${method}</span>
+                    </label>
+                    <button type="button" class="btn btn-primary btn-lg w-100" id="paySentBtn" disabled onclick="app.showPaymentSentConfirmation(this)">I've sent the payment</button>
+                    <div class="pay-footnote">Tick the box once you've paid. We'll match your payment, then email your confirmation. If we can't find a payment, your registration won't be accepted.</div>
+                </div>`;
     }
 
     // Free class: no payment screen, one button that saves and confirms the spot
