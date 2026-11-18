@@ -413,10 +413,12 @@ class EmailProfileRegistrationApp {
         if (this.crewMode) {
             const sel = document.getElementById('courseSelection');
             const crewSec = document.getElementById('crewPracticeSection');
-            const firstHeader = sel && sel.querySelector('.section-header');
-            if (sel && crewSec && firstHeader && crewSec.compareDocumentPosition(firstHeader) & Node.DOCUMENT_POSITION_FOLLOWING) {
-                firstHeader.parentNode.insertBefore(crewSec, firstHeader);
+            const seriesSec = document.getElementById('seriesSection');
+            if (sel && crewSec && seriesSec && crewSec.compareDocumentPosition(seriesSec) & Node.DOCUMENT_POSITION_FOLLOWING) {
+                seriesSec.parentNode.insertBefore(crewSec, seriesSec);
             }
+            const allLink = document.getElementById('navAllClasses');
+            if (allLink) allLink.href = '/crew';
         }
         const courseCount = this.eligibleCourses.length;
         let filterText = '';
@@ -494,7 +496,9 @@ class EmailProfileRegistrationApp {
             }
         });
 
-        // Render each category
+        // Render each category (a heading only shows when it has classes)
+        const seriesSection = document.getElementById('seriesSection');
+        if (seriesSection) seriesSection.style.display = multiWeekCourses.length ? '' : 'none';
         multiWeekCourses.forEach(course => {
             const courseCard = this.createCourseCard(course);
             multiWeekContainer.appendChild(courseCard);

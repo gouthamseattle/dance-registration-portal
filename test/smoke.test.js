@@ -932,9 +932,16 @@ test('payments: Zelle is off by default and can be switched on; Venmo ID comes f
 
     // Checkout page has the new confirm-before-saving flow and no old "You're in!" screen
     const js = await (await fetch(`${BASE}/js/registration.js`)).text();
-    assert.ok(js.includes('askPaymentSent') && js.includes("You're all done!"), 'new checkout screens');
+    assert.ok(js.includes('paySentCheck') && js.includes("You're all done!"), 'tick box before saving, then done screen');
+    assert.ok(!js.includes('askPaymentSent') && !js.includes('Payment Instructions'), 'no pop-up and no old long Zelle screen');
+    assert.ok(js.includes('Pay with Zelle') && js.includes('Name shown in your bank'), 'short Zelle screen');
     const page = await (await fetch(`${BASE}/index-registration.html`)).text();
     assert.ok(!page.includes("You're in!"), 'old confirmation screen removed');
+    assert.ok(page.includes('class="student-nav"') && page.includes('href="/my"') && page.includes('id="backToEmailProfile"'), 'checkout has Back to classes and My classes');
+    const list = await (await fetch(`${BASE}/email-profile.html`)).text();
+    assert.ok(list.includes('id="navAllClasses"') && list.includes('href="/my"') && list.includes('id="seriesSection"'), 'class list has nav and a hideable Series section');
+    const listJs = await (await fetch(`${BASE}/js/email-profile-registration.js`)).text();
+    assert.ok(listJs.includes("allLink.href = '/crew'") && listJs.includes('seriesSection.style.display'), 'crew link goes back to /crew; empty Series heading hidden');
 });
 
 test('home page: instructor cards have style tags and open a bio', async () => {

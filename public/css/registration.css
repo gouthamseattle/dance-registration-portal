@@ -255,3 +255,13 @@ body.crew-practice-mode { background: var(--bg); }
 .pay-done-rows span { color: var(--muted); }
 .pay-done-rows strong { text-align: right; }
 
+
+/* "I've sent the payment" tick box: the button stays off until it's ticked */
+.pay-check { display: flex; align-items: flex-start; gap: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; font-size: 15px; line-height: 1.45; cursor: pointer; margin: 0; }
+.pay-check input { flex: 0 0 auto; width: 22px; height: 22px; margin: 0; accent-color: var(--accent); cursor: pointer; }
+.pay-check strong { color: var(--text); }
+#paySentBtn:disabled { opacity: .4; }
+
+/* Student navigation: back to the class list and My classes (neither signs out) */
+.student-nav { display: flex; gap: 8px; margin-bottom: 16px; }
+.student-nav .btn { flex: 1 1 0; height: 42px; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 14px; }
